@@ -1,0 +1,3 @@
+Fotos dos pilotos: <id>.jpg ou <id>.png (quadradas, rosto mais ou menos no centro).
+IDs: fejaum burcca mugurin telles ortiz shinando nanni digao
+Ajuste o recorte em scripts/characters.gd (face_center, face_zoom).
