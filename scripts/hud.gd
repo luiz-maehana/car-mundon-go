@@ -10,6 +10,7 @@ const ROLL_ORDER := ["turbo", "casca", "bomba"]
 const SpeedLinesShader = preload("res://shaders/speed_lines.gdshader")
 const Chars = preload("res://scripts/characters.gd")
 const GameScript = preload("res://scripts/game.gd")
+const Gfx = preload("res://scripts/gfx.gd")
 const ITEM_NAMES := {"turbo": "TURBO", "casca": "CASCA", "bomba": "BOMBA"}
 const ITEM_COLORS := {"turbo": Color(1.0, 0.55, 0.1), "casca": Color(1.0, 0.88, 0.15), "bomba": Color(0.9, 0.2, 0.15)}
 const FINISH_TEXT_TIME := 2.5
@@ -45,6 +46,8 @@ var lbl_mute: Label
 var rank_rows: Array = []
 var minimap: Control
 var speed_lines: ColorRect
+var ranking_box: Control
+var lbl_unit: Label
 var boost_fx := 0.0
 
 
@@ -151,6 +154,7 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 	lbl_speed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var kmh := _label(22)
 	kmh.text = "km/h"
+	lbl_unit = kmh
 	kmh.anchor_left = 1.0
 	kmh.anchor_right = 1.0
 	kmh.anchor_top = 1.0
@@ -234,6 +238,7 @@ func _build_ranking() -> void:
 	vb.add_theme_constant_override("separation", 3)
 	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(vb)
+	ranking_box = vb
 	for i in race.karts.size():
 		var row := PanelContainer.new()
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -327,7 +332,7 @@ func update_hud(delta: float) -> void:
 	_update_ranking()
 	boost_fx = lerpf(boost_fx, 1.0 if p.boost_time > 0.0 else 0.0, 1.0 - exp(-8.0 * delta))
 	var slm := speed_lines.material as ShaderMaterial
-	slm.set_shader_parameter("intensity", boost_fx)
+	slm.set_shader_parameter("intensity", boost_fx if Gfx.setting("speed_lines", true) else 0.0)
 	slm.set_shader_parameter("aspect", root.size.x / maxf(1.0, root.size.y))
 	var lap: int = race.lap_of(p)
 	lbl_lap.text = "VOLTA %d/%d" % [lap, race.laps]
@@ -361,7 +366,9 @@ func update_hud(delta: float) -> void:
 	lbl_cheese.text = "%d/10" % p.cheese
 	lbl_cheese.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3) if p.cheese >= 10 else Color.WHITE)
 	# RF-131: velocímetro + carga do drift
-	lbl_speed.text = "%d" % int(absf(p.speed) * 3.6)
+	var mph: bool = Gfx.setting("speed_unit", "kmh") == "mph"
+	lbl_speed.text = "%d" % int(absf(p.speed) * (2.237 if mph else 3.6))
+	lbl_unit.text = "mph" if mph else "km/h"
 	lbl_speed.add_theme_color_override("font_color", Color(1.0, 0.6, 0.15) if p.boost_time > 0.0 else Color.WHITE)
 	drift_bar_bg.visible = p.drifting
 	if p.drifting:
@@ -511,3 +518,11 @@ func _podium(ranking: Array) -> Control:
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		lbl.add_theme_font_size_override("font_size", 22)
 	return row
+
+
+## RF-183: liga/desliga minimapa e lista de posições.
+func apply_settings() -> void:
+	if minimap:
+		minimap.visible = Gfx.setting("show_minimap", true)
+	if ranking_box:
+		ranking_box.visible = Gfx.setting("show_ranking", true)

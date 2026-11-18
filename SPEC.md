@@ -156,7 +156,7 @@ Conversão de stat para física (em `kart.gd`):
 
 ### Gráficos (v0.9)
 - [x] **RF-160** Renderer **Forward+** no PC (a versão web, quando existir, usa Compatibility). Ambiente com tonemap ACES, bloom (glow), SSAO, neblina leve na cor do horizonte, saturação +10% e MSAA 4x.
-- [x] **RF-161** Opção `GRÁFICOS: ALTO / BAIXO` no menu (salva no `Game`). BAIXO desliga SSAO, bloom, sombras suaves e MSAA e reduz as partículas pela metade.
+- [x] **RF-161** (substituído pelo RF-182) Opção `GRÁFICOS: ALTO / BAIXO` no menu (salva no `Game`). BAIXO desliga SSAO, bloom, sombras suaves e MSAA e reduz as partículas pela metade.
 - [x] **RF-162** Texturas procedurais em projeção triplanar (sem UV): asfalto granulado com relevo, grama com variação, areia, e piso de azulejo xadrez na cozinha.
 - [x] **RF-163** Céu em shader: gradiente, sol com halo, nuvens animadas; na pista noturna, estrelas e lua.
 - [x] **RF-164** Kart remodelado: carroceria arredondada com pintura metálica, bico, para-choques, volante, escapamento duplo, número do grid em placa branca, braços do piloto no volante.
@@ -173,6 +173,15 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-173** Cenário do Racing Kit: pórtico de largada com semáforo no lugar do arco, arquibancadas cobertas, torres de faixa, tendas e boxes perto da largada, outdoors e árvores do kit.
 - [x] **RF-174** Interface com fonte **Kenney Future Narrow** (tema global com fallback pra fonte padrão) e botões do UI Pack (amarelo = ação principal, cinza = opções) no menu, pause e resultado; sons de clique do UI Pack.
 - [x] **RF-175** Marca do jogo nos cenários: **ZAWSZE** (combustível/patrocínio). O banner "TANKCO" do Racing Kit é trocado em todos os props por `assets/brand/zawsze_banner.png`, gerado por `tools/make_brand.gd`.
+
+### Configurações (v0.11)
+- [x] **RF-180** Tela de configurações (abas **ÁUDIO / VÍDEO / JOGO / CONTROLES**) aberta pelo botão `CONFIGURAÇÕES` do menu e pelo pause. Toda mudança vale na hora (inclusive no meio da corrida pausada) e é salva em `user://settings.cfg`. Botão `PADRÃO` restaura tudo; `Esc` ou `VOLTAR` fecha.
+- [x] **RF-181** Áudio: volume geral, música, efeitos e motor (0–100%), cada um num bus próprio (`Music`, `SFX`, `Engine` → `Master`). `M` continua mutando tudo.
+- [x] **RF-182** Vídeo: tela cheia, vsync, limite de FPS (sem limite/30/60/120/144/240), qualidade **BAIXO / MÉDIO / ALTO**, escala de resolução 3D (50–100%), campo de visão (60–90°) e mostrar FPS.
+  - ALTO = bloom + SSAO + MSAA 4x + sombra 140 m; MÉDIO = bloom + MSAA 2x + sombra 100 m; BAIXO = sem bloom/SSAO/MSAA, sombra 60 m.
+- [x] **RF-183** Jogo: intensidade da tremida de câmera (0–100%), linhas de velocidade, partículas (normais/reduzidas), nomes sobre os karts, minimapa, lista de posições e unidade de velocidade (km/h ou mph).
+- [x] **RF-184** Controles: tabela com as teclas/botões de cada ação para J1, J2 e controles; zona morta do analógico (5–50%).
+- [x] **RF-185** O antigo botão `GRÁFICOS` do menu vira `CONFIGURAÇÕES` (a qualidade passa a morar na aba Vídeo).
 
 ## 5. Controles
 
@@ -246,6 +255,10 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-27** Os 8 pilotos têm `look` completo; o modelo de cada um tem as peças do visual (ex.: Burcca com óculos + barba + fone; Telles com óculos escuros + cabelo comprido).
 - [x] **CA-28** Casca e queijinho usam os modelos do Food Kit; o cenário tem pórtico, arquibancadas e props do Racing Kit.
 - [x] **CA-29** O tema global usa a fonte Kenney Future Narrow e ela tem todos os caracteres do jogo (acentos e º).
+- [x] **CA-30** Salvar e carregar as configurações devolve os mesmos valores; chave faltando no arquivo usa o padrão.
+- [x] **CA-31** Aplicar volumes muda os buses (`Music`/`SFX`/`Engine`); 0% silencia o bus.
+- [x] **CA-32** A tela de configurações monta as 4 abas com os controles, e `PADRÃO` restaura os valores.
+- [x] **CA-33** Na corrida, desligar nomes/minimapa/lista esconde esses elementos e o campo de visão base segue a configuração.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

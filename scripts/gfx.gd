@@ -7,18 +7,42 @@ const RainbowShader = preload("res://shaders/rainbow_box.gdshader")
 static var _cache := {}
 
 
-## RF-161: qualidade escolhida no menu (Game.graphics_high). Sem Game, ALTO.
-static func high() -> bool:
+static func _game() -> Node:
 	var ml := Engine.get_main_loop()
 	if ml is SceneTree:
-		var game: Node = (ml as SceneTree).root.get_node_or_null("Game")
-		if game:
-			return game.graphics_high
-	return true
+		return (ml as SceneTree).root.get_node_or_null("Game")
+	return null
+
+
+## Valor de configuração (RF-180); sem o autoload Game, o padrão.
+static func setting(key: String, fallback = null):
+	var game := _game()
+	if game:
+		return game.settings.get(key, fallback)
+	return fallback
+
+
+## RF-182: 0 = BAIXO, 1 = MÉDIO, 2 = ALTO.
+static func quality() -> int:
+	return int(setting("quality", 2))
+
+
+static func high() -> bool:
+	return quality() == 2
 
 
 static func particle_scale() -> float:
-	return 1.0 if high() else 0.5
+	return 1.0 if setting("particles_full", true) else 0.4
+
+
+static func msaa_for(q: int) -> Viewport.MSAA:
+	return [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][clampi(q, 0, 2)]
+
+
+## Liga/desliga bloom e SSAO de um Environment conforme a qualidade.
+static func apply_quality(env: Environment, q: int) -> void:
+	env.glow_enabled = q >= 1
+	env.ssao_enabled = q >= 2
 
 
 # ---------------------------------------------------------------- texturas (RF-162)
@@ -117,7 +141,7 @@ static func ground_material(kind: String, base: Color) -> StandardMaterial3D:
 
 # ---------------------------------------------------------------- céu e ambiente (RF-160/163)
 
-static func environment(d: Dictionary, hq: bool) -> Environment:
+static func environment(d: Dictionary, q: int) -> Environment:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
@@ -139,11 +163,11 @@ static func environment(d: Dictionary, hq: bool) -> Environment:
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = d.get("exposure", 1.0)
-	env.glow_enabled = hq
+	env.glow_enabled = q >= 1
 	env.glow_intensity = 0.6
 	env.glow_bloom = 0.04
 	env.glow_hdr_threshold = 0.95
-	env.ssao_enabled = hq
+	env.ssao_enabled = q >= 2
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 1.6
 	env.fog_enabled = true

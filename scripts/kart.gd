@@ -116,6 +116,7 @@ var wheels: Array = []        # MeshInstance3D (giram)
 var front_wheels: Array = []  # MeshInstance3D (esterçam)
 var kart_body: MeshInstance3D
 var driver: Node3D
+var name_label: Label3D
 var wheel_spin := 0.0
 
 
@@ -551,6 +552,7 @@ func _build_model() -> void:
 	model.add_child(driver)
 	var head_top := 2.75
 	var lbl := Label3D.new()
+	name_label = lbl
 	lbl.text = display_name
 	lbl.font_size = 40
 	lbl.outline_size = 14

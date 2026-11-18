@@ -45,5 +45,8 @@ Largada turbo: comece a acelerar quando aparecer o **2** (entre 1.6 s e 0.6 s do
 - **Queijinhos**: cada um deixa o kart 1% mais rápido (até 10); levar casca/bomba tira 3.
 
 ## Gráficos
-Renderer Forward+ com bloom, SSAO, neblina e texturas procedurais. Em PC fraco, use **GRÁFICOS: BAIXO** (canto do menu).
+Renderer Forward+ com bloom, SSAO, neblina e texturas procedurais. Em PC fraco, abra **CONFIGURAÇÕES → VÍDEO** e use qualidade BAIXO e/ou escala de resolução menor.
 Medido numa RTX 5070: 1 jogador ~180 FPS (vsync), 4 jogadores ~90 FPS.
+
+## Configurações
+Menu → **CONFIGURAÇÕES** (ou Esc → Configurações durante a corrida): volumes (geral/música/efeitos/motor), tela cheia, vsync, limite de FPS, qualidade, resolução 3D, campo de visão, FPS na tela, tremida, linhas de velocidade, partículas, nomes, minimapa, lista de posições, km/h ou mph e zona morta do analógico. Salvo em `user://settings.cfg`.

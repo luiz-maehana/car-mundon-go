@@ -62,7 +62,12 @@ var engines: Array = []   # {kart, player, base_db} — um loop de motor por hum
 var last_beep := 4
 var human_laps: Array = []
 var world_env: WorldEnvironment
+var sun_light: DirectionalLight3D
+var subviewports: Array = []
+var base_fov := 72.0
 var shakes: Array = []    # tremida por câmera (RF-166)
+var settings_overlay: Control
+const SettingsMenu = preload("res://scripts/settings_menu.gd")
 
 
 func _ready() -> void:
@@ -86,6 +91,7 @@ func _ready() -> void:
 	if audio_enabled:
 		_build_audio()
 	_build_pause()
+	apply_settings()
 	for p in players:
 		human_laps.append(1)
 
@@ -96,6 +102,7 @@ func _build_audio() -> void:
 	for i in 8:
 		var ap := AudioStreamPlayer.new()
 		ap.volume_db = -4.0
+		ap.bus = "SFX"
 		add_child(ap)
 		sfx_players.append(ap)
 	if not engines_enabled:
@@ -106,6 +113,7 @@ func _build_audio() -> void:
 	for p in players:
 		var ap := AudioStreamPlayer.new()
 		ap.stream = Sfx.get_sound("engine")
+		ap.bus = "Engine"
 		ap.volume_db = -60.0
 		add_child(ap)
 		ap.play()
@@ -167,7 +175,7 @@ func _build_pause() -> void:
 	title.add_theme_color_override("font_outline_color", Color.BLACK)
 	title.add_theme_constant_override("outline_size", 10)
 	vb.add_child(title)
-	var opts := [["Continuar", toggle_pause], ["Reiniciar (R)", restart], ["Menu", to_menu]]
+	var opts := [["Continuar", toggle_pause], ["Configurações", open_settings], ["Reiniciar (R)", restart], ["Menu", to_menu]]
 	for o in opts:
 		var b := Button.new()
 		b.text = o[0]
@@ -242,7 +250,8 @@ func _build_views() -> void:
 		svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		grid.add_child(svc)
 		var vp := SubViewport.new()
-		vp.msaa_3d = Viewport.MSAA_4X if Gfx.high() else Viewport.MSAA_DISABLED
+		vp.msaa_3d = Gfx.msaa_for(Gfx.quality())
+		subviewports.append(vp)
 		svc.add_child(vp)
 		var cam := _make_camera(i)
 		vp.add_child(cam)
@@ -274,7 +283,19 @@ func _physics_process(delta: float) -> void:
 	step(delta)
 
 
+func open_settings() -> void:
+	if settings_overlay:
+		return
+	settings_overlay = SettingsMenu.new()
+	pause_layer.add_child(settings_overlay)
+	settings_overlay.closed.connect(func():
+		settings_overlay = null
+		pause_resume_btn.grab_focus())
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if settings_overlay:
+		return
 	var pause_pressed := false
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
@@ -324,21 +345,22 @@ func all_finished() -> bool:
 
 func _build_environment() -> void:
 	var d: Dictionary = track.def
-	var hq := Gfx.high()
+	var q := Gfx.quality()
 	world_env = WorldEnvironment.new()
-	world_env.environment = Gfx.environment(d, hq)  # RF-160/163
+	world_env.environment = Gfx.environment(d, q)  # RF-160/163
 	add_child(world_env)
-	var sun := DirectionalLight3D.new()
+	sun_light = DirectionalLight3D.new()
+	var sun := sun_light
 	sun.rotation = Vector3(deg_to_rad(d["sun"][1]), deg_to_rad(-35), 0)
 	sun.light_color = d["sun"][2]
 	sun.light_energy = d["sun"][0]
 	sun.shadow_enabled = true
-	sun.shadow_blur = 1.5 if hq else 0.5
+	sun.shadow_blur = [0.5, 1.0, 1.5][q]
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	sun.directional_shadow_max_distance = 140.0 if hq else 80.0
+	sun.directional_shadow_max_distance = [60.0, 100.0, 140.0][q]
 	add_child(sun)
-	# RF-161: MSAA 4x no ALTO, desligado no BAIXO
-	get_viewport().msaa_3d = Viewport.MSAA_4X if hq else Viewport.MSAA_DISABLED
+	# RF-182: MSAA conforme a qualidade
+	get_viewport().msaa_3d = Gfx.msaa_for(q)
 
 
 func _spawn_karts() -> void:
@@ -752,7 +774,7 @@ func _update_cameras(delta: float, snap: bool) -> void:
 		else:
 			cam.position = cam.position.lerp(desired, 1.0 - exp(-8.0 * delta))
 		cam.look_at(p.position + f * 9.0 + Vector3.UP * 1.0)
-		var target_fov := 82.0 if p.boost_time > 0.0 else 72.0
+		var target_fov := base_fov + 10.0 if p.boost_time > 0.0 else base_fov
 		cam.fov = lerpf(cam.fov, target_fov, 1.0 - exp(-5.0 * delta))
 		# RF-166: tremida (h/v_offset não atrapalha a suavização da posição)
 		while shakes.size() <= i:
@@ -772,4 +794,27 @@ func shake(k: Node3D, amount: float) -> void:
 	var i: int = k.player_index
 	while shakes.size() <= i:
 		shakes.append(0.0)
-	shakes[i] = maxf(shakes[i], amount)
+	shakes[i] = maxf(shakes[i], amount * float(Gfx.setting("shake", 1.0)))  # RF-183
+
+
+## RF-180..183: aplica as configurações na corrida (chamado no início e quando o jogador
+## muda algo na tela de configurações, inclusive com o jogo pausado).
+func apply_settings() -> void:
+	if track == null or world_env == null:
+		return
+	var q := Gfx.quality()
+	Gfx.apply_quality(world_env.environment, q)
+	sun_light.shadow_blur = [0.5, 1.0, 1.5][q]
+	sun_light.directional_shadow_max_distance = [60.0, 100.0, 140.0][q]
+	get_viewport().msaa_3d = Gfx.msaa_for(q)
+	var rs := float(Gfx.setting("render_scale", 1.0))
+	for vp in subviewports:
+		vp.msaa_3d = Gfx.msaa_for(q)
+		vp.scaling_3d_scale = rs
+	base_fov = float(Gfx.setting("fov", 72.0))
+	var names: bool = Gfx.setting("show_names", true)
+	for k in karts:
+		if k.name_label:
+			k.name_label.visible = names
+	for h in huds:
+		h.apply_settings()

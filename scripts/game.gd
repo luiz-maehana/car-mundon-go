@@ -13,17 +13,42 @@ var laps := 3
 var track_id := "queijo"
 var difficulty := 1
 var muted := false
-var graphics_high := true  # RF-161
 var music: AudioStreamPlayer
+
+# ---------------------------------------------------------------- configurações (RF-180..185)
+
+const SETTINGS_PATH := "user://settings.cfg"
+const QUALITY_NAMES := ["BAIXO", "MÉDIO", "ALTO"]
+const FPS_OPTIONS := [0, 30, 60, 120, 144, 240]
+const DEFAULTS := {
+	"vol_master": 0.85, "vol_music": 0.7, "vol_sfx": 0.9, "vol_engine": 0.7,
+	"fullscreen": false, "vsync": true, "max_fps": 0, "quality": 2, "render_scale": 1.0, "fov": 72.0, "show_fps": false,
+	"shake": 1.0, "speed_lines": true, "particles_full": true, "show_names": true, "show_minimap": true,
+	"show_ranking": true, "speed_unit": "kmh", "deadzone": 0.25,
+}
+
+var settings: Dictionary = DEFAULTS.duplicate()
+var settings_path := SETTINGS_PATH  # os testes trocam pra não mexer no arquivo do jogador
+var fps_label: Label
+
+## Compatibilidade (RF-161): ALTO = qualidade 2.
+var graphics_high: bool:
+	get:
+		return int(settings["quality"]) == 2
+	set(v):
+		settings["quality"] = 2 if v else 0
 
 
 func _ready() -> void:
 	setup_inputs()
 	_setup_ui()
+	_setup_buses()
+	load_settings()
 	# RF-82: música contínua entre menu e corrida
 	music = AudioStreamPlayer.new()
 	music.stream = Sfx.get_sound("music")
 	music.volume_db = -3.0
+	music.bus = "Music"
 	# limitador no master: vários sons juntos não distorcem
 	if AudioServer.get_bus_effect_count(0) == 0:
 		var lim := AudioEffectHardLimiter.new()
@@ -147,8 +172,20 @@ func _setup_ui() -> void:
 	click = AudioStreamPlayer.new()
 	click.stream = load(UI + "sounds/click-a.ogg")
 	click.volume_db = -6.0
+	click.bus = "SFX"
 	add_child(click)
 	get_tree().node_added.connect(_on_node_added)
+	# contador de FPS global (RF-182)
+	var layer := CanvasLayer.new()
+	layer.layer = 100
+	add_child(layer)
+	fps_label = Label.new()
+	fps_label.position = Vector2(8, 4)
+	fps_label.add_theme_font_size_override("font_size", 16)
+	fps_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	fps_label.add_theme_constant_override("outline_size", 6)
+	fps_label.visible = false
+	layer.add_child(fps_label)
 
 
 func _on_node_added(n: Node) -> void:
@@ -159,3 +196,81 @@ func _on_node_added(n: Node) -> void:
 func _play_click() -> void:
 	if click:
 		click.play()
+
+
+# ---------------------------------------------------------------- configurações: buses, salvar, aplicar
+
+func _setup_buses() -> void:
+	for b in ["Music", "SFX", "Engine"]:
+		if AudioServer.get_bus_index(b) == -1:
+			AudioServer.add_bus()
+			var i := AudioServer.bus_count - 1
+			AudioServer.set_bus_name(i, b)
+			AudioServer.set_bus_send(i, "Master")
+
+
+func load_settings() -> void:
+	settings = DEFAULTS.duplicate()
+	var cfg := ConfigFile.new()
+	if cfg.load(settings_path) == OK:
+		for k in DEFAULTS:
+			var v = cfg.get_value("settings", k, DEFAULTS[k])
+			if typeof(v) == typeof(DEFAULTS[k]) or (typeof(DEFAULTS[k]) == TYPE_FLOAT and typeof(v) == TYPE_INT):
+				settings[k] = v
+	apply_settings()
+
+
+func save_settings() -> void:
+	var cfg := ConfigFile.new()
+	for k in settings:
+		cfg.set_value("settings", k, settings[k])
+	cfg.save(settings_path)
+
+
+func reset_settings() -> void:
+	settings = DEFAULTS.duplicate()
+	apply_settings()
+	save_settings()
+
+
+func set_setting(key: String, value) -> void:
+	settings[key] = value
+	apply_settings()
+	save_settings()
+
+
+static func vol_db(v: float) -> float:
+	return -80.0 if v <= 0.001 else linear_to_db(v)
+
+
+## Aplica o que é global (áudio, janela, FPS, resolução, zona morta). O que é da corrida
+## (bloom, MSAA, nomes, minimapa...) é aplicado por race.apply_settings().
+func apply_settings() -> void:
+	var s := settings
+	for pair in [["Master", "vol_master"], ["Music", "vol_music"], ["SFX", "vol_sfx"], ["Engine", "vol_engine"]]:
+		var i := AudioServer.get_bus_index(pair[0])
+		if i >= 0:
+			AudioServer.set_bus_volume_db(i, vol_db(float(s[pair[1]])))
+	AudioServer.set_bus_mute(0, muted)
+	if DisplayServer.get_name() != "headless":
+		var want := DisplayServer.WINDOW_MODE_FULLSCREEN if s["fullscreen"] else DisplayServer.WINDOW_MODE_WINDOWED
+		if DisplayServer.window_get_mode() != want:
+			DisplayServer.window_set_mode(want)
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if s["vsync"] else DisplayServer.VSYNC_DISABLED)
+	Engine.max_fps = int(s["max_fps"])
+	get_tree().root.scaling_3d_scale = float(s["render_scale"])
+	for p in MAX_PLAYERS:
+		for a in ACTIONS:
+			var act := action(p, a)
+			if InputMap.has_action(act):
+				InputMap.action_set_deadzone(act, float(s["deadzone"]))
+	if fps_label:
+		fps_label.visible = s["show_fps"]
+	var race := get_tree().current_scene
+	if race and race.has_method("apply_settings"):
+		race.apply_settings()
+
+
+func _process(_delta: float) -> void:
+	if fps_label and fps_label.visible:
+		fps_label.text = "%d FPS" % Engine.get_frames_per_second()

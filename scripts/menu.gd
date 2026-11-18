@@ -20,6 +20,8 @@ var track_btn: Button
 var diff_btn: Button
 var diff_i := 1
 var gfx_btn: Button
+var settings_overlay: Control
+const SettingsMenu = preload("res://scripts/settings_menu.gd")
 const DIFF_NAMES := ["FÁCIL", "NORMAL", "DIFÍCIL"]
 var track_i := 0
 var players_btn: Button
@@ -46,20 +48,16 @@ func _build() -> void:
 	bg.color = Color(0.07, 0.08, 0.15)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
-	# RF-161: qualidade gráfica (canto superior direito)
-	gfx_btn = _button("", 18)
-	gfx_btn.custom_minimum_size = Vector2(210, 44)
+	# RF-185: botão de configurações (canto superior direito)
+	gfx_btn = _button("CONFIGURAÇÕES", 18)
+	gfx_btn.custom_minimum_size = Vector2(230, 44)
 	gfx_btn.anchor_left = 1.0
 	gfx_btn.anchor_right = 1.0
-	gfx_btn.offset_left = -226
+	gfx_btn.offset_left = -246
 	gfx_btn.offset_right = -16
 	gfx_btn.offset_top = 12
 	gfx_btn.offset_bottom = 56
-	gfx_btn.pressed.connect(func():
-		var g := get_node_or_null("/root/Game")
-		if g:
-			g.graphics_high = not g.graphics_high
-		_refresh())
+	gfx_btn.pressed.connect(open_settings)
 
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -240,8 +238,6 @@ func _refresh() -> void:
 	laps_btn.text = "VOLTAS: %d" % LAP_OPTIONS[laps_i]
 	track_btn.text = "PISTA: %s" % TrackScript.TRACKS[track_i]["name"]
 	diff_btn.text = "IA: %s" % DIFF_NAMES[diff_i]
-	var game_g := get_node_or_null("/root/Game")
-	gfx_btn.text = "GRÁFICOS: %s" % ("ALTO" if (game_g == null or game_g.graphics_high) else "BAIXO")
 	go_btn.text = "CORRER!" if cur == num_players - 1 else "CONFIRMAR J%d" % (cur + 1)
 
 
@@ -253,7 +249,17 @@ func _move_selection(step: int) -> void:
 			return
 
 
+func open_settings() -> void:
+	if settings_overlay:
+		return
+	settings_overlay = SettingsMenu.new()
+	add_child(settings_overlay)
+	settings_overlay.closed.connect(func(): settings_overlay = null)
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if settings_overlay:
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
 		get_tree().change_scene_to_file("res://scenes/intro.tscn")  # RF-103
 		return

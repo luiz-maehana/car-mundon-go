@@ -19,6 +19,11 @@ func _initialize() -> void:
 
 func _run() -> void:
 	seed(42)
+	# configurações isoladas: não usa nem altera o arquivo do jogador
+	var g = root.get_node_or_null("Game")
+	if g:
+		g.settings_path = "user://test_settings.cfg"
+		g.reset_settings()
 	_test_characters()
 	_test_track()
 	await _test_race()
@@ -33,6 +38,7 @@ func _run() -> void:
 	await _test_v08()
 	await _test_graphics()
 	await _test_assets()
+	await _test_settings()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -511,8 +517,8 @@ func _test_graphics() -> void:
 	var Track = load("res://scripts/track.gd")
 	print("CA-23 qualidade gráfica")
 	var d: Dictionary = Track.TRACKS[0]
-	var hi: Environment = Gfx.environment(d, true)
-	var lo: Environment = Gfx.environment(d, false)
+	var hi: Environment = Gfx.environment(d, 2)
+	var lo: Environment = Gfx.environment(d, 0)
 	check(hi.glow_enabled and hi.ssao_enabled, "ALTO: glow e SSAO ligados")
 	check(not lo.glow_enabled and not lo.ssao_enabled, "BAIXO: glow e SSAO desligados")
 	var game = root.get_node_or_null("Game")
@@ -618,3 +624,67 @@ func _test_assets() -> void:
 		if ch != " " and not f.has_char(ch.unicode_at(0)):
 			missing += ch
 	check(missing == "", "fonte tem todos os caracteres do jogo%s" % ("" if missing == "" else " (faltam: %s)" % missing))
+
+
+func _test_settings() -> void:
+	var game = root.get_node_or_null("Game")
+	if game == null:
+		check(false, "autoload Game presente")
+		return
+	print("CA-30 salvar/carregar configurações")
+	game.reset_settings()
+	game.settings["vol_music"] = 0.35
+	game.settings["fov"] = 80.0
+	game.settings["show_names"] = false
+	game.settings["speed_unit"] = "mph"
+	game.save_settings()
+	game.settings = game.DEFAULTS.duplicate()
+	game.load_settings()
+	check(is_equal_approx(game.settings["vol_music"], 0.35) and game.settings["fov"] == 80.0 and game.settings["show_names"] == false and game.settings["speed_unit"] == "mph", "valores voltam iguais do arquivo")
+	var cfg := ConfigFile.new()
+	cfg.load(game.settings_path)
+	cfg.erase_section_key("settings", "quality")
+	cfg.save(game.settings_path)
+	game.load_settings()
+	check(game.settings["quality"] == game.DEFAULTS["quality"], "chave faltando usa o padrão")
+
+	print("CA-31 volumes nos buses")
+	game.set_setting("vol_sfx", 0.5)
+	game.set_setting("vol_engine", 0.0)
+	var sfx_db := AudioServer.get_bus_volume_db(AudioServer.get_bus_index("SFX"))
+	var eng_db := AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Engine"))
+	check(absf(sfx_db - linear_to_db(0.5)) < 0.1 and eng_db <= -79.0, "SFX %.1f dB, Engine %.1f dB (silêncio)" % [sfx_db, eng_db])
+
+	print("CA-32 tela de configurações")
+	var SM = load("res://scripts/settings_menu.gd")
+	var sm = SM.new()
+	root.add_child(sm)
+	await process_frame
+	check(sm.tabs.get_tab_count() == 4, "4 abas (ÁUDIO, VÍDEO, JOGO, CONTROLES)")
+	check(sm.controls.size() >= 15, "%d opções configuráveis" % sm.controls.size())
+	sm.controls["vol_master"]["node"].value = 0.2
+	check(is_equal_approx(game.settings["vol_master"], 0.2), "mexer no slider muda a configuração")
+	sm._reset()
+	check(game.settings == game.DEFAULTS and is_equal_approx(sm.controls["vol_master"]["node"].value, game.DEFAULTS["vol_master"]), "PADRÃO restaura tudo (e a tela)")
+	sm.close()
+	await process_frame
+
+	print("CA-33 configurações na corrida")
+	var race = await _new_race(["nanni"], true)
+	game.set_setting("show_names", false)
+	game.set_setting("show_minimap", false)
+	game.set_setting("show_ranking", false)
+	game.set_setting("fov", 64.0)
+	race.apply_settings()
+	var names_off := true
+	for k in race.karts:
+		if k.name_label.visible:
+			names_off = false
+	check(names_off and not race.huds[0].minimap.visible and not race.huds[0].ranking_box.visible, "nomes, minimapa e lista escondidos")
+	check(race.base_fov == 64.0, "campo de visão base = 64°")
+	game.reset_settings()
+	race.apply_settings()
+	check(race.karts[0].name_label.visible and race.huds[0].minimap.visible, "voltam ao ligar de novo")
+	race.queue_free()
+	await process_frame
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(game.settings_path))
