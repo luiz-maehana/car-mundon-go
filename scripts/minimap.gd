@@ -1,5 +1,7 @@
 extends Control
-## Minimapa visto de cima: pista + pontinho de cada kart.
+## Minimapa visto de cima: pista + busto de cada piloto (RF-112).
+
+const Chars = preload("res://scripts/characters.gd")
 
 var track: Node3D
 var karts: Array = []
@@ -7,6 +9,7 @@ var player: Node3D
 var poly := PackedVector2Array()
 var scale_f := 1.0
 var offset := Vector2.ZERO
+var heads_drawn := 0
 
 
 func setup(t: Node3D, k: Array, p: Node3D) -> void:
@@ -40,12 +43,23 @@ func _draw() -> void:
 	var a := _map(pts[0] + track.rights[0] * 8.0)
 	var b := _map(pts[0] - track.rights[0] * 8.0)
 	draw_line(a, b, Color.WHITE, 3.0)
+	# RF-112: busto de cada piloto; o jogador por último (por cima) e maior
+	heads_drawn = 0
+	var base := clampf(minf(size.x, size.y) * 0.15, 22.0, 56.0)
+	var order := []
 	for k in karts:
-		if k == player:
-			continue
-		if k.is_player:
-			draw_circle(_map(k.position), 6.5, Color.WHITE)
-		draw_circle(_map(k.position), 5.0, k.color)
+		if k != player:
+			order.append(k)
 	if player:
-		draw_circle(_map(player.position), 8.0, Color.WHITE)
-		draw_circle(_map(player.position), 6.0, player.color)
+		order.append(player)
+	for k in order:
+		var big: bool = k == player
+		var w := base * (1.35 if big else 1.0)
+		var c := _map(k.position)
+		draw_circle(c, w * 0.18 + (3.0 if big else 1.5), Color.WHITE if (big or k.is_player) else Color(0, 0, 0, 0.6))
+		draw_circle(c, w * 0.18, k.color)
+		var tex: Texture2D = Chars.art(k.char_id, "head")
+		if tex:
+			var h := w * float(tex.get_height()) / float(tex.get_width())
+			draw_texture_rect(tex, Rect2(c - Vector2(w * 0.5, h + w * 0.08), Vector2(w, h)), false)
+			heads_drawn += 1

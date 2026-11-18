@@ -88,11 +88,16 @@ static func _tone(b: PackedFloat32Array, rate: int, start: float, dur: float, f0
 		b[i0 + i] += s * vol * env
 
 
-static func _to_wav(b: PackedFloat32Array, rate: int, loop: bool) -> AudioStreamWAV:
+## Normaliza o pico para `target` (efeitos 0.9, música 0.75) antes de converter pra 16 bits.
+static func _to_wav(b: PackedFloat32Array, rate: int, loop: bool, target := 0.9) -> AudioStreamWAV:
+	var peak := 0.0001
+	for v in b:
+		peak = maxf(peak, absf(v))
+	var gain := target / peak
 	var data := PackedByteArray()
 	data.resize(b.size() * 2)
 	for i in b.size():
-		data.encode_s16(i * 2, int(clampf(b[i], -1.0, 1.0) * 32767.0))
+		data.encode_s16(i * 2, int(clampf(b[i] * gain, -1.0, 1.0) * 32767.0))
 	var w := AudioStreamWAV.new()
 	w.format = AudioStreamWAV.FORMAT_16_BITS
 	w.mix_rate = rate
@@ -141,4 +146,4 @@ static func _music() -> AudioStreamWAV:
 		for note in chords[c]:
 			_tone(b, r, t0, beat * 4, note, note, "tri", 0.025, 1.0)
 	b.resize(int(bars * 4 * beat * r))
-	return _to_wav(b, r, true)
+	return _to_wav(b, r, true, 0.75)

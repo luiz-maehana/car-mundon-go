@@ -28,6 +28,7 @@ func _run() -> void:
 	await _test_start()
 	await _test_pause()
 	await _test_intro()
+	await _test_faces()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -303,4 +304,32 @@ func _test_intro() -> void:
 	check(cur != null and cur.scene_file_path == "res://scenes/menu.tscn", "menu carregado depois da abertura")
 	if cur:
 		cur.queue_free()
+	await process_frame
+
+
+func _test_faces() -> void:
+	print("CA-14 caras só no mapa/HUD")
+	var race = await _new_race(["fejaum"], true)
+	var textured := 0
+	for k in race.karts:
+		for n in k.find_children("*", "MeshInstance3D", true, false):
+			var m = n.material_override
+			if m is StandardMaterial3D and m.albedo_texture != null:
+				textured += 1
+	check(textured == 0, "nenhum kart com a arte do rosto (%d)" % textured)
+	for i in 120:
+		race.step(1.0 / 60.0)
+	var hud = race.huds[0]
+	hud.update_hud(1.0 / 60.0)
+	var order: Array = race.ranking()
+	var names_ok: bool = hud.rank_rows.size() == 8
+	for i in mini(8, hud.rank_rows.size()):
+		if hud.rank_rows[i]["name"].text != order[i].display_name or hud.rank_rows[i]["head"].texture == null:
+			names_ok = false
+	check(names_ok, "HUD lista os 8 pilotos com busto, na ordem do ranking")
+	hud.minimap.queue_redraw()
+	await process_frame
+	await process_frame
+	check(hud.minimap.heads_drawn == 8, "minimapa desenha 8 bustos (%d)" % hud.minimap.heads_drawn)
+	race.queue_free()
 	await process_frame

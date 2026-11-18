@@ -390,42 +390,33 @@ func _build_model() -> void:
 	torso.radius = 0.33
 	torso.height = 0.8
 	_part(torso, trim, Vector3(0, 1.0, 0.25))
-	var head_top := 2.4
-	var head_tex: Texture2D = Chars.art(char_id, "head")
-	if head_tex:
-		# RF-71: busto do camundongo como sticker sempre virado pra câmera
-		var w := 2.1
-		var h := w * float(head_tex.get_height()) / float(head_tex.get_width())
-		var quad := QuadMesh.new()
-		quad.size = Vector2(w, h)
-		var hm := StandardMaterial3D.new()
-		hm.albedo_texture = head_tex
-		hm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		hm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-		hm.alpha_scissor_threshold = 0.5
-		hm.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-		hm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-		hm.cull_mode = BaseMaterial3D.CULL_DISABLED
-		var head := _part(quad, hm, Vector3(0, 1.3 + h * 0.5, 0.25))
-		head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		head_top = 1.3 + h
-	else:
-		# RF-74: sem arte, capacete colorido com orelhinhas
-		var head := SphereMesh.new()
-		head.radius = 0.4
-		head.height = 0.8
-		_part(head, body_mat, Vector3(0, 1.8, 0.25))
-		_part(_box(Vector3(0.55, 0.2, 0.12)), dark, Vector3(0, 1.82, -0.12))
-		var ear := SphereMesh.new()
-		ear.radius = 0.24
-		ear.height = 0.48
-		var ear_in := SphereMesh.new()
-		ear_in.radius = 0.15
-		ear_in.height = 0.3
-		var pink := _mat(Color(1.0, 0.6, 0.7))
-		for x in [-0.32, 0.32]:
-			_part(ear, body_mat, Vector3(x, 2.17, 0.3), Vector3.ZERO).scale = Vector3(1, 1, 0.35)
-			_part(ear_in, pink, Vector3(x, 2.17, 0.21), Vector3.ZERO).scale = Vector3(1, 1, 0.3)
+	# RF-111: camundongo de capacete (a arte do rosto fica só no minimapa/HUD)
+	var fur := _mat(Color(0.86, 0.7, 0.55))
+	var pink := _mat(Color(1.0, 0.55, 0.62))
+	var head := SphereMesh.new()
+	head.radius = 0.42
+	head.height = 0.84
+	_part(head, fur, Vector3(0, 1.8, 0.25))
+	var helmet := SphereMesh.new()
+	helmet.radius = 0.46
+	helmet.height = 0.46
+	helmet.is_hemisphere = true
+	_part(helmet, body_mat, Vector3(0, 1.84, 0.25))
+	_part(_box(Vector3(0.6, 0.16, 0.1)), dark, Vector3(0, 1.98, -0.17))
+	var nose := SphereMesh.new()
+	nose.radius = 0.09
+	nose.height = 0.18
+	_part(nose, pink, Vector3(0, 1.72, -0.18))
+	var ear := SphereMesh.new()
+	ear.radius = 0.34
+	ear.height = 0.68
+	var ear_in := SphereMesh.new()
+	ear_in.radius = 0.24
+	ear_in.height = 0.48
+	for x in [-0.5, 0.5]:
+		_part(ear, fur, Vector3(x, 2.25, 0.32)).scale = Vector3(1, 1, 0.3)
+		_part(ear_in, pink, Vector3(x, 2.25, 0.25)).scale = Vector3(1, 1, 0.25)
+	var head_top := 2.6
 	var lbl := Label3D.new()
 	lbl.text = display_name
 	lbl.font_size = 40

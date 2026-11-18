@@ -19,7 +19,12 @@ func _ready() -> void:
 	# RF-82: música contínua entre menu e corrida
 	music = AudioStreamPlayer.new()
 	music.stream = Sfx.get_sound("music")
-	music.volume_db = -7.0
+	music.volume_db = -3.0
+	# limitador no master: vários sons juntos não distorcem
+	if AudioServer.get_bus_effect_count(0) == 0:
+		var lim := AudioEffectHardLimiter.new()
+		lim.ceiling_db = -0.5
+		AudioServer.add_bus_effect(0, lim)
 	add_child(music)
 	music.play()
 

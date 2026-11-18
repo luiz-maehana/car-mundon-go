@@ -89,7 +89,7 @@ func _build_audio() -> void:
 	gen.buffer_length = 0.1
 	engine_player = AudioStreamPlayer.new()
 	engine_player.stream = gen
-	engine_player.volume_db = -8.0 - 2.0 * (players.size() - 1)
+	engine_player.volume_db = -6.0 - 2.0 * (players.size() - 1)
 	add_child(engine_player)
 	engine_player.play()
 	for p in players:
@@ -130,7 +130,7 @@ func _process(_delta: float) -> void:
 		var f := 38.0 + absf(k.speed) * 2.6
 		if k.boost_time > 0.0:
 			f *= 1.3
-		var target_amp := 0.0 if paused else (0.10 + 0.08 * clampf(k.in_throttle, 0.0, 1.0))
+		var target_amp := 0.0 if paused else (0.22 + 0.14 * clampf(k.in_throttle, 0.0, 1.0))
 		var phase: float = e["phase"]
 		var amp: float = e["amp"]
 		for i in frames:

@@ -25,6 +25,8 @@ var last_lap := 1
 var msg_time := 0.0
 var start_shown := false
 var lbl_mute: Label
+var rank_rows: Array = []
+var minimap: Control
 
 
 func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
@@ -118,12 +120,69 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 	mm.anchor_top = 1.0
 	mm.anchor_bottom = 1.0
 	mm.offset_left = 20
-	mm.offset_right = 250
-	mm.offset_top = -250
+	mm.offset_right = 290
+	mm.offset_top = -290
 	mm.offset_bottom = -20
 	mm.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(mm)
 	mm.setup(race.track, race.karts, kart)
+	minimap = mm
+	_build_ranking()
+
+
+## RF-113: lista de posições ao vivo com busto + nome, na lateral direita.
+func _build_ranking() -> void:
+	var vb := VBoxContainer.new()
+	vb.anchor_left = 1.0
+	vb.anchor_right = 1.0
+	vb.offset_left = -236
+	vb.offset_right = -16
+	vb.offset_top = 124
+	vb.add_theme_constant_override("separation", 3)
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(vb)
+	for i in race.karts.size():
+		var row := PanelContainer.new()
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var st := StyleBoxFlat.new()
+		st.bg_color = Color(0, 0, 0, 0.45)
+		st.set_corner_radius_all(8)
+		st.content_margin_left = 6
+		st.content_margin_right = 8
+		row.add_theme_stylebox_override("panel", st)
+		vb.add_child(row)
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 6)
+		hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(hb)
+		var pos := _label(20, hb)
+		pos.text = "%dº" % (i + 1)
+		pos.custom_minimum_size.x = 34
+		var head := TextureRect.new()
+		head.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		head.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		head.custom_minimum_size = Vector2(44, 32)
+		head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hb.add_child(head)
+		var nm := _label(20, hb)
+		rank_rows.append({"style": st, "head": head, "name": nm})
+
+
+func _update_ranking() -> void:
+	var order: Array = race.ranking()
+	for i in rank_rows.size():
+		var r: Dictionary = rank_rows[i]
+		var k: Node3D = order[i]
+		r["head"].texture = Chars.art(k.char_id, "head")
+		r["name"].text = k.display_name
+		r["name"].add_theme_color_override("font_color", k.color.lightened(0.25))
+		var me: bool = k == kart
+		r["style"].bg_color = Color(1.0, 0.85, 0.2, 0.55) if me else (Color(0.3, 0.3, 0.45, 0.5) if k.is_player else Color(0, 0, 0, 0.45))
+
+
+func _process(_delta: float) -> void:
+	if root:
+		_fit()
 
 
 ## O root tem o tamanho do quadro dividido pela escala, então as âncoras continuam valendo.
@@ -172,6 +231,7 @@ func update_hud(delta: float) -> void:
 	if kart == null:
 		return
 	var p := kart
+	_update_ranking()
 	var lap: int = race.lap_of(p)
 	lbl_lap.text = "VOLTA %d/%d" % [lap, race.laps]
 	lbl_time.text = fmt_time(race.race_time)

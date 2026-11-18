@@ -98,7 +98,7 @@ Conversão de stat para física (em `kart.gd`):
 
 ### Arte dos camundongos (v0.3 — substitui as fotos)
 - [x] **RF-70** Cada piloto tem ilustração de camundongo de corpo inteiro. `tools/process_characters.gd` remove o fundo e gera `assets/chars/<id>.png` (corpo) e `assets/chars/<id>_head.png` (busto com orelhas).
-- [x] **RF-71** No kart, o busto é a cabeça do piloto (*sticker* sempre virado pra câmera), em cima do corpo na cor do piloto.
+- [x] ~~**RF-71** busto como cabeça do piloto no kart~~ → removido no v0.6 (feedback: caras só no mapa/HUD).
 - [x] **RF-72** Os cards do menu mostram o busto.
 - [x] **RF-73** O HUD mostra o busto do jogador ao lado da posição; o resultado tem **pódio** com o top 3 de corpo inteiro e o busto de cada piloto na lista.
 - [x] **RF-74** Sem arte, o piloto usa capacete colorido com orelhinhas (o jogo não quebra).
@@ -118,6 +118,12 @@ Conversão de stat para física (em `kart.gd`):
 - [x] **RF-101** Um aviso "APERTE ENTER PARA COMEÇAR" pisca embaixo; qualquer tecla, clique ou botão de controle vai pro menu (Esc fecha o jogo).
 - [x] **RF-102** A arte entra com um *fade-in* rápido e um leve zoom lento (efeito "vivo").
 - [x] **RF-103** No menu, `Esc` volta pra tela de abertura.
+
+### Ajustes do primeiro playtest (v0.6)
+- [x] **RF-110** Volume: todo som gerado é normalizado (efeitos com pico 0.9, música 0.75) e o master tem limitador em -0.5 dB. Pico medido na corrida entre -6 e -0.5 dB (antes: -11 a -15 dB, "som baixo").
+- [x] **RF-111** No kart, o piloto é um camundongo de capacete na cor do piloto, com orelhonas e nome em cima. A arte dos rostos **não** aparece na pista.
+- [x] **RF-112** O minimapa mostra o busto de cada piloto no lugar do pontinho (o jogador com borda branca, por cima dos outros).
+- [x] **RF-113** O HUD tem a lista de posições ao vivo (busto + nome, 1º a 8º) na lateral esquerda; a linha do jogador fica destacada.
 
 ## 5. Controles
 
@@ -175,6 +181,7 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-11** Largada: acelerar a 1.2 s do VAI dá turbo; acelerar desde o início queima; não acelerar não dá nada.
 - [x] **CA-12** Com a corrida pausada, `step()` não avança tempo nem karts.
 - [x] **CA-13** A tela de abertura carrega a arte, é a cena principal do projeto e um aperto de tecla leva pro menu.
+- [x] **CA-14** Nenhum kart tem a arte do rosto como malha; o minimapa desenha 8 bustos e o HUD lista os 8 pilotos na ordem do ranking.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
