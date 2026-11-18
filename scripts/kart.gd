@@ -59,6 +59,13 @@ var ai_lane := 0.0
 var ai_lane_timer := 0.0
 var ai_item_delay := 3.0
 
+# largada (RF-85..87)
+const START_WINDOW_EARLY := 1.6
+const START_WINDOW_LATE := 0.6
+var start_hold := -1.0     # countdown no momento em que começou a segurar o acelerador
+var start_stall := 0.0
+var start_result := ""     # "" | "turbo" | "queimou"
+
 # input do frame
 var in_throttle := 0.0
 var in_steer := 0.0
@@ -116,6 +123,33 @@ func hit() -> void:
 	drifting = false
 	boost_time = 0.0
 	speed *= 0.35
+	if is_player:
+		race.sfx("hit")
+
+
+## Chamado pela corrida no VAI! (RF-85..87).
+func on_race_start() -> void:
+	if autopilot:
+		if randf() < 0.35:
+			start_result = "turbo"
+	elif start_hold > START_WINDOW_EARLY:
+		start_result = "queimou"
+	elif start_hold >= START_WINDOW_LATE:
+		start_result = "turbo"
+	if start_result == "turbo":
+		boost_time = maxf(boost_time, 1.0)
+	elif start_result == "queimou":
+		start_stall = 0.7
+
+
+func _track_start_hold() -> void:
+	if autopilot or race.state != "countdown":
+		return
+	if in_throttle > 0.5:
+		if start_hold < 0.0:
+			start_hold = race.countdown
+	else:
+		start_hold = -1.0
 
 
 func step(delta: float, can_drive: bool) -> void:
@@ -124,6 +158,8 @@ func step(delta: float, can_drive: bool) -> void:
 		_ai_input(delta)
 	else:
 		_player_input()
+	if not can_drive:
+		_track_start_hold()
 	if can_drive:
 		_move(delta)
 		_update_track(delta)
@@ -146,6 +182,9 @@ func _move(delta: float) -> void:
 		throttle = 0.0
 		steer = 0.0
 		speed = move_toward(speed, 0.0, 30.0 * delta)
+	if start_stall > 0.0:
+		start_stall -= delta
+		throttle = 0.0
 
 	var top := max_speed
 	if autopilot and not is_player:
@@ -179,6 +218,8 @@ func _move(delta: float) -> void:
 	if drifting and (not in_drift or speed < DRIFT_MIN_SPEED * 0.6 or spin_time > 0.0):
 		drifting = false
 		if spin_time <= 0.0:
+			if drift_charge >= MINI_TURBO_1 and is_player:
+				race.sfx("mini_turbo")
 			if drift_charge >= MINI_TURBO_2:
 				boost_time = maxf(boost_time, 1.1)
 			elif drift_charge >= MINI_TURBO_1:

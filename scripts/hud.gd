@@ -23,6 +23,8 @@ var item_style: StyleBoxFlat
 var results: PanelContainer
 var last_lap := 1
 var msg_time := 0.0
+var start_shown := false
+var lbl_mute: Label
 
 
 func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
@@ -89,9 +91,19 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 	lbl_msg.offset_top = 130
 	lbl_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
+	lbl_mute = _label(20)
+	lbl_mute.text = "SEM SOM (M)"
+	lbl_mute.anchor_left = 0.5
+	lbl_mute.anchor_right = 0.5
+	lbl_mute.offset_left = -100
+	lbl_mute.offset_right = 100
+	lbl_mute.offset_top = 96
+	lbl_mute.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl_mute.visible = false
+
 	if show_hint:
 		var hint := _label(16)
-		hint.text = "WASD/Setas: pilotar · Espaço: drift · E: item · R: reiniciar · Esc: menu"
+		hint.text = "WASD/Setas: pilotar · Espaço: drift · E: item · Esc: pausar · M: som"
 		hint.anchor_left = 1.0
 		hint.anchor_right = 1.0
 		hint.anchor_top = 1.0
@@ -183,6 +195,14 @@ func update_hud(delta: float) -> void:
 	else:
 		lbl_center.text = ""
 
+	if p.start_result != "" and not start_shown:
+		start_shown = true
+		_flash("LARGADA TURBO!" if p.start_result == "turbo" else "QUEIMOU!", 1.5)
+		lbl_msg.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0) if p.start_result == "turbo" else Color(1.0, 0.4, 0.3))
+	elif msg_time <= 0.0:
+		lbl_msg.remove_theme_color_override("font_color")
+	var game := get_node_or_null("/root/Game")
+	lbl_mute.visible = game != null and game.muted
 	if not p.finished:
 		if lap > last_lap:
 			_flash("VOLTA FINAL!" if lap == race.laps else "VOLTA %d" % lap)

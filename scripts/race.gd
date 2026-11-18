@@ -6,6 +6,8 @@ const TrackScript = preload("res://scripts/track.gd")
 const KartScript = preload("res://scripts/kart.gd")
 const HudScript = preload("res://scripts/hud.gd")
 const Chars = preload("res://scripts/characters.gd")
+const Sfx = preload("res://scripts/sfx.gd")
+const ENGINE_RATE := 22050.0
 
 const COUNTDOWN := 3.0
 const BOX_RESPAWN := 3.0
@@ -32,6 +34,15 @@ var boxes: Array = []    # {node, pos, cd}
 var hazards: Array = []  # {node, type, pos, vel, life, owner, age, idx}
 var boxes_picked := 0
 var rng := RandomNumberGenerator.new()
+var paused := false
+var pause_layer: CanvasLayer
+var pause_resume_btn: Button
+var sfx_players: Array = []
+var sfx_next := 0
+var sfx_log: Array = []   # nomes tocados (usado pelos testes)
+var engines: Array = []   # {player: AudioStreamPlayer, kart, phase}
+var last_beep := 4
+var human_laps: Array = []
 
 
 func _ready() -> void:
@@ -49,6 +60,128 @@ func _ready() -> void:
 	_spawn_boxes()
 	_build_views()
 	_update_cameras(1.0, true)
+	_build_audio()
+	_build_pause()
+	for p in players:
+		human_laps.append(1)
+
+
+# ---------------------------------------------------------------- áudio (RF-80..83)
+
+func _build_audio() -> void:
+	for i in 8:
+		var ap := AudioStreamPlayer.new()
+		ap.volume_db = -4.0
+		add_child(ap)
+		sfx_players.append(ap)
+	var vol := -8.0 - 3.0 * (players.size() - 1)
+	for p in players:
+		var gen := AudioStreamGenerator.new()
+		gen.mix_rate = ENGINE_RATE
+		gen.buffer_length = 0.1
+		var ap := AudioStreamPlayer.new()
+		ap.stream = gen
+		ap.volume_db = vol
+		add_child(ap)
+		ap.play()
+		engines.append({"player": ap, "kart": p, "phase": 0.0, "amp": 0.0})
+
+
+func sfx(sound_name: String) -> void:
+	sfx_log.append(sound_name)
+	if sfx_players.is_empty():
+		return
+	var ap: AudioStreamPlayer = sfx_players[sfx_next]
+	sfx_next = (sfx_next + 1) % sfx_players.size()
+	ap.stream = Sfx.get_sound(sound_name)
+	ap.play()
+
+
+## RF-81: motor = serra + onda quadrada uma oitava abaixo; frequência acompanha a velocidade.
+func _process(_delta: float) -> void:
+	for e in engines:
+		var ap: AudioStreamPlayer = e["player"]
+		if not ap.playing:
+			continue
+		var pb := ap.get_stream_playback() as AudioStreamGeneratorPlayback
+		if pb == null:
+			continue
+		var frames := pb.get_frames_available()
+		if frames <= 0:
+			continue
+		var k: Node3D = e["kart"]
+		var f := 38.0 + absf(k.speed) * 2.6
+		if k.boost_time > 0.0:
+			f *= 1.3
+		var target_amp := 0.0 if paused else (0.10 + 0.08 * clampf(k.in_throttle, 0.0, 1.0))
+		var phase: float = e["phase"]
+		var amp: float = e["amp"]
+		var buf := PackedVector2Array()
+		buf.resize(frames)
+		for i in frames:
+			phase = fmod(phase + f / ENGINE_RATE, 2.0)
+			var saw := fmod(phase, 1.0) * 2.0 - 1.0
+			var sub := 1.0 if phase < 1.0 else -1.0
+			amp = lerpf(amp, target_amp, 0.0005)
+			var s := (saw * 0.6 + sub * 0.4) * amp
+			buf[i] = Vector2(s, s)
+		pb.push_buffer(buf)
+		e["phase"] = phase
+		e["amp"] = amp
+
+
+# ---------------------------------------------------------------- pause (RF-90)
+
+func _build_pause() -> void:
+	pause_layer = CanvasLayer.new()
+	pause_layer.layer = 20
+	pause_layer.visible = false
+	add_child(pause_layer)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_layer.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_layer.add_child(center)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 14)
+	center.add_child(vb)
+	var title := Label.new()
+	title.text = "PAUSADO"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 64)
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	title.add_theme_color_override("font_outline_color", Color.BLACK)
+	title.add_theme_constant_override("outline_size", 10)
+	vb.add_child(title)
+	var opts := [["Continuar", toggle_pause], ["Reiniciar (R)", restart], ["Menu", to_menu]]
+	for o in opts:
+		var b := Button.new()
+		b.text = o[0]
+		b.custom_minimum_size = Vector2(320, 60)
+		b.add_theme_font_size_override("font_size", 28)
+		b.pressed.connect(o[1])
+		vb.add_child(b)
+		if pause_resume_btn == null:
+			pause_resume_btn = b
+	var hint := Label.new()
+	hint.text = "M: liga/desliga o som"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.modulate = Color(1, 1, 1, 0.7)
+	vb.add_child(hint)
+
+
+func toggle_pause() -> void:
+	if results_shown:
+		return
+	paused = not paused
+	pause_layer.visible = paused
+	var game := get_node_or_null("/root/Game")
+	if game and game.music:
+		game.music.stream_paused = paused
+	if paused:
+		pause_resume_btn.grab_focus()
 
 
 func _make_camera(i: int) -> Camera3D:
@@ -129,18 +262,35 @@ func _physics_process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	var pause_pressed := false
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
-			to_menu()
+			pause_pressed = true
 		elif event.physical_keycode == KEY_R:
 			restart()
+	elif event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_START:
+		pause_pressed = true
+	if pause_pressed:
+		if results_shown:
+			to_menu()
+		else:
+			toggle_pause()
+		get_viewport().set_input_as_handled()
+
+
+func _leave() -> void:
+	var game := get_node_or_null("/root/Game")
+	if game and game.music:
+		game.music.stream_paused = false
 
 
 func restart() -> void:
+	_leave()
 	get_tree().reload_current_scene()
 
 
 func to_menu() -> void:
+	_leave()
 	get_tree().change_scene_to_file("res://scenes/menu.tscn")
 
 
@@ -246,12 +396,24 @@ func _spawn_boxes() -> void:
 # ---------------------------------------------------------------- loop
 
 func step(delta: float) -> void:
+	if paused:  # RF-90 / CA-12
+		return
 	if state == "countdown":
+		var c := int(ceil(countdown))
+		if c < last_beep and c > 0:
+			last_beep = c
+			sfx("beep")
 		countdown -= delta
 		if countdown <= 0.0:
 			state = "racing"
+			sfx("go")
+			for k in karts:
+				k.on_race_start()
+				if k.is_player and k.start_result != "":
+					sfx("start_turbo" if k.start_result == "turbo" else "stall")
 	else:
 		race_time += delta
+		_human_lap_sounds()
 	var can_drive := state != "countdown"
 	_update_rubber()
 	for k in karts:
@@ -265,6 +427,15 @@ func step(delta: float) -> void:
 	_update_cameras(delta, false)
 	for h in huds:
 		h.update_hud(delta)
+
+
+func _human_lap_sounds() -> void:
+	for i in players.size():
+		var p: Node3D = players[i]
+		var lap := lap_of(p)
+		if lap > human_laps[i] and not p.finished:
+			sfx("lap")
+		human_laps[i] = lap
 
 
 func humans_finished() -> bool:
@@ -327,6 +498,8 @@ func _update_boxes(delta: float) -> void:
 					k.item_hold = 0.0
 					k.ai_item_delay = rng.randf_range(1.5, 5.0)
 					boxes_picked += 1
+					if k.is_player:
+						sfx("item")
 				b["cd"] = BOX_RESPAWN
 				node.visible = false
 				break
@@ -342,6 +515,8 @@ func _roll_item(rank: int) -> String:
 
 
 func use_item(k: Node3D, it: String) -> void:
+	if k.is_player:
+		sfx({"turbo": "boost", "casca": "drop", "bomba": "shoot"}[it])
 	match it:
 		"turbo":
 			k.boost_time = maxf(k.boost_time, KartScript.ITEM_BOOST)
@@ -455,6 +630,8 @@ func _check_finish(delta: float) -> void:
 			k.finished = true
 			k.finish_time = race_time
 			k.autopilot = true
+			if k.is_player:
+				sfx("finish")
 	if state == "racing" and humans_finished():  # RF-65
 		state = "finished"
 		end_timer = RESULTS_DELAY

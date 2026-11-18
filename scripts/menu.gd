@@ -77,7 +77,7 @@ func _build() -> void:
 	go_btn.pressed.connect(_confirm)
 	row.add_child(go_btn)
 
-	var help := _label("Setas: escolher · Enter: confirmar · Backspace: desfazer · J1 = WASD/controle 1 · J2 = setas/controle 2 · J3/J4 = controles 3/4", 15, Color(1, 1, 1, 0.6))
+	var help := _label("Setas: escolher · Enter: confirmar · Backspace: desfazer · J1 = WASD/controle 1 · J2 = setas/controle 2 · J3/J4 = controles 3/4 · M: som", 15, Color(1, 1, 1, 0.6))
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(help)
 

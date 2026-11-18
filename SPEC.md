@@ -103,6 +103,16 @@ Conversão de stat para física (em `kart.gd`):
 - [x] **RF-73** O HUD mostra o busto do jogador ao lado da posição; o resultado tem **pódio** com o top 3 de corpo inteiro e o busto de cada piloto na lista.
 - [x] **RF-74** Sem arte, o piloto usa capacete colorido com orelhinhas (o jogo não quebra).
 
+### Áudio, largada turbo e pause (v0.4)
+- [x] **RF-80** Todo som é sintetizado em código (`scripts/sfx.gd`), sem arquivos de áudio: bipes da contagem, "VAI!", caixa de item, turbo, casca, bomba, rodada, volta, chegada.
+- [x] **RF-81** Motor de cada jogador humano com tom que sobe com a velocidade (e mais agudo no turbo).
+- [x] **RF-82** Música chiptune em loop no menu e na corrida (gerada uma vez e reaproveitada). `M` liga/desliga todo o som.
+- [x] **RF-83** Sons de eventos só tocam quando envolvem um jogador humano (os da IA não poluem o áudio).
+- [x] **RF-85** **Largada turbo:** começar a segurar o acelerador quando faltam entre 1.6 s e 0.6 s pro VAI dá 1 s de turbo ("LARGADA TURBO!").
+- [x] **RF-86** **Queimou:** segurar o acelerador desde antes de 1.6 s deixa o kart 0.7 s sem acelerar ("QUEIMOU!"). Soltar antes do VAI zera.
+- [x] **RF-87** A IA acerta a largada turbo 35% das vezes.
+- [x] **RF-90** **Pause:** `Esc` (ou Start no controle) pausa com menu Continuar / Reiniciar / Menu; `Esc` de novo continua. Na tela de resultado, `Esc` vai pro menu.
+
 ## 5. Controles
 
 | Ação | Jogador 1 (teclado) | Jogador 2 (teclado) | Controle (J1..J4 = controle 1..4) |
@@ -113,7 +123,8 @@ Conversão de stat para física (em `kart.gd`):
 | Drift | Espaço / Shift esq. | Shift dir. / Numpad 0 | RB |
 | Usar item | E / Ctrl esq. | Enter / Ctrl dir. | LB ou X |
 | Reiniciar | R | R | — |
-| Menu | Esc | Esc | — |
+| Pausar | Esc | Esc | Start |
+| Som liga/desliga | M | M | — |
 
 Jogadores 3 e 4 só por controle. Com 1 jogador, as teclas do J2 também valem para o J1.
 
@@ -152,6 +163,9 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-07** Corrida com 4 humanos (em piloto automático) cria 4 câmeras/quadros, coloca os humanos nas 4 últimas posições do grid e termina com os 8 karts.
 - [x] **CA-08** Mapa de controles: cada ação existe para J1..J4, e os eventos de controle de cada jogador só aceitam o seu próprio controle.
 - [x] **CA-09** Os 8 pilotos têm arte de corpo e busto carregável, com fundo transparente (cantos com alpha 0).
+- [x] **CA-10** Todos os sons existem e não estão vazios; a música tem loop ligado e dura > 8 s.
+- [x] **CA-11** Largada: acelerar a 1.2 s do VAI dá turbo; acelerar desde o início queima; não acelerar não dá nada.
+- [x] **CA-12** Com a corrida pausada, `step()` não avança tempo nem karts.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
@@ -161,9 +175,9 @@ Teste manual (checklist por release):
 ## 9. Roadmap pós-MVP (cada item vira seção nova desta spec)
 1. **Rostos/modelos dos amigos** — fotos já suportadas em `assets/faces/`; depois modelos low-poly.
 2. ~~**Multiplayer local** em tela dividida (2–4 jogadores).~~ → §4 RF-60..67.
-3. **Áudio**: motor, drift, itens, música.
+3. ~~**Áudio**~~ → §4 RF-80..83.
 4. **Mais pistas** com elevação, rampas e atalhos; modo Grand Prix (4 pistas, pontos).
 5. **Mais itens** (escudo, raio, item "assinatura" por piloto).
-6. **Largada turbo** (acelerar no tempo certo da contagem).
+6. ~~**Largada turbo**~~ → §4 RF-85..87.
 7. **Export web** (GitHub Pages) pra turma jogar no navegador.
 8. **Multiplayer online.**

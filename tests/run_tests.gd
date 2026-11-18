@@ -24,6 +24,9 @@ func _run() -> void:
 	await _test_race()
 	_test_inputs()
 	await _test_multiplayer()
+	_test_sounds()
+	await _test_start()
+	await _test_pause()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -199,5 +202,82 @@ func _test_multiplayer() -> void:
 		t += dt
 	check(race.all_finished(), "todos terminaram (%.1f s simulados)" % t)
 	check(race.results_shown, "resultado apareceu após todos os humanos terminarem")
+	race.queue_free()
+	await process_frame
+
+
+func _new_race(chars: Array, auto: bool) -> Node:
+	var race = load("res://scripts/race.gd").new()
+	race.use_game_settings = false
+	race.autopilot_player = auto
+	race.player_chars = chars
+	race.laps = 1
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	return race
+
+
+func _test_sounds() -> void:
+	print("CA-10 sons sintetizados")
+	var Sfx = load("res://scripts/sfx.gd")
+	var ok := true
+	for n in Sfx.NAMES:
+		var w: AudioStreamWAV = Sfx.get_sound(n)
+		if w == null or w.data.size() < 200:
+			ok = false
+			printerr("     som vazio: ", n)
+	check(ok, "%d efeitos com conteúdo" % Sfx.NAMES.size())
+	var m: AudioStreamWAV = Sfx.get_sound("music")
+	var secs: float = m.data.size() / 2.0 / m.mix_rate
+	check(m.loop_mode == AudioStreamWAV.LOOP_FORWARD and secs > 8.0, "música em loop (%.1f s)" % secs)
+
+
+## Roda a contagem; press_at = countdown em que começa a segurar o acelerador (-1 = nunca).
+func _run_start(press_at: float) -> String:
+	var race = await _new_race(["telles"], false)
+	var dt := 1.0 / 60.0
+	while race.state == "countdown":
+		if press_at >= 0.0 and race.countdown <= press_at:
+			Input.action_press("p1_accelerate")
+		race.step(dt)
+	race.step(dt)
+	var p = race.player
+	var res := "%s|%s|%s" % [p.start_result, p.boost_time > 0.0, p.start_stall > 0.0]
+	Input.action_release("p1_accelerate")
+	var beeps: int = race.sfx_log.count("beep")
+	var went: bool = race.sfx_log.has("go")
+	race.queue_free()
+	await process_frame
+	return res + "|%d|%s" % [beeps, went]
+
+
+func _test_start() -> void:
+	print("CA-11 largada turbo")
+	var r: String = await _run_start(1.2)
+	check(r.begins_with("turbo|true|false"), "acelerar a 1.2 s do VAI dá turbo (%s)" % r)
+	check(r.ends_with("|3|true"), "3 bipes + som do VAI")
+	r = await _run_start(3.0)
+	check(r.begins_with("queimou|false|true"), "acelerar desde o início queima (%s)" % r)
+	r = await _run_start(-1.0)
+	check(r.begins_with("|false|false"), "sem acelerar, largada normal (%s)" % r)
+
+
+func _test_pause() -> void:
+	print("CA-12 pause")
+	var race = await _new_race(["telles"], true)
+	var dt := 1.0 / 60.0
+	for i in 60 * 6:
+		race.step(dt)
+	race.toggle_pause()
+	var t0: float = race.race_time
+	var p0: Vector3 = race.karts[0].position
+	for i in 120:
+		race.step(dt)
+	check(race.paused and race.race_time == t0 and race.karts[0].position == p0, "pausado: tempo e karts parados")
+	race.toggle_pause()
+	for i in 60:
+		race.step(dt)
+	check(not race.paused and race.race_time > t0, "despausou: corrida continua")
 	race.queue_free()
 	await process_frame

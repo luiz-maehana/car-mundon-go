@@ -33,3 +33,7 @@ godot --path . --script tools/screenshot.gd -- <pasta_saida>
 ## Multiplayer local
 No menu, `JOGADORES: N` (1–4). Cada jogador confirma o seu piloto em sequência (Backspace desfaz).
 J1 = WASD + Espaço/E ou controle 1 · J2 = setas + Shift dir./Enter ou controle 2 · J3/J4 = controles 3/4.
+
+## Som e pause
+Todo som é sintetizado em código (`scripts/sfx.gd`). `M` liga/desliga · `Esc`/Start pausa.
+Largada turbo: comece a acelerar quando aparecer o **2** (entre 1.6 s e 0.6 s do VAI). Antes disso, queima.

@@ -5,13 +5,33 @@ extends Node
 const MAX_PLAYERS := 4
 const ACTIONS := ["accelerate", "brake", "steer_left", "steer_right", "drift", "use_item"]
 
+const Sfx = preload("res://scripts/sfx.gd")
+
 var num_players := 1
 var selected_chars: Array = ["fejaum"]
 var laps := 3
+var muted := false
+var music: AudioStreamPlayer
 
 
 func _ready() -> void:
 	setup_inputs()
+	# RF-82: música contínua entre menu e corrida
+	music = AudioStreamPlayer.new()
+	music.stream = Sfx.get_sound("music")
+	music.volume_db = -7.0
+	add_child(music)
+	music.play()
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_M:
+		toggle_mute()
+
+
+func toggle_mute() -> void:
+	muted = not muted
+	AudioServer.set_bus_mute(0, muted)
 
 
 static func action(player: int, name: String) -> String:
