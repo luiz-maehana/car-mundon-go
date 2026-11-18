@@ -92,6 +92,9 @@ func _ready() -> void:
 	if audio_enabled:
 		_build_audio()
 	_build_pause()
+	var game_m := get_node_or_null("/root/Game")
+	if game_m:
+		game_m.play_music(track.def.get("music", track.def["id"]))  # RF-221
 	apply_settings()
 	for p in players:
 		human_laps.append(1)
@@ -434,6 +437,7 @@ func step(delta: float) -> void:
 		if countdown <= 0.0:
 			state = "racing"
 			sfx("go")
+			sfx("crowd")  # RF-222
 			for k in karts:
 				k.on_race_start()
 				if k.is_player and k.start_result != "":
@@ -845,6 +849,7 @@ func _check_finish(delta: float) -> void:
 			k.autopilot = true
 			if k.is_player:
 				sfx("finish")
+				sfx("crowd")
 				k.celebrate()
 	if state == "racing" and humans_finished():  # RF-65
 		state = "finished"

@@ -14,6 +14,7 @@ var track_id := "queijo"
 var difficulty := 1
 var muted := false
 var music: AudioStreamPlayer
+var current_music := ""
 
 # ---------------------------------------------------------------- configurações (RF-180..185)
 
@@ -46,7 +47,8 @@ func _ready() -> void:
 	load_settings()
 	# RF-82: música contínua entre menu e corrida
 	music = AudioStreamPlayer.new()
-	music.stream = Sfx.get_sound("music")
+	music.stream = Sfx.music("menu")
+	current_music = "menu"
 	music.volume_db = -3.0
 	music.bus = "Music"
 	# limitador no master: vários sons juntos não distorcem
@@ -354,3 +356,15 @@ func gp_next() -> bool:
 	gp_index += 1
 	track_id = GP_TRACKS[gp_index]
 	return true
+
+
+## RF-221: troca a trilha (sem reiniciar se o estilo já está tocando).
+func play_music(style: String) -> void:
+	if music == null:
+		return
+	if current_music == style and music.playing:
+		return
+	current_music = style
+	music.stream = Sfx.music(style)
+	music.pitch_scale = 1.0
+	music.play()

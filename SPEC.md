@@ -208,14 +208,14 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
   - Burcca e Ortiz agressivos; Nanni e Mugurin cautelosos; Telles e Shinando focados; FeJauM e Digão equilibrados.
 
 ### Música por pista e torcida (v0.15)
-- [ ] **RF-220** Cada contexto tem a sua trilha chiptune gerada em código (`Sfx.music(estilo)`), em loop e guardada em cache:
+- [x] **RF-220** Cada contexto tem a sua trilha chiptune gerada em código (`Sfx.music(estilo)`), em loop e guardada em cache:
   - `menu` (abertura/menu) — 118 bpm, dó maior, calma.
   - `queijo` — 150 bpm, lá menor (a trilha original).
   - `deserto` — 136 bpm, ré com escala "árabe" (frígio dominante) e percussão seca.
   - `cozinha` — 164 bpm, mi menor, baixo em oitavas, mais funk.
   - `victory` — 132 bpm, sol maior, pra tela de campeão do GP.
-- [ ] **RF-221** A música troca sozinha ao mudar de tela/pista (`Game.play_music`), sem reiniciar se o estilo já está tocando. A aceleração da volta final continua valendo.
-- [ ] **RF-222** Torcida sintetizada (`crowd`) no VAI! e quando um humano cruza a chegada.
+- [x] **RF-221** A música troca sozinha ao mudar de tela/pista (`Game.play_music`), sem reiniciar se o estilo já está tocando. A aceleração da volta final continua valendo.
+- [x] **RF-222** Torcida sintetizada (`crowd`) no VAI! e quando um humano cruza a chegada.
 
 ## 5. Controles
 
@@ -302,7 +302,7 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-39** IA com cuidado máximo desvia de uma casca na faixa dela; com cuidado zero, bate.
 - [x] **CA-40** IA sem item vai pra faixa da caixa da próxima fileira; IA atrás de um kart lento na mesma faixa troca de faixa.
 - [x] **CA-41** Os 8 pilotos têm personalidade completa e diferente entre si.
-- [ ] **CA-42** Os 5 estilos de música existem, em loop, com mais de 8 s e diferentes entre si; cada pista aponta pra um estilo; `play_music` troca o stream e não reinicia o mesmo estilo; a torcida existe e não está vazia.
+- [x] **CA-42** Os 5 estilos de música existem, em loop, com mais de 8 s e diferentes entre si; cada pista aponta pra um estilo; `play_music` troca o stream e não reinicia o mesmo estilo; a torcida existe e não está vazia.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

@@ -10,6 +10,9 @@ var leaving := false
 
 
 func _ready() -> void:
+	var gm := get_node_or_null("/root/Game")
+	if gm:
+		gm.play_music("menu")  # RF-221
 	var bg := ColorRect.new()
 	bg.color = Color.BLACK
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

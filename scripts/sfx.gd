@@ -4,7 +4,7 @@ extends RefCounted
 
 const RATE := 22050
 const MUSIC_RATE := 16000
-const NAMES := ["beep", "go", "item", "boost", "mini_turbo", "drop", "shoot", "hit", "lap", "finish", "start_turbo", "stall", "bump", "cheese", "pad", "trick", "slip", "engine", "meow", "shield", "shield_break", "snap"]
+const NAMES := ["beep", "go", "item", "boost", "mini_turbo", "drop", "shoot", "hit", "lap", "finish", "start_turbo", "stall", "bump", "cheese", "pad", "trick", "slip", "engine", "meow", "shield", "shield_break", "snap", "crowd"]
 
 static var _cache := {}
 
@@ -16,6 +16,8 @@ static func get_sound(sound_name: String) -> AudioStreamWAV:
 
 
 static func _make(sound_name: String) -> AudioStreamWAV:
+	if sound_name.begins_with("music_"):
+		return _compose(sound_name.substr(6))
 	var b := PackedFloat32Array()
 	var r := RATE
 	match sound_name:
@@ -82,8 +84,10 @@ static func _make(sound_name: String) -> AudioStreamWAV:
 			_tone(b, r, 0.05, 0.5, 90.0, 60.0, "square", 0.2, 5.0)
 		"engine":
 			return _engine_loop()
+		"crowd":
+			return _crowd()
 		"music":
-			return _music()
+			return _compose("queijo")
 	return _to_wav(b, r, false)
 
 
@@ -141,43 +145,133 @@ static func _to_wav(b: PackedFloat32Array, rate: int, loop: bool, target := 0.9)
 	return w
 
 
-## Chiptune em lá menor, 150 bpm, 8 compassos (Am F C G x2) com baixo, melodia e bateria.
-static func _music() -> AudioStreamWAV:
+## RF-220: trilhas por contexto. Acordes = [nota MIDI da fundamental, "M" maior | "m" menor].
+## bass: "eighths" | "half" | "octaves" | "sync"; drums: "rock" | "soft" | "dance" | "darbuka".
+const MUSIC_STYLES := {
+	"menu": {"bpm": 118, "chords": [[48, "M"], [45, "m"], [41, "M"], [43, "M"]], "scale": [72, 74, 76, 79, 81, 84],
+		"lead": "tri", "lead_vol": 0.07, "bass": "half", "drums": "soft", "seed": 11, "rest": 0.45},
+	"queijo": {"bpm": 150, "chords": [[45, "m"], [41, "M"], [48, "M"], [43, "M"]], "scale": [69, 72, 74, 76, 79, 81],
+		"lead": "pulse", "lead_vol": 0.06, "bass": "eighths", "drums": "rock", "seed": 2026, "rest": 0.3},
+	"deserto": {"bpm": 136, "chords": [[38, "M"], [39, "M"], [38, "M"], [36, "m"]], "scale": [62, 63, 66, 67, 69, 70, 72, 74],
+		"lead": "saw", "lead_vol": 0.045, "bass": "sync", "drums": "darbuka", "seed": 77, "rest": 0.35},
+	"cozinha": {"bpm": 164, "chords": [[40, "m"], [36, "M"], [43, "M"], [38, "M"]], "scale": [64, 67, 69, 70, 71, 74, 76],
+		"lead": "pulse", "lead_vol": 0.055, "bass": "octaves", "drums": "dance", "seed": 909, "rest": 0.35},
+	"victory": {"bpm": 132, "chords": [[43, "M"], [48, "M"], [50, "M"], [43, "M"]], "scale": [67, 69, 71, 74, 76, 79],
+		"lead": "square", "lead_vol": 0.06, "bass": "half", "drums": "rock", "seed": 5, "rest": 0.2},
+}
+
+
+static func midi(n: float) -> float:
+	return 440.0 * pow(2.0, (n - 69.0) / 12.0)
+
+
+## Trilha do estilo (gerada uma vez e guardada em cache).
+static func music(style: String) -> AudioStreamWAV:
+	return get_sound("music_" + (style if MUSIC_STYLES.has(style) else "queijo"))
+
+
+## 8 compassos: baixo, acordes (tri), melodia com 4 compassos repetidos e variados, bateria.
+static func _compose(style: String) -> AudioStreamWAV:
+	var st: Dictionary = MUSIC_STYLES[style]
 	var r := MUSIC_RATE
-	var beat := 60.0 / 150.0
+	var beat := 60.0 / float(st["bpm"])
 	var eighth := beat / 2.0
 	var bars := 8
 	var b := PackedFloat32Array()
 	b.resize(int(bars * 4 * beat * r))
-	var roots := [110.0, 87.31, 130.81, 98.0]
-	var chords := [[220.0, 261.63, 329.63], [174.61, 220.0, 261.63], [261.63, 329.63, 392.0], [196.0, 246.94, 293.66]]
-	var scale := [440.0, 523.25, 587.33, 659.26, 783.99, 880.0]
+	var scale: Array = st["scale"]
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 2026
+	rng.seed = int(st["seed"])
 	var melody := []
-	for i in 32:  # 4 compassos de melodia, repetidos com variação
-		melody.append(-1 if rng.randf() < 0.3 else rng.randi_range(0, scale.size() - 1))
+	for i in 32:
+		melody.append(-1 if rng.randf() < float(st["rest"]) else rng.randi_range(0, scale.size() - 1))
 	for bar in bars:
-		var c := bar % 4
+		var ch: Array = st["chords"][bar % 4]
+		var root := float(ch[0])
+		var third := 4.0 if ch[1] == "M" else 3.0
 		var t0 := bar * 4 * beat
+		# baixo
+		match st["bass"]:
+			"half":
+				_tone(b, r, t0, beat * 1.9, midi(root), midi(root), "square", 0.09, 1.5)
+				_tone(b, r, t0 + beat * 2, beat * 1.9, midi(root + 7), midi(root + 7), "square", 0.08, 1.5)
+			"octaves":
+				for e in 8:
+					var n := root + (12.0 if e % 2 == 1 else 0.0)
+					_tone(b, r, t0 + e * eighth, eighth * 0.8, midi(n), midi(n), "square", 0.085, 3.0)
+			"sync":
+				for e in [0, 3, 4, 6]:
+					_tone(b, r, t0 + e * eighth, eighth * 1.2, midi(root), midi(root), "pulse", 0.1, 2.5)
+			_:
+				for e in 8:
+					_tone(b, r, t0 + e * eighth, eighth * 0.9, midi(root), midi(root), "square", 0.09, 2.0)
+		# acorde de fundo
+		for iv in [0.0, third, 7.0]:
+			var f := midi(root + 12.0 + iv)
+			_tone(b, r, t0, beat * 4, f, f, "tri", 0.025, 1.0)
+		# melodia
 		for e in 8:
-			var t := t0 + e * eighth
-			_tone(b, r, t, eighth * 0.9, roots[c], roots[c], "square", 0.09, 2.0)
-			if e % 2 == 1:
-				_tone(b, r, t, 0.03, 0.0, 0.0, "noise", 0.05, 8.0)
 			var m: int = melody[(bar % 4) * 8 + e]
 			if bar >= 4 and e == 7:
 				m = rng.randi_range(0, scale.size() - 1)
 			if m >= 0:
-				_tone(b, r, t, eighth * 1.6, scale[m], scale[m], "pulse", 0.06, 2.5)
-		for k in [0, 2]:
-			_tone(b, r, t0 + k * beat, 0.14, 140.0, 40.0, "sine", 0.3, 4.0)
-		for s in [1, 3]:
-			_tone(b, r, t0 + s * beat, 0.12, 0.0, 0.0, "noise", 0.13, 6.0)
-		for note in chords[c]:
-			_tone(b, r, t0, beat * 4, note, note, "tri", 0.025, 1.0)
+				var f := midi(float(scale[m]))
+				_tone(b, r, t0 + e * eighth, eighth * 1.6, f, f, st["lead"], float(st["lead_vol"]), 2.5)
+		# bateria
+		match st["drums"]:
+			"soft":
+				for k in [0, 2]:
+					_tone(b, r, t0 + k * beat, 0.12, 120.0, 45.0, "sine", 0.18, 4.0)
+				for e in [1, 3, 5, 7]:
+					_tone(b, r, t0 + e * eighth, 0.025, 0.0, 0.0, "noise", 0.03, 8.0)
+			"dance":
+				for k in 4:
+					_tone(b, r, t0 + k * beat, 0.14, 150.0, 40.0, "sine", 0.32, 4.0)
+				for s in [1, 3]:
+					_tone(b, r, t0 + s * beat, 0.12, 0.0, 0.0, "noise", 0.13, 6.0)
+				for e in 16:
+					_tone(b, r, t0 + e * eighth * 0.5, 0.02, 0.0, 0.0, "noise", 0.025 if e % 2 == 0 else 0.04, 9.0)
+			"darbuka":
+				for e in [0, 3]:
+					_tone(b, r, t0 + e * eighth, 0.1, 180.0, 70.0, "sine", 0.3, 5.0)
+				for e in [2, 6]:
+					_tone(b, r, t0 + e * eighth, 0.06, 0.0, 0.0, "noise", 0.12, 9.0)
+				for e in [1, 5, 7]:
+					_tone(b, r, t0 + e * eighth, 0.03, 900.0, 600.0, "tri", 0.05, 8.0)
+			_:
+				for k in [0, 2]:
+					_tone(b, r, t0 + k * beat, 0.14, 140.0, 40.0, "sine", 0.3, 4.0)
+				for s in [1, 3]:
+					_tone(b, r, t0 + s * beat, 0.12, 0.0, 0.0, "noise", 0.13, 6.0)
+				for e in [1, 3, 5, 7]:
+					_tone(b, r, t0 + e * eighth, 0.03, 0.0, 0.0, "noise", 0.05, 8.0)
 	b.resize(int(bars * 4 * beat * r))
 	return _to_wav(b, r, true, 0.75)
+
+
+## RF-222: torcida — ruído grave filtrado com "ondas" de volume + gritinhos.
+static func _crowd() -> AudioStreamWAV:
+	var r := RATE
+	var dur := 2.4
+	var n := int(dur * r)
+	var b := PackedFloat32Array()
+	b.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 33
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in n:
+		var t := float(i) / r
+		lp = lerpf(lp, rng.randf_range(-1.0, 1.0), 0.18)
+		lp2 = lerpf(lp2, lp, 0.25)
+		var env := minf(1.0, t / 0.25) * clampf((dur - t) / 1.2, 0.0, 1.0)
+		var wave := 0.75 + 0.25 * sin(t * 7.0) * sin(t * 2.3)
+		b[i] = lp2 * env * wave * 0.9
+	for k in 14:
+		var t0 := rng.randf_range(0.05, 1.6)
+		var f0 := rng.randf_range(350.0, 650.0)
+		_tone(b, r, t0, rng.randf_range(0.25, 0.5), f0, f0 * rng.randf_range(1.2, 1.6), "tri", 0.05, 3.0)
+	return _to_wav(b, r, false, 0.8)
 
 
 ## Loop de motor (RF-81): 1 s com número inteiro de ciclos (emenda sem clique).

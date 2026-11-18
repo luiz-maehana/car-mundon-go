@@ -67,6 +67,8 @@ func _ready() -> void:
 	fanfare.bus = "SFX"
 	add_child(fanfare)
 	fanfare.play()
+	if game:
+		game.play_music("victory")  # RF-221
 
 
 func _unhandled_input(event: InputEvent) -> void:

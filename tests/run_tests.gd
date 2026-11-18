@@ -43,6 +43,7 @@ func _run() -> void:
 	await _test_gp()
 	await _test_new_items()
 	await _test_smart_ai()
+	_test_music()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -933,3 +934,36 @@ func _test_smart_ai() -> void:
 				ok = false
 		sigs[str(ai)] = true
 	check(ok and sigs.size() == 8, "8 personalidades completas e diferentes")
+
+
+func _test_music() -> void:
+	print("CA-42 música por pista e torcida")
+	var Sfx = load("res://scripts/sfx.gd")
+	var Track = load("res://scripts/track.gd")
+	var sigs := {}
+	var ok := true
+	for style in ["menu", "queijo", "deserto", "cozinha", "victory"]:
+		var t0 := Time.get_ticks_msec()
+		var w: AudioStreamWAV = Sfx.music(style)
+		var secs: float = w.data.size() / 2.0 / w.mix_rate
+		print("     %-8s %.1f s de música, gerada em %d ms" % [style, secs, Time.get_ticks_msec() - t0])
+		if w.loop_mode != AudioStreamWAV.LOOP_FORWARD or secs < 8.0:
+			ok = false
+		sigs[w.data.slice(20000, 20400).hex_encode()] = true
+	check(ok and sigs.size() == 5, "5 trilhas em loop, > 8 s e diferentes entre si")
+	var tracks_ok := true
+	for td in Track.TRACKS:
+		if not Sfx.MUSIC_STYLES.has(td.get("music", td["id"])):
+			tracks_ok = false
+	check(tracks_ok, "cada pista tem a sua trilha")
+	var game = root.get_node_or_null("Game")
+	if game:
+		game.play_music("deserto")
+		var s1 = game.music.stream
+		var pos_before: float = game.music.get_playback_position()
+		game.play_music("deserto")
+		check(game.music.stream == s1 and game.current_music == "deserto", "mesmo estilo não reinicia")
+		game.play_music("menu")
+		check(game.music.stream != s1 and game.current_music == "menu", "estilo novo troca a trilha")
+	var crowd: AudioStreamWAV = Sfx.get_sound("crowd")
+	check(crowd != null and crowd.data.size() > 20000, "torcida existe")

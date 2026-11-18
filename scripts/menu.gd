@@ -32,6 +32,9 @@ var sub: Label
 
 
 func _ready() -> void:
+	var gm := get_node_or_null("/root/Game")
+	if gm:
+		gm.play_music("menu")  # RF-221
 	var game := get_node_or_null("/root/Game")
 	if game:
 		num_players = game.num_players
