@@ -14,6 +14,10 @@ const BOX_RESPAWN := 3.0
 const RESULTS_DELAY := 3.0
 
 var use_game_settings := true
+var audio_enabled := true
+# No modo headless (testes) o driver de áudio "dummy" do Godot 4.7 dá segfault com o
+# gerador do motor + tela dividida; com driver real não reproduz (RNF-04, tools/stress_races.gd).
+var engines_enabled := DisplayServer.get_name() != "headless"
 var autopilot_player := false
 var player_chars: Array = ["fejaum"]  # um por jogador humano (1..4)
 var laps := 3
@@ -40,7 +44,8 @@ var pause_resume_btn: Button
 var sfx_players: Array = []
 var sfx_next := 0
 var sfx_log: Array = []   # nomes tocados (usado pelos testes)
-var engines: Array = []   # {player: AudioStreamPlayer, kart, phase}
+var engines: Array = []   # {kart, phase, amp} — todos mixados em engine_player
+var engine_player: AudioStreamPlayer
 var last_beep := 4
 var human_laps: Array = []
 
@@ -60,7 +65,8 @@ func _ready() -> void:
 	_spawn_boxes()
 	_build_views()
 	_update_cameras(1.0, true)
-	_build_audio()
+	if audio_enabled:
+		_build_audio()
 	_build_pause()
 	for p in players:
 		human_laps.append(1)
@@ -74,17 +80,27 @@ func _build_audio() -> void:
 		ap.volume_db = -4.0
 		add_child(ap)
 		sfx_players.append(ap)
-	var vol := -8.0 - 3.0 * (players.size() - 1)
+	if not engines_enabled:
+		return
+	# Um único gerador mistura o motor de todos os humanos: vários AudioStreamGenerator
+	# ao mesmo tempo derrubavam o Godot 4.7 com segfault (tela dividida com 4 motores).
+	var gen := AudioStreamGenerator.new()
+	gen.mix_rate = ENGINE_RATE
+	gen.buffer_length = 0.1
+	engine_player = AudioStreamPlayer.new()
+	engine_player.stream = gen
+	engine_player.volume_db = -8.0 - 2.0 * (players.size() - 1)
+	add_child(engine_player)
+	engine_player.play()
 	for p in players:
-		var gen := AudioStreamGenerator.new()
-		gen.mix_rate = ENGINE_RATE
-		gen.buffer_length = 0.1
-		var ap := AudioStreamPlayer.new()
-		ap.stream = gen
-		ap.volume_db = vol
-		add_child(ap)
-		ap.play()
-		engines.append({"player": ap, "kart": p, "phase": 0.0, "amp": 0.0})
+		engines.append({"kart": p, "phase": 0.0, "amp": 0.0})
+
+
+func _exit_tree() -> void:
+	if engine_player:
+		engine_player.stop()
+	for ap in sfx_players:
+		ap.stop()
 
 
 func sfx(sound_name: String) -> void:
@@ -99,16 +115,17 @@ func sfx(sound_name: String) -> void:
 
 ## RF-81: motor = serra + onda quadrada uma oitava abaixo; frequência acompanha a velocidade.
 func _process(_delta: float) -> void:
+	if engine_player == null or not engine_player.playing:
+		return
+	var pb := engine_player.get_stream_playback() as AudioStreamGeneratorPlayback
+	if pb == null:
+		return
+	var frames := pb.get_frames_available()
+	if frames <= 0:
+		return
+	var buf := PackedVector2Array()
+	buf.resize(frames)
 	for e in engines:
-		var ap: AudioStreamPlayer = e["player"]
-		if not ap.playing:
-			continue
-		var pb := ap.get_stream_playback() as AudioStreamGeneratorPlayback
-		if pb == null:
-			continue
-		var frames := pb.get_frames_available()
-		if frames <= 0:
-			continue
 		var k: Node3D = e["kart"]
 		var f := 38.0 + absf(k.speed) * 2.6
 		if k.boost_time > 0.0:
@@ -116,18 +133,16 @@ func _process(_delta: float) -> void:
 		var target_amp := 0.0 if paused else (0.10 + 0.08 * clampf(k.in_throttle, 0.0, 1.0))
 		var phase: float = e["phase"]
 		var amp: float = e["amp"]
-		var buf := PackedVector2Array()
-		buf.resize(frames)
 		for i in frames:
 			phase = fmod(phase + f / ENGINE_RATE, 2.0)
 			var saw := fmod(phase, 1.0) * 2.0 - 1.0
 			var sub := 1.0 if phase < 1.0 else -1.0
 			amp = lerpf(amp, target_amp, 0.0005)
 			var s := (saw * 0.6 + sub * 0.4) * amp
-			buf[i] = Vector2(s, s)
-		pb.push_buffer(buf)
+			buf[i] += Vector2(s, s)
 		e["phase"] = phase
 		e["amp"] = amp
+	pb.push_buffer(buf)
 
 
 # ---------------------------------------------------------------- pause (RF-90)

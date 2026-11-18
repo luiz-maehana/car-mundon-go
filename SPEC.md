@@ -138,6 +138,7 @@ Jogadores 3 e 4 só por controle. Com 1 jogador, as teclas do J2 também valem p
 - **RNF-01** 60 ticks de física fixos com *physics interpolation* (suave em monitores 144 Hz).
 - **RNF-02** Lógica da corrida roda sem renderização (`race.step(delta)`), permitindo simular corridas inteiras em teste headless.
 - **RNF-03** Sem `class_name`: scripts se referenciam por `preload`, para o projeto rodar direto da linha de comando sem passar pelo editor.
+- **RNF-04** Nos testes headless o motor (AudioStreamGenerator) fica desligado: com o driver de áudio *dummy* do Godot 4.7 ele dá segfault junto com a tela dividida. Com driver real: 0 crashes em 36 corridas de 4 jogadores (`tools/stress_races.gd -- mp`, com janela). Os motores de todos os jogadores são mixados num gerador só.
 
 ## 7. Arquitetura
 
