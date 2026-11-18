@@ -7,6 +7,7 @@ const MinimapScript = preload("res://scripts/minimap.gd")
 const IconScript = preload("res://scripts/icons.gd")
 const KartScript = preload("res://scripts/kart.gd")
 const ROLL_ORDER := ["turbo", "casca", "bomba"]
+const SpeedLinesShader = preload("res://shaders/speed_lines.gdshader")
 const Chars = preload("res://scripts/characters.gd")
 const ITEM_NAMES := {"turbo": "TURBO", "casca": "CASCA", "bomba": "BOMBA"}
 const ITEM_COLORS := {"turbo": Color(1.0, 0.55, 0.1), "casca": Color(1.0, 0.88, 0.15), "bomba": Color(0.9, 0.2, 0.15)}
@@ -42,6 +43,8 @@ var start_shown := false
 var lbl_mute: Label
 var rank_rows: Array = []
 var minimap: Control
+var speed_lines: ColorRect
+var boost_fx := 0.0
 
 
 func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
@@ -55,6 +58,14 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 	_fit()
 	if kart == null:
 		return
+	# RF-166: linhas de velocidade (atrás do resto do HUD)
+	speed_lines = ColorRect.new()
+	speed_lines.set_anchors_preset(Control.PRESET_FULL_RECT)
+	speed_lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var slm := ShaderMaterial.new()
+	slm.shader = SpeedLinesShader
+	speed_lines.material = slm
+	root.add_child(speed_lines)
 
 	lbl_lap = _label(40)
 	lbl_lap.position = Vector2(24, 12)
@@ -310,6 +321,10 @@ func update_hud(delta: float) -> void:
 		return
 	var p := kart
 	_update_ranking()
+	boost_fx = lerpf(boost_fx, 1.0 if p.boost_time > 0.0 else 0.0, 1.0 - exp(-8.0 * delta))
+	var slm := speed_lines.material as ShaderMaterial
+	slm.set_shader_parameter("intensity", boost_fx)
+	slm.set_shader_parameter("aspect", root.size.x / maxf(1.0, root.size.y))
 	var lap: int = race.lap_of(p)
 	lbl_lap.text = "VOLTA %d/%d" % [lap, race.laps]
 	# RF-134: volta final em vermelho

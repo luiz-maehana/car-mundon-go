@@ -13,6 +13,7 @@ var laps := 3
 var track_id := "queijo"
 var difficulty := 1
 var muted := false
+var graphics_high := true  # RF-161
 var music: AudioStreamPlayer
 
 

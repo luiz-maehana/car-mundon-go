@@ -18,6 +18,7 @@ var laps_btn: Button
 var track_btn: Button
 var diff_btn: Button
 var diff_i := 1
+var gfx_btn: Button
 const DIFF_NAMES := ["FÁCIL", "NORMAL", "DIFÍCIL"]
 var track_i := 0
 var players_btn: Button
@@ -44,6 +45,20 @@ func _build() -> void:
 	bg.color = Color(0.07, 0.08, 0.15)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
+	# RF-161: qualidade gráfica (canto superior direito)
+	gfx_btn = _button("", 18)
+	gfx_btn.custom_minimum_size = Vector2(210, 44)
+	gfx_btn.anchor_left = 1.0
+	gfx_btn.anchor_right = 1.0
+	gfx_btn.offset_left = -226
+	gfx_btn.offset_right = -16
+	gfx_btn.offset_top = 12
+	gfx_btn.offset_bottom = 56
+	gfx_btn.pressed.connect(func():
+		var g := get_node_or_null("/root/Game")
+		if g:
+			g.graphics_high = not g.graphics_high
+		_refresh())
 
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -101,6 +116,7 @@ func _build() -> void:
 	var help := _label("Setas: escolher · Enter: confirmar · Backspace: desfazer · J1 = WASD/controle 1 · J2 = setas/controle 2 · J3/J4 = controles 3/4 · M: som", 15, Color(1, 1, 1, 0.6))
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(help)
+	add_child(gfx_btn)  # por cima do resto
 
 
 func _label(text: String, size: int, c: Color) -> Label:
@@ -222,6 +238,8 @@ func _refresh() -> void:
 	laps_btn.text = "VOLTAS: %d" % LAP_OPTIONS[laps_i]
 	track_btn.text = "PISTA: %s" % TrackScript.TRACKS[track_i]["name"]
 	diff_btn.text = "IA: %s" % DIFF_NAMES[diff_i]
+	var game_g := get_node_or_null("/root/Game")
+	gfx_btn.text = "GRÁFICOS: %s" % ("ALTO" if (game_g == null or game_g.graphics_high) else "BAIXO")
 	go_btn.text = "CORRER!" if cur == num_players - 1 else "CONFIRMAR J%d" % (cur + 1)
 
 

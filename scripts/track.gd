@@ -3,6 +3,8 @@ extends Node3D
 ## Linha central = spline Catmull-Rom fechada, reamostrada a cada SPACING metros.
 ## Tudo (grama, muro, progresso, IA) é resolvido pela distância lateral à linha central.
 
+const Gfx = preload("res://scripts/gfx.gd")
+
 const ROAD_HALF := 8.0
 const CURB := 1.2
 const OFFROAD := 7.0
@@ -22,13 +24,14 @@ const TRACKS := [
 			Vector2(140, -160), Vector2(175, -215), Vector2(110, -265), Vector2(-20, -255),
 			Vector2(-100, -205), Vector2(-70, -130), Vector2(-140, -75), Vector2(-170, 10),
 		],
-		"ground": Color(0.22, 0.42, 0.16), "offroad": Color(0.42, 0.55, 0.22),
+		"ground": Color(0.15, 0.32, 0.11), "offroad": Color(0.33, 0.45, 0.17),
 		"road": [Color(0.2, 0.2, 0.22), Color(0.23, 0.23, 0.25)],
 		"curb": [Color(0.85, 0.1, 0.1), Color(0.95, 0.95, 0.95)],
 		"wall": [Color(0.15, 0.35, 0.9), Color(0.95, 0.95, 0.95)],
 		"sky_top": Color(0.25, 0.5, 0.9), "sky_horizon": Color(0.7, 0.82, 0.95),
 		"ambient": Color(0.62, 0.64, 0.7), "sun": [1.1, -55.0, Color(1, 1, 1)],
 		"deco": "pine", "deco_color": Color(0.13, 0.42, 0.18),
+		"ground_tex": "grass", "clouds": 0.55, "fog": 0.0007, "exposure": 0.92, "scenery": "rocks_green",
 	},
 	{
 		"id": "deserto", "name": "Deserto do Parmesão",
@@ -45,6 +48,7 @@ const TRACKS := [
 		"sky_top": Color(0.35, 0.45, 0.8), "sky_horizon": Color(1.0, 0.7, 0.45),
 		"ambient": Color(0.75, 0.62, 0.55), "sun": [1.25, -25.0, Color(1.0, 0.85, 0.65)],
 		"deco": "cactus", "deco_color": Color(0.3, 0.55, 0.25),
+		"ground_tex": "sand", "clouds": 0.25, "fog": 0.0015, "exposure": 1.05, "cloud_color": Color(1.0, 0.85, 0.75), "scenery": "rocks",
 	},
 	{
 		"id": "cozinha", "name": "Cozinha à Meia-Noite",
@@ -60,6 +64,7 @@ const TRACKS := [
 		"sky_top": Color(0.02, 0.02, 0.08), "sky_horizon": Color(0.18, 0.1, 0.3),
 		"ambient": Color(0.45, 0.45, 0.65), "sun": [0.45, -60.0, Color(0.6, 0.7, 1.0)],
 		"deco": "lamp", "deco_color": Color(1.0, 0.85, 0.4),
+		"ground_tex": "tiles", "clouds": 0.15, "fog": 0.003, "exposure": 1.2, "stars": true, "cloud_color": Color(0.25, 0.22, 0.35), "scenery": "cheese",
 	},
 ]
 
@@ -281,19 +286,15 @@ func _build_visuals() -> void:
 		_strip(st, i, -WALL - WALL_T, -WALL - WALL_T, 0.0, WALL_H, wall_c)
 	_start_line(st)
 	_pads_and_ramp(st)
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.vertex_color_is_srgb = true
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mat.roughness = 1.0
-	mat.metallic_specular = 0.15
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
-	mi.material_override = mat
+	mi.material_override = Gfx.track_material()  # RF-162
+	mi.name = "TrackMesh"
 	add_child(mi)
 	_build_ground()
 	_build_arch()
 	_build_trees()
+	_build_scenery()
 
 
 func _strip(st: SurfaceTool, i: int, la: float, lb: float, ya: float, yb: float, c: Color) -> void:
@@ -338,12 +339,10 @@ func _build_ground() -> void:
 	var center := (bounds_max + bounds_min) * 0.5
 	var plane := PlaneMesh.new()
 	plane.size = size
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = def["ground"]
-	mat.roughness = 1.0
 	var mi := MeshInstance3D.new()
 	mi.mesh = plane
-	mi.material_override = mat
+	mi.material_override = Gfx.ground_material(def.get("ground_tex", "grass"), def["ground"])
+	mi.name = "Ground"
 	mi.position = Vector3(center.x, -0.02, center.y)
 	add_child(mi)
 
@@ -529,3 +528,238 @@ func _pads_and_ramp(st: SurfaceTool) -> void:
 	var e := (ramp_idx + RAMP_LEN) % n
 	_quad(st, points[e] - rights[e] * ROAD_HALF, points[e] + rights[e] * ROAD_HALF,
 		points[e] + rights[e] * ROAD_HALF + Vector3.UP * RAMP_H, points[e] - rights[e] * ROAD_HALF + Vector3.UP * RAMP_H, Color(0.25, 0.25, 0.28))
+
+
+# ---------------------------------------------------------------- cenário (RF-167)
+
+var scenery_count := 0
+
+
+func _build_scenery() -> void:
+	_grandstand()
+	_flags()
+	_tire_stacks()
+	_scatter()
+
+
+func _clear_of_track(pos: Vector3, radius: float) -> bool:
+	var i := nearest_index(pos)
+	return Vector2(pos.x - points[i].x, pos.z - points[i].z).length() > WALL + radius
+
+
+func _vc_mat(roughness := 0.8) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.vertex_color_use_as_albedo = true
+	m.roughness = roughness
+	return m
+
+
+func _multimesh_colored(mesh: Mesh, xforms: Array, colors: Array, mat: Material) -> void:
+	if xforms.is_empty():
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = mesh
+	mm.instance_count = xforms.size()
+	for i in xforms.size():
+		mm.set_instance_transform(i, xforms[i])
+		mm.set_instance_color(i, colors[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = mat
+	add_child(mmi)
+	scenery_count += xforms.size()
+
+
+## Arquibancada com torcida do lado de fora da largada (o lado que tiver espaço).
+func _grandstand() -> void:
+	var side := 1.0
+	if not _clear_of_track(points[0] + rights[0] * (WALL + 20.0), 6.0):
+		side = -1.0
+	var stand := Node3D.new()
+	stand.name = "Grandstand"
+	stand.position = points[0] + rights[0] * side * (WALL + 9.0)
+	stand.basis = Basis(Vector3.UP, heading_at(0))
+	add_child(stand)
+	var concrete := StandardMaterial3D.new()
+	concrete.albedo_color = Color(0.62, 0.62, 0.66)
+	concrete.albedo_texture = Gfx.noise_tex("grain", 0.35, [Color(0.72, 0.72, 0.72), Color(0.92, 0.92, 0.92), Color(1, 1, 1)])
+	concrete.uv1_triplanar = true
+	concrete.uv1_scale = Vector3(0.5, 0.5, 0.5)
+	var length := 44.0
+	for k in 4:
+		var tier := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(2.6, 0.9 * (k + 1), length)
+		tier.mesh = bm
+		tier.material_override = concrete
+		tier.position = Vector3(side * (k * 2.6), 0.45 * (k + 1), 0)
+		stand.add_child(tier)
+	var roof_mat := StandardMaterial3D.new()
+	roof_mat.albedo_color = def["wall"][0]
+	var roof := MeshInstance3D.new()
+	var rm := BoxMesh.new()
+	rm.size = Vector3(12.0, 0.35, length + 2.0)
+	roof.mesh = rm
+	roof.material_override = roof_mat
+	roof.position = Vector3(side * 4.0, 7.2, 0)
+	stand.add_child(roof)
+	var post_mesh := CylinderMesh.new()
+	post_mesh.top_radius = 0.18
+	post_mesh.bottom_radius = 0.18
+	post_mesh.height = 7.2
+	for z in [-length * 0.5, 0.0, length * 0.5]:
+		var post := MeshInstance3D.new()
+		post.mesh = post_mesh
+		post.material_override = concrete
+		post.position = Vector3(side * 9.5, 3.6, z)
+		stand.add_child(post)
+	var banner := Label3D.new()
+	banner.text = "CAR'MUNDON'GO!"
+	banner.font_size = 160
+	banner.pixel_size = 0.02
+	banner.outline_size = 24
+	banner.modulate = Color(1.0, 0.85, 0.2)
+	banner.position = Vector3(side * -1.9, 6.3, 0)
+	banner.rotation.y = -PI / 2.0 * side
+	stand.add_child(banner)
+	# torcida: cápsulas coloridas nos degraus
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var fan := CapsuleMesh.new()
+	fan.radius = 0.28
+	fan.height = 1.0
+	var xf: Array = []
+	var cols: Array = []
+	for k in 4:
+		var z := -length * 0.5 + 0.6
+		while z < length * 0.5 - 0.6:
+			if rng.randf() < 0.85:
+				var local := Vector3(side * (k * 2.6), 0.9 * (k + 1) + 0.5, z + rng.randf_range(-0.15, 0.15))
+				xf.append(Transform3D(stand.basis, stand.position + stand.basis * local))
+				cols.append(Color.from_hsv(rng.randf(), rng.randf_range(0.5, 0.9), rng.randf_range(0.7, 1.0)))
+			z += 0.85
+	_multimesh_colored(fan, xf, cols, _vc_mat())
+
+
+## Bandeirolas quadriculadas dos dois lados da reta de largada.
+func _flags() -> void:
+	var n := points.size()
+	var poles: Array = []
+	var flags: Array = []
+	for k in range(-24, 25, 6):
+		var i := wrapi(k, 0, n)
+		for side in [-1.0, 1.0]:
+			var base: Vector3 = points[i] + rights[i] * side * (WALL + WALL_T + 1.2)
+			poles.append(Transform3D(Basis(), base + Vector3.UP * 2.5))
+			flags.append(Transform3D(Basis(Vector3.UP, heading_at(i) + PI / 2.0), base + Vector3.UP * 4.4 - tangents[i] * 0.8))
+	var pole := CylinderMesh.new()
+	pole.top_radius = 0.06
+	pole.bottom_radius = 0.08
+	pole.height = 5.0
+	var white: Array = []
+	for t in poles:
+		white.append(Color(0.85, 0.85, 0.9))
+	_multimesh_colored(pole, poles, white, _vc_mat(0.4))
+	var flag := QuadMesh.new()
+	flag.size = Vector2(1.6, 1.0)
+	var fm := StandardMaterial3D.new()
+	fm.albedo_texture = Gfx.checker_tex(Color.WHITE, Color(0.05, 0.05, 0.05), Color(0.05, 0.05, 0.05), "flag")
+	fm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	fm.uv1_scale = Vector3(2, 2, 1)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = flag
+	mm.instance_count = flags.size()
+	for i in flags.size():
+		mm.set_instance_transform(i, flags[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = fm
+	add_child(mmi)
+	scenery_count += flags.size()
+
+
+## Pilhas de pneu do lado de fora das curvas mais fechadas.
+func _tire_stacks() -> void:
+	var n := points.size()
+	var tire := TorusMesh.new()
+	tire.inner_radius = 0.28
+	tire.outer_radius = 0.55
+	var xf: Array = []
+	var cols: Array = []
+	var last := -100
+	for i in range(0, n, 2):
+		if i - last < 12 or curvature_at(i) < 0.75:
+			continue
+		last = i
+		var turn := tangents[i].cross(tangents[(i + 10) % n]).y
+		var outer := 1.0 if turn > 0.0 else -1.0
+		for s in [-1, 0, 1]:
+			var j := wrapi(i + 5 + s, 0, n)
+			var base: Vector3 = points[j] + rights[j] * outer * (WALL - 0.7)
+			for h in 3:
+				xf.append(Transform3D(Basis(), base + Vector3.UP * (0.15 + h * 0.3)))
+				var top_c := Color(0.9, 0.15, 0.1) if s == 0 else Color(0.92, 0.92, 0.92)
+				cols.append(top_c if h == 2 else Color(0.08, 0.08, 0.09))
+	_multimesh_colored(tire, xf, cols, _vc_mat(0.9))
+
+
+## Tufos/pedras (ou queijos gigantes na cozinha) espalhados fora da pista.
+func _scatter() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4242
+	var kind: String = def.get("scenery", "rocks_green")
+	var tufts: Array = []
+	var tuft_cols: Array = []
+	var rocks: Array = []
+	var rock_cols: Array = []
+	var count := 260 if kind != "cheese" else 30
+	var tries := 0
+	while tufts.size() + rocks.size() < count and tries < 6000:
+		tries += 1
+		var i := rng.randi_range(0, points.size() - 1)
+		var side := -1.0 if rng.randf() < 0.5 else 1.0
+		var p: Vector3 = points[i] + rights[i] * side * rng.randf_range(WALL + 3.0, WALL + 55.0)
+		if not _clear_of_track(p, 2.5):
+			continue
+		var yaw := rng.randf() * TAU
+		if kind == "cheese":
+			var s := rng.randf_range(3.0, 8.0)
+			rocks.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(s, s * 0.6, s)), p + Vector3.UP * s * 0.3))
+			rock_cols.append(Color(1.0, 0.8, 0.25).darkened(rng.randf() * 0.15))
+		elif rng.randf() < (0.8 if kind == "rocks_green" else 0.35):
+			var s := rng.randf_range(0.6, 1.4)
+			tufts.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(s, s * rng.randf_range(0.8, 1.5), s)), p + Vector3.UP * 0.35 * s))
+			var g: Color = Color(0.2, 0.45, 0.15) if kind == "rocks_green" else Color(0.55, 0.45, 0.2)
+			tuft_cols.append(g.lightened(rng.randf_range(-0.1, 0.2)))
+		else:
+			var s := rng.randf_range(0.5, 2.2)
+			var axis := Vector3(rng.randf(), 1.0, rng.randf()).normalized()
+			rocks.append(Transform3D(Basis(axis, yaw).scaled(Vector3(s, s * 0.6, s * 0.8)), p + Vector3.UP * s * 0.2))
+			var rc: Color = Color(0.5, 0.5, 0.52) if kind == "rocks_green" else Color(0.65, 0.5, 0.35)
+			rock_cols.append(rc.darkened(rng.randf() * 0.25))
+	var tuft := CylinderMesh.new()
+	tuft.top_radius = 0.0
+	tuft.bottom_radius = 0.45
+	tuft.height = 0.9
+	tuft.radial_segments = 5
+	_multimesh_colored(tuft, tufts, tuft_cols, _vc_mat(1.0))
+	var rock: Mesh
+	if kind == "cheese":
+		var c := CylinderMesh.new()
+		c.top_radius = 1.0
+		c.bottom_radius = 1.0
+		c.height = 1.0
+		c.radial_segments = 3
+		c.rings = 1
+		rock = c
+	else:
+		var sp := SphereMesh.new()
+		sp.radius = 0.5
+		sp.height = 1.0
+		sp.radial_segments = 7
+		sp.rings = 4
+		rock = sp
+	_multimesh_colored(rock, rocks, rock_cols, _vc_mat(0.85))

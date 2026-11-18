@@ -5,6 +5,7 @@ extends Node3D
 const TrackScript = preload("res://scripts/track.gd")
 const GameScript = preload("res://scripts/game.gd")
 const Chars = preload("res://scripts/characters.gd")
+const Gfx = preload("res://scripts/gfx.gd")
 const LABEL_LAYER_BASE := 10  # camada do nome do jogador N = 10+N (escondida na câmera dele)
 
 const DRIFT_MIN_SPEED := 12.0
@@ -99,8 +100,14 @@ var in_item := false
 # visual
 var model: Node3D
 var sparks: Array = []
-var spark_mat: StandardMaterial3D
-var flame: MeshInstance3D
+var flames: Array = []
+var p_flame: CPUParticles3D
+var p_dust: CPUParticles3D
+var p_smoke: CPUParticles3D
+var p_stars: CPUParticles3D
+var p_land: CPUParticles3D
+var p_confetti: CPUParticles3D
+
 var wheels: Array = []        # MeshInstance3D (giram)
 var front_pivots: Array = []  # Node3D (esterçam)
 var wheel_spin := 0.0
@@ -151,6 +158,10 @@ func hit() -> void:
 	boost_time = 0.0
 	speed *= 0.35
 	cheese = maxi(0, cheese - 3)  # RF-150
+	if p_smoke:
+		p_smoke.restart()
+		p_stars.restart()
+	race.shake(self, 0.5)
 	if is_player:
 		race.sfx("hit")
 
@@ -329,6 +340,10 @@ func _update_air(delta: float) -> void:
 		position.y = 0.0
 		vy = 0.0
 		airborne = false
+		if air_time > 0.3:
+			if p_land:
+				p_land.restart()
+			race.shake(self, 0.25)
 		if trick:
 			boost_time = maxf(boost_time, TRICK_BOOST)
 			if is_player:
@@ -368,6 +383,7 @@ func _update_track(delta: float) -> void:
 			if vout > 6.0 and is_player and bump_cd <= 0.0:  # RF-144
 				bump_cd = 0.4
 				race.sfx("bump")
+				race.shake(self, 0.3)
 		speed *= 0.995
 		lateral = s * lim
 	max_abs_lateral = maxf(max_abs_lateral, absf(lateral))
@@ -483,64 +499,154 @@ func _box(size: Vector3) -> BoxMesh:
 	return b
 
 
+func _paint(c: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = c
+	m.metallic = 0.35
+	m.roughness = 0.28
+	m.clearcoat_enabled = true
+	m.clearcoat = 0.7
+	m.clearcoat_roughness = 0.15
+	return m
+
+
+## RF-164: kart arredondado com pintura metálica, volante, escapamento e número.
 func _build_model() -> void:
 	model = Node3D.new()
 	add_child(model)
-	var body_mat := _mat(color)
-	var dark := _mat(Color(0.1, 0.1, 0.12))
-	var trim := _mat(color.darkened(0.35))
-	_part(_box(Vector3(1.6, 0.45, 2.6)), body_mat, Vector3(0, 0.5, 0))
-	_part(_box(Vector3(1.2, 0.3, 0.9)), trim, Vector3(0, 0.45, -1.55))
-	_part(_box(Vector3(1.8, 0.1, 0.45)), dark, Vector3(0, 1.1, 1.25))
-	_part(_box(Vector3(0.1, 0.4, 0.1)), dark, Vector3(-0.6, 0.85, 1.25))
-	_part(_box(Vector3(0.1, 0.4, 0.1)), dark, Vector3(0.6, 0.85, 1.25))
-	var wheel := CylinderMesh.new()
-	wheel.top_radius = 0.38
-	wheel.bottom_radius = 0.38
-	wheel.height = 0.36
-	# RF-145: rodas em pivôs (dianteiras esterçam) com uma faixa clara pra ver o giro
-	var hub := _box(Vector3(0.38, 0.5, 0.12))
-	var hub_mat := _mat(Color(0.75, 0.75, 0.8))
+	var paint := _paint(color)
+	var trim := _paint(color.darkened(0.35))
+	var dark := _mat(Color(0.08, 0.08, 0.1))
+	dark.roughness = 0.6
+	var rubber := _mat(Color(0.06, 0.06, 0.07))
+	rubber.roughness = 0.95
+	var chrome := StandardMaterial3D.new()
+	chrome.albedo_color = Color(0.55, 0.56, 0.6)
+	chrome.metallic = 1.0
+	chrome.roughness = 0.32
+	# chassi e carroceria
+	_part(_box(Vector3(1.5, 0.16, 2.7)), dark, Vector3(0, 0.3, 0))
+	var hull := CapsuleMesh.new()
+	hull.radius = 0.5
+	hull.height = 2.7
+	_part(hull, paint, Vector3(0, 0.58, 0.05), Vector3(PI / 2, 0, 0)).scale = Vector3(1.3, 1.0, 0.6)
+	var nose := CylinderMesh.new()
+	nose.top_radius = 0.16
+	nose.bottom_radius = 0.42
+	nose.height = 0.7
+	_part(nose, paint, Vector3(0, 0.48, -1.5), Vector3(-PI / 2, 0, 0)).scale = Vector3(1.5, 1.0, 0.6)
+	var bar := CapsuleMesh.new()
+	bar.radius = 0.09
+	bar.height = 1.9
+	_part(bar, dark, Vector3(0, 0.34, -1.98), Vector3(0, 0, PI / 2))
+	_part(bar, dark, Vector3(0, 0.34, 1.6), Vector3(0, 0, PI / 2))
+	var pod := CapsuleMesh.new()
+	pod.radius = 0.26
+	pod.height = 1.3
+	for x in [-0.74, 0.74]:
+		_part(pod, trim, Vector3(x, 0.48, 0.25), Vector3(PI / 2, 0, 0))
+	# motor + escapamento duplo
+	_part(_box(Vector3(0.9, 0.42, 0.6)), _mat(Color(0.3, 0.3, 0.33)), Vector3(0, 0.78, 1.05))
+	var pipe := CylinderMesh.new()
+	pipe.top_radius = 0.09
+	pipe.bottom_radius = 0.09
+	pipe.height = 0.55
+	for x in [-0.25, 0.25]:
+		_part(pipe, chrome, Vector3(x, 0.78, 1.45), Vector3(PI / 2, 0, 0))
+	# aerofólio
+	_part(_box(Vector3(1.9, 0.08, 0.45)), paint, Vector3(0, 1.22, 1.32))
+	_part(_box(Vector3(0.08, 0.42, 0.08)), dark, Vector3(-0.55, 0.98, 1.3))
+	_part(_box(Vector3(0.08, 0.42, 0.08)), dark, Vector3(0.55, 0.98, 1.3))
+	# banco e volante
+	_part(_box(Vector3(0.62, 0.62, 0.14)), dark, Vector3(0, 1.0, 0.6))
+	var wheel_ring := TorusMesh.new()
+	wheel_ring.inner_radius = 0.13
+	wheel_ring.outer_radius = 0.19
+	_part(wheel_ring, dark, Vector3(0, 1.06, -0.28), Vector3(deg_to_rad(65), 0, 0))
+	var column := CylinderMesh.new()
+	column.top_radius = 0.03
+	column.bottom_radius = 0.03
+	column.height = 0.5
+	_part(column, dark, Vector3(0, 0.88, -0.45), Vector3(deg_to_rad(-25), 0, 0))
+	# número do grid (placa branca nos dois lados)
+	var number := str(Chars.index_of(char_id) + 1)
+	var plate := CylinderMesh.new()
+	plate.top_radius = 0.26
+	plate.bottom_radius = 0.26
+	plate.height = 0.02
+	var white := _mat(Color(0.95, 0.95, 0.95))
+	for side in [-1.0, 1.0]:
+		_part(plate, white, Vector3(side * 0.66, 0.6, -0.35), Vector3(0, 0, PI / 2)).scale = Vector3(1, 1, 1)
+		var num := Label3D.new()
+		num.text = number
+		num.font_size = 72
+		num.pixel_size = 0.005
+		num.modulate = Color(0.05, 0.05, 0.05)
+		num.outline_size = 0
+		num.position = Vector3(side * 0.68, 0.6, -0.35)
+		num.rotation.y = PI / 2.0 * side
+		model.add_child(num)
+	# rodas: pneu + aro cromado + faixa pra ver o giro (RF-145)
+	var tire := CylinderMesh.new()
+	tire.top_radius = 0.4
+	tire.bottom_radius = 0.4
+	tire.height = 0.38
+	var rim := CylinderMesh.new()
+	rim.top_radius = 0.24
+	rim.bottom_radius = 0.24
+	rim.height = 0.4
+	var spoke := _box(Vector3(0.44, 0.42, 0.09))
 	for x in [-0.95, 0.95]:
-		for z in [-0.9, 0.9]:
+		for z in [-0.92, 0.92]:
 			var pivot := Node3D.new()
-			pivot.position = Vector3(x, 0.38, z)
+			pivot.position = Vector3(x, 0.4, z)
 			model.add_child(pivot)
 			var w := MeshInstance3D.new()
-			w.mesh = wheel
-			w.material_override = dark
+			w.mesh = tire
+			w.material_override = rubber
 			w.rotation = Vector3(0, 0, PI / 2)
 			pivot.add_child(w)
-			var stripe := MeshInstance3D.new()
-			stripe.mesh = hub
-			stripe.material_override = hub_mat
-			stripe.position = Vector3(0, 0.0, 0)
-			w.add_child(stripe)
+			var r := MeshInstance3D.new()
+			r.mesh = rim
+			r.material_override = chrome
+			w.add_child(r)
+			var sp := MeshInstance3D.new()
+			sp.mesh = spoke
+			sp.material_override = dark
+			w.add_child(sp)
 			wheels.append(w)
 			if z < 0.0:
 				front_pivots.append(pivot)
-	# piloto
+	# piloto camundongo (RF-111) com braços no volante
 	var torso := CapsuleMesh.new()
 	torso.radius = 0.33
 	torso.height = 0.8
-	_part(torso, trim, Vector3(0, 1.0, 0.25))
-	# RF-111: camundongo de capacete (a arte do rosto fica só no minimapa/HUD)
+	_part(torso, trim, Vector3(0, 1.05, 0.3))
+	var arm := CapsuleMesh.new()
+	arm.radius = 0.09
+	arm.height = 0.62
+	var glove := SphereMesh.new()
+	glove.radius = 0.1
+	glove.height = 0.2
+	for x in [-0.25, 0.25]:
+		_part(arm, trim, Vector3(x, 1.12, 0.0), Vector3(deg_to_rad(-70), 0, -x * 0.6))
+		_part(glove, white, Vector3(x * 0.75, 1.08, -0.25))
 	var fur := _mat(Color(0.86, 0.7, 0.55))
 	var pink := _mat(Color(1.0, 0.55, 0.62))
 	var head := SphereMesh.new()
 	head.radius = 0.42
 	head.height = 0.84
-	_part(head, fur, Vector3(0, 1.8, 0.25))
+	_part(head, fur, Vector3(0, 1.8, 0.3))
 	var helmet := SphereMesh.new()
 	helmet.radius = 0.46
 	helmet.height = 0.46
 	helmet.is_hemisphere = true
-	_part(helmet, body_mat, Vector3(0, 1.84, 0.25))
-	_part(_box(Vector3(0.6, 0.16, 0.1)), dark, Vector3(0, 1.98, -0.17))
-	var nose := SphereMesh.new()
-	nose.radius = 0.09
-	nose.height = 0.18
-	_part(nose, pink, Vector3(0, 1.72, -0.18))
+	_part(helmet, paint, Vector3(0, 1.84, 0.3))
+	_part(_box(Vector3(0.6, 0.16, 0.1)), dark, Vector3(0, 1.98, -0.12))
+	var nose_m := SphereMesh.new()
+	nose_m.radius = 0.09
+	nose_m.height = 0.18
+	_part(nose_m, pink, Vector3(0, 1.72, -0.13))
 	var ear := SphereMesh.new()
 	ear.radius = 0.34
 	ear.height = 0.68
@@ -548,8 +654,8 @@ func _build_model() -> void:
 	ear_in.radius = 0.24
 	ear_in.height = 0.48
 	for x in [-0.5, 0.5]:
-		_part(ear, fur, Vector3(x, 2.25, 0.32)).scale = Vector3(1, 1, 0.3)
-		_part(ear_in, pink, Vector3(x, 2.25, 0.25)).scale = Vector3(1, 1, 0.25)
+		_part(ear, fur, Vector3(x, 2.25, 0.37)).scale = Vector3(1, 1, 0.3)
+		_part(ear_in, pink, Vector3(x, 2.25, 0.3)).scale = Vector3(1, 1, 0.25)
 	var head_top := 2.6
 	var lbl := Label3D.new()
 	lbl.text = display_name
@@ -563,27 +669,51 @@ func _build_model() -> void:
 	if is_player:
 		lbl.layers = 1 << (LABEL_LAYER_BASE + player_index)  # RF-63
 	add_child(lbl)
-	# faíscas do drift
-	spark_mat = StandardMaterial3D.new()
-	spark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	spark_mat.albedo_color = Color(0.3, 0.7, 1.0)
-	var spark := SphereMesh.new()
-	spark.radius = 0.22
-	spark.height = 0.44
-	for x in [-0.9, 0.9]:
-		var s := _part(spark, spark_mat, Vector3(x, 0.25, 1.35))
-		s.visible = false
-		sparks.append(s)
-	# chama do turbo
+	# chama do turbo (cone) + partículas (RF-165)
 	var cone := CylinderMesh.new()
 	cone.top_radius = 0.0
-	cone.bottom_radius = 0.32
-	cone.height = 1.0
+	cone.bottom_radius = 0.2
+	cone.height = 0.8
 	var flame_mat := StandardMaterial3D.new()
 	flame_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	flame_mat.albedo_color = Color(1.0, 0.55, 0.1)
-	flame = _part(cone, flame_mat, Vector3(0, 0.55, 1.8), Vector3(PI / 2, 0, 0))
-	flame.visible = false
+	flame_mat.albedo_color = Color(1.6, 0.7, 0.15)
+	for x in [-0.25, 0.25]:
+		var f := _part(cone, flame_mat, Vector3(x, 0.78, 1.95), Vector3(PI / 2, 0, 0))
+		f.visible = false
+		flames.append(f)
+	_build_particles()
+
+
+func _build_particles() -> void:
+	for x in [-0.95, 0.95]:
+		var s := Gfx.particles("sparks")
+		s.position = Vector3(x, 0.15, 1.1)
+		model.add_child(s)
+		sparks.append(s)
+	p_flame = Gfx.particles("flame")
+	p_flame.position = Vector3(0, 0.78, 1.75)
+	model.add_child(p_flame)
+	var dust_c: Color = track.def.get("offroad", Color(0.5, 0.45, 0.3)) if track else Color(0.5, 0.45, 0.3)
+	p_dust = Gfx.particles("dust", dust_c.lightened(0.2))
+	p_dust.position = Vector3(0, 0.2, 1.2)
+	model.add_child(p_dust)
+	p_smoke = Gfx.particles("smoke")
+	p_smoke.position = Vector3(0, 1.0, 0)
+	add_child(p_smoke)
+	p_stars = Gfx.particles("stars")
+	p_stars.position = Vector3(0, 2.6, 0)
+	add_child(p_stars)
+	p_land = Gfx.particles("landing", dust_c.lightened(0.3))
+	p_land.position = Vector3(0, 0.2, 0)
+	add_child(p_land)
+	p_confetti = Gfx.particles("confetti")
+	p_confetti.position = Vector3(0, 2.0, 0)
+	add_child(p_confetti)
+
+
+func celebrate() -> void:
+	if p_confetti:
+		p_confetti.restart()
 
 
 func _update_visuals(delta: float) -> void:
@@ -618,14 +748,19 @@ func _update_visuals(delta: float) -> void:
 		model.position.y = sin((1.0 - hop_time / 0.25) * PI) * 0.45 + shake
 	else:
 		model.position.y = shake
+	# RF-165: partículas
 	var show_sparks := drifting and drift_charge >= MINI_TURBO_1
 	for s in sparks:
-		s.visible = show_sparks
-	if show_sparks:
-		spark_mat.albedo_color = drift_color(drift_charge)
-	flame.visible = boost_time > 0.0
-	if flame.visible:
-		flame.scale = Vector3.ONE * randf_range(0.8, 1.25)
+		s.emitting = show_sparks
+		if show_sparks:
+			s.color = drift_color(drift_charge) * 1.6
+	var boosting := boost_time > 0.0
+	p_flame.emitting = boosting
+	for f in flames:
+		f.visible = boosting
+		if boosting:
+			f.scale = Vector3.ONE * randf_range(0.8, 1.3)
+	p_dust.emitting = not airborne and absf(speed) > 5.0 and absf(lateral) > TrackScript.ROAD_HALF + TrackScript.CURB
 
 
 static func drift_color(charge: float) -> Color:

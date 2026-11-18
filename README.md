@@ -43,3 +43,7 @@ Largada turbo: comece a acelerar quando aparecer o **2** (entre 1.6 s e 0.6 s do
 - **Rampa**: aperte drift no ar pra fazer a manobra e ganhar turbo no pouso.
 - **Setas no chão** dão turbo; andar **colado atrás** de alguém dá turbo de vácuo.
 - **Queijinhos**: cada um deixa o kart 1% mais rápido (até 10); levar casca/bomba tira 3.
+
+## Gráficos
+Renderer Forward+ com bloom, SSAO, neblina e texturas procedurais. Em PC fraco, use **GRÁFICOS: BAIXO** (canto do menu).
+Medido numa RTX 5070: 1 jogador ~180 FPS (vsync), 4 jogadores ~90 FPS.

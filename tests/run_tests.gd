@@ -31,6 +31,7 @@ func _run() -> void:
 	await _test_faces()
 	await _test_all_tracks()
 	await _test_v08()
+	await _test_graphics()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -502,3 +503,44 @@ func _test_v08() -> void:
 		r.queue_free()
 		await process_frame
 	check(ranges == [true, true, true], "habilidade da IA dentro da faixa em fácil/normal/difícil")
+
+
+func _test_graphics() -> void:
+	var Gfx = load("res://scripts/gfx.gd")
+	var Track = load("res://scripts/track.gd")
+	print("CA-23 qualidade gráfica")
+	var d: Dictionary = Track.TRACKS[0]
+	var hi: Environment = Gfx.environment(d, true)
+	var lo: Environment = Gfx.environment(d, false)
+	check(hi.glow_enabled and hi.ssao_enabled, "ALTO: glow e SSAO ligados")
+	check(not lo.glow_enabled and not lo.ssao_enabled, "BAIXO: glow e SSAO desligados")
+	var game = root.get_node_or_null("Game")
+	if game:
+		game.graphics_high = false
+		var r_lo = await _new_race(["telles"], true)
+		check(r_lo.get_viewport().msaa_3d == Viewport.MSAA_DISABLED, "BAIXO: MSAA desligado")
+		r_lo.queue_free()
+		await process_frame
+		game.graphics_high = true
+
+	print("CA-24 partículas")
+	var race = await _new_race(["telles"], true)
+	var k = race.karts[0]
+	check(k.sparks.size() == 2 and k.p_flame != null and k.p_dust != null and k.p_confetti != null, "kart tem emissores")
+	race.state = "racing"
+	k.drifting = true
+	k.drift_charge = 1.0
+	k.boost_time = 1.0
+	k.lateral = 12.0
+	k.speed = 20.0
+	k._update_visuals(1.0 / 60.0)
+	check(k.sparks[0].emitting and k.p_flame.emitting and k.p_dust.emitting, "drift → faíscas, turbo → fogo, grama → poeira")
+
+	print("CA-25 texturas e cenário")
+	var tm: StandardMaterial3D = race.track.get_node("TrackMesh").material_override
+	var gm: StandardMaterial3D = race.track.get_node("Ground").material_override
+	check(tm.albedo_texture != null and tm.normal_texture != null and tm.uv1_triplanar, "pista com granulado + relevo triplanar")
+	check(gm.albedo_texture != null, "chão com textura")
+	check(race.track.get_node_or_null("Grandstand") != null and race.track.scenery_count > 100, "arquibancada + cenário (%d instâncias)" % race.track.scenery_count)
+	race.queue_free()
+	await process_frame

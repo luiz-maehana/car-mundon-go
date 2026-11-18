@@ -7,7 +7,7 @@
 
 Jogo de corrida de kart arcade 3D (gênero kart racer: drift com mini-turbo, caixas de item, 8 pilotos), em que os pilotos são a nossa turma. Objetivo do MVP: **uma corrida completa, divertida e jogável do menu até o pódio**, para validar a sensação de pilotagem antes de investir em arte, pistas e multiplayer.
 
-- Engine: **Godot 4.7** (GDScript), renderer *Compatibility* (roda em PC fraco e permite exportar pra web depois).
+- Engine: **Godot 4.7** (GDScript). Renderer **Forward+** no PC (v0.9), com opção de gráficos BAIXO; a web usará Compatibility.
 - Arte do MVP: 100% procedural (primitivas + cores). Nenhum asset externo obrigatório.
 - Idioma da interface: português.
 
@@ -154,6 +154,17 @@ Conversão de stat para física (em `kart.gd`):
 - [x] **RF-150** Queijinhos: fileiras de queijos na pista (voltam 8 s depois de pegos). Cada um dá +1% de velocidade máxima, até 10. Quem é atingido (casca/bomba) perde 3.
 - [x] **RF-151** Dificuldade da IA no menu (`IA: FÁCIL / NORMAL / DIFÍCIL`): habilidade 0.84–0.90 / 0.90–0.97 / 0.97–1.02 e *rubber band* mais forte no difícil.
 
+### Gráficos (v0.9)
+- [x] **RF-160** Renderer **Forward+** no PC (a versão web, quando existir, usa Compatibility). Ambiente com tonemap ACES, bloom (glow), SSAO, neblina leve na cor do horizonte, saturação +10% e MSAA 4x.
+- [x] **RF-161** Opção `GRÁFICOS: ALTO / BAIXO` no menu (salva no `Game`). BAIXO desliga SSAO, bloom, sombras suaves e MSAA e reduz as partículas pela metade.
+- [x] **RF-162** Texturas procedurais em projeção triplanar (sem UV): asfalto granulado com relevo, grama com variação, areia, e piso de azulejo xadrez na cozinha.
+- [x] **RF-163** Céu em shader: gradiente, sol com halo, nuvens animadas; na pista noturna, estrelas e lua.
+- [x] **RF-164** Kart remodelado: carroceria arredondada com pintura metálica, bico, para-choques, volante, escapamento duplo, número do grid em placa branca, braços do piloto no volante.
+- [x] **RF-165** Partículas (CPUParticles3D): faíscas do drift na cor do nível, fogo do turbo, poeira na grama/areia, fumaça + estrelinhas ao ser atingido, poeira no pouso da rampa, confete na chegada dos humanos.
+- [x] **RF-166** Linhas de velocidade na tela durante o turbo; tremida de câmera em batida, pancada e pouso.
+- [x] **RF-167** Cenário: arquibancada com torcida colorida na largada, bandeirolas na reta, pilhas de pneu nas curvas mais fechadas, tufos de grama/pedras (ou queijos gigantes na cozinha).
+- [x] **RF-168** Caixas de item com brilho arco-íris animado (shader).
+
 ## 5. Controles
 
 | Ação | Jogador 1 (teclado) | Jogador 2 (teclado) | Controle (J1..J4 = controle 1..4) |
@@ -173,7 +184,7 @@ Jogadores 3 e 4 só por controle. Com 1 jogador, as teclas do J2 também valem p
 - **RNF-01** 60 ticks de física fixos com *physics interpolation* (suave em monitores 144 Hz).
 - **RNF-02** Lógica da corrida roda sem renderização (`race.step(delta)`), permitindo simular corridas inteiras em teste headless.
 - **RNF-03** Sem `class_name`: scripts se referenciam por `preload`, para o projeto rodar direto da linha de comando sem passar pelo editor.
-- **RNF-04** Nos testes headless o motor (AudioStreamGenerator) fica desligado: com o driver de áudio *dummy* do Godot 4.7 ele dá segfault junto com a tela dividida. Com driver real: 0 crashes em 36 corridas de 4 jogadores (`tools/stress_races.gd -- mp`, com janela). Os motores de todos os jogadores são mixados num gerador só.
+- **RNF-04** O som do motor é um loop WAV pré-gerado com pitch variando pela velocidade. (A versão com `AudioStreamGenerator` derrubava o Godot 4.7 com segfault ao criar/destruir corridas de 4 jogadores, inclusive com driver real.) Regressão: `tools/stress_races.gd -- mp` — 144 corridas, 0 crashes (com e sem janela).
 
 ## 7. Arquitetura
 
@@ -219,6 +230,9 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-20** Dificuldade muda a faixa de habilidade da IA.
 - [x] **CA-21** Roleta: item recém-pego não pode ser usado antes de 1 s.
 - [x] **CA-22** Soltar o drift com 2.5 s de carga dá turbo ≥ 1.5 s.
+- [x] **CA-23** Qualidade ALTO liga glow e SSAO no ambiente; BAIXO desliga os dois e zera o MSAA.
+- [x] **CA-24** Kart tem emissores de partículas; drift carregado liga as faíscas, turbo liga o fogo, grama liga a poeira.
+- [x] **CA-25** O material da pista e o do chão têm textura; o cenário tem arquibancada, pneus e decoração (> 0 instâncias).
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

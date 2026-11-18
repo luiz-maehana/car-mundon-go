@@ -4,7 +4,7 @@ extends RefCounted
 
 const RATE := 22050
 const MUSIC_RATE := 16000
-const NAMES := ["beep", "go", "item", "boost", "mini_turbo", "drop", "shoot", "hit", "lap", "finish", "start_turbo", "stall", "bump", "cheese", "pad", "trick", "slip"]
+const NAMES := ["beep", "go", "item", "boost", "mini_turbo", "drop", "shoot", "hit", "lap", "finish", "start_turbo", "stall", "bump", "cheese", "pad", "trick", "slip", "engine"]
 
 static var _cache := {}
 
@@ -66,6 +66,8 @@ static func _make(sound_name: String) -> AudioStreamWAV:
 			var notes := [523.0, 659.0, 784.0, 1046.0, 784.0, 1046.0]
 			for i in notes.size():
 				_tone(b, r, i * 0.12, 0.2 if i < 5 else 0.6, notes[i], notes[i], "square", 0.22)
+		"engine":
+			return _engine_loop()
 		"music":
 			return _music()
 	return _to_wav(b, r, false)
@@ -162,3 +164,26 @@ static func _music() -> AudioStreamWAV:
 			_tone(b, r, t0, beat * 4, note, note, "tri", 0.025, 1.0)
 	b.resize(int(bars * 4 * beat * r))
 	return _to_wav(b, r, true, 0.75)
+
+
+## Loop de motor (RF-81): 1 s com número inteiro de ciclos (emenda sem clique).
+## O pitch é variado em tempo real pela corrida conforme a velocidade.
+static func _engine_loop() -> AudioStreamWAV:
+	var r := RATE
+	var period := 400            # amostras por ciclo -> 55.125 Hz
+	var n := period * 55          # 1 s exato
+	var b := PackedFloat32Array()
+	b.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var rumble := 0.0
+	for i in n:
+		var ph := float(i % period) / period
+		var ph2 := float(i % (period * 2)) / (period * 2)
+		var saw := ph * 2.0 - 1.0
+		var sub := 1.0 if ph2 < 0.5 else -1.0
+		var pulse := 1.0 if ph < 0.18 else -0.2
+		if i % 8 == 0:
+			rumble = lerpf(rumble, rng.randf_range(-1.0, 1.0), 0.5)
+		b[i] = saw * 0.45 + sub * 0.3 + pulse * 0.15 + rumble * 0.1
+	return _to_wav(b, r, true, 0.8)

@@ -7,7 +7,8 @@ const KartScript = preload("res://scripts/kart.gd")
 const HudScript = preload("res://scripts/hud.gd")
 const Chars = preload("res://scripts/characters.gd")
 const Sfx = preload("res://scripts/sfx.gd")
-const ENGINE_RATE := 22050.0
+const Gfx = preload("res://scripts/gfx.gd")
+
 
 const COUNTDOWN := 3.0
 const BOX_RESPAWN := 3.0
@@ -23,9 +24,7 @@ const DIFFICULTY := [
 
 var use_game_settings := true
 var audio_enabled := true
-# No modo headless (testes) o driver de áudio "dummy" do Godot 4.7 dá segfault com o
-# gerador do motor + tela dividida; com driver real não reproduz (RNF-04, tools/stress_races.gd).
-var engines_enabled := DisplayServer.get_name() != "headless"
+var engines_enabled := true
 var autopilot_player := false
 var player_chars: Array = ["fejaum"]  # um por jogador humano (1..4)
 var laps := 3
@@ -55,10 +54,12 @@ var pause_resume_btn: Button
 var sfx_players: Array = []
 var sfx_next := 0
 var sfx_log: Array = []   # nomes tocados (usado pelos testes)
-var engines: Array = []   # {kart, phase, amp} — todos mixados em engine_player
-var engine_player: AudioStreamPlayer
+var engines: Array = []   # {kart, player, base_db} — um loop de motor por humano
+
 var last_beep := 4
 var human_laps: Array = []
+var world_env: WorldEnvironment
+var shakes: Array = []    # tremida por câmera (RF-166)
 
 
 func _ready() -> void:
@@ -96,23 +97,21 @@ func _build_audio() -> void:
 		sfx_players.append(ap)
 	if not engines_enabled:
 		return
-	# Um único gerador mistura o motor de todos os humanos: vários AudioStreamGenerator
-	# ao mesmo tempo derrubavam o Godot 4.7 com segfault (tela dividida com 4 motores).
-	var gen := AudioStreamGenerator.new()
-	gen.mix_rate = ENGINE_RATE
-	gen.buffer_length = 0.1
-	engine_player = AudioStreamPlayer.new()
-	engine_player.stream = gen
-	engine_player.volume_db = -6.0 - 2.0 * (players.size() - 1)
-	add_child(engine_player)
-	engine_player.play()
+	# RF-81/RNF-04: motor = loop WAV pré-gerado com pitch variando pela velocidade.
+	# (AudioStreamGenerator derrubava o Godot 4.7 com segfault ao criar/destruir corridas.)
+	var base_db := -11.0 - 2.0 * (players.size() - 1)
 	for p in players:
-		engines.append({"kart": p, "phase": 0.0, "amp": 0.0})
+		var ap := AudioStreamPlayer.new()
+		ap.stream = Sfx.get_sound("engine")
+		ap.volume_db = -60.0
+		add_child(ap)
+		ap.play()
+		engines.append({"kart": p, "player": ap, "base_db": base_db})
 
 
 func _exit_tree() -> void:
-	if engine_player:
-		engine_player.stop()
+	for e in engines:
+		e["player"].stop()
 	for ap in sfx_players:
 		ap.stop()
 
@@ -127,36 +126,17 @@ func sfx(sound_name: String) -> void:
 	ap.play()
 
 
-## RF-81: motor = serra + onda quadrada uma oitava abaixo; frequência acompanha a velocidade.
-func _process(_delta: float) -> void:
-	if engine_player == null or not engine_player.playing:
-		return
-	var pb := engine_player.get_stream_playback() as AudioStreamGeneratorPlayback
-	if pb == null:
-		return
-	var frames := pb.get_frames_available()
-	if frames <= 0:
-		return
-	var buf := PackedVector2Array()
-	buf.resize(frames)
+## RF-81: o loop do motor (55 Hz) sobe de tom com a velocidade; volume segue o acelerador.
+func _process(delta: float) -> void:
 	for e in engines:
+		var ap: AudioStreamPlayer = e["player"]
 		var k: Node3D = e["kart"]
-		var f := 38.0 + absf(k.speed) * 2.6
+		var pitch := 0.7 + absf(k.speed) * 0.05
 		if k.boost_time > 0.0:
-			f *= 1.3
-		var target_amp := 0.0 if paused else (0.22 + 0.14 * clampf(k.in_throttle, 0.0, 1.0))
-		var phase: float = e["phase"]
-		var amp: float = e["amp"]
-		for i in frames:
-			phase = fmod(phase + f / ENGINE_RATE, 2.0)
-			var saw := fmod(phase, 1.0) * 2.0 - 1.0
-			var sub := 1.0 if phase < 1.0 else -1.0
-			amp = lerpf(amp, target_amp, 0.0005)
-			var s := (saw * 0.6 + sub * 0.4) * amp
-			buf[i] += Vector2(s, s)
-		e["phase"] = phase
-		e["amp"] = amp
-	pb.push_buffer(buf)
+			pitch *= 1.25
+		ap.pitch_scale = lerpf(ap.pitch_scale, clampf(pitch, 0.5, 3.5), 1.0 - exp(-10.0 * delta))
+		var target_db: float = -60.0 if paused else float(e["base_db"]) + 3.0 * clampf(k.in_throttle, 0.0, 1.0)
+		ap.volume_db = lerpf(ap.volume_db, target_db, 1.0 - exp(-8.0 * delta))
 
 
 # ---------------------------------------------------------------- pause (RF-90)
@@ -258,7 +238,7 @@ func _build_views() -> void:
 		svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		grid.add_child(svc)
 		var vp := SubViewport.new()
-		vp.msaa_3d = Viewport.MSAA_2X
+		vp.msaa_3d = Viewport.MSAA_4X if Gfx.high() else Viewport.MSAA_DISABLED
 		svc.add_child(vp)
 		var cam := _make_camera(i)
 		vp.add_child(cam)
@@ -339,32 +319,22 @@ func all_finished() -> bool:
 # ---------------------------------------------------------------- setup
 
 func _build_environment() -> void:
-	var env := Environment.new()
-	env.background_mode = Environment.BG_SKY
-	var sky := Sky.new()
-	var sky_mat := ProceduralSkyMaterial.new()
 	var d: Dictionary = track.def
-	sky_mat.sky_top_color = d["sky_top"]
-	sky_mat.sky_horizon_color = d["sky_horizon"]
-	sky_mat.ground_horizon_color = (d["ground"] as Color).lerp(d["sky_horizon"], 0.4)
-	sky_mat.ground_bottom_color = d["ground"]
-	sky.sky_material = sky_mat
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = d["ambient"]
-	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
-	env.ambient_light_energy = 0.55
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
+	var hq := Gfx.high()
+	world_env = WorldEnvironment.new()
+	world_env.environment = Gfx.environment(d, hq)  # RF-160/163
+	add_child(world_env)
 	var sun := DirectionalLight3D.new()
 	sun.rotation = Vector3(deg_to_rad(d["sun"][1]), deg_to_rad(-35), 0)
 	sun.light_color = d["sun"][2]
 	sun.light_energy = d["sun"][0]
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 120.0
+	sun.shadow_blur = 1.5 if hq else 0.5
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_max_distance = 140.0 if hq else 80.0
 	add_child(sun)
+	# RF-161: MSAA 4x no ALTO, desligado no BAIXO
+	get_viewport().msaa_3d = Viewport.MSAA_4X if hq else Viewport.MSAA_DISABLED
 
 
 func _spawn_karts() -> void:
@@ -402,12 +372,7 @@ func _spawn_karts() -> void:
 func _spawn_boxes() -> void:
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(1.4, 1.4, 1.4)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.3, 0.8, 1.0, 0.75)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.emission_enabled = true
-	mat.emission = Color(0.2, 0.5, 1.0)
-	mat.emission_energy_multiplier = 0.6
+	var mat := Gfx.rainbow_material()  # RF-168
 	for p in track.item_box_positions():
 		var node := Node3D.new()
 		var mi := MeshInstance3D.new()
@@ -538,6 +503,8 @@ func _kart_collisions() -> void:
 						a.bump_cd = 0.4
 						b.bump_cd = 0.4
 						sfx("bump")
+						shake(a, 0.35)
+						shake(b, 0.35)
 
 
 ## RF-142: vácuo — logo atrás de outro kart por 1.2 s dá turbo.
@@ -762,6 +729,7 @@ func _check_finish(delta: float) -> void:
 			k.autopilot = true
 			if k.is_player:
 				sfx("finish")
+				k.celebrate()
 	if state == "racing" and humans_finished():  # RF-65
 		state = "finished"
 		end_timer = RESULTS_DELAY
@@ -779,6 +747,13 @@ func _update_cameras(delta: float, snap: bool) -> void:
 		var p: Node3D = players[i]
 		var f: Vector3 = p.forward()
 		var desired: Vector3 = p.position - f * 7.5 + Vector3.UP * 3.3
+		# outro kart colado na câmera: sobe um pouco pra ele não tapar a visão
+		var near := 99.0
+		for o in karts:
+			if o != p:
+				near = minf(near, Vector2(o.position.x - desired.x, o.position.z - desired.z).length())
+		if near < 4.5:
+			desired += Vector3.UP * (4.5 - near) * 0.7
 		if snap:
 			cam.position = desired
 		else:
@@ -786,5 +761,22 @@ func _update_cameras(delta: float, snap: bool) -> void:
 		cam.look_at(p.position + f * 5.0 + Vector3.UP * 1.2)
 		var target_fov := 82.0 if p.boost_time > 0.0 else 72.0
 		cam.fov = lerpf(cam.fov, target_fov, 1.0 - exp(-5.0 * delta))
+		# RF-166: tremida (h/v_offset não atrapalha a suavização da posição)
+		while shakes.size() <= i:
+			shakes.append(0.0)
+		shakes[i] = maxf(0.0, shakes[i] - delta * 2.5)
+		var sh: float = shakes[i]
+		cam.h_offset = randf_range(-1.0, 1.0) * sh * 0.35
+		cam.v_offset = randf_range(-1.0, 1.0) * sh * 0.25
 		if snap:
 			cam.reset_physics_interpolation()
+
+
+## RF-166: tremida da câmera do jogador dono do kart.
+func shake(k: Node3D, amount: float) -> void:
+	if not k.is_player:
+		return
+	var i: int = k.player_index
+	while shakes.size() <= i:
+		shakes.append(0.0)
+	shakes[i] = maxf(shakes[i], amount)
