@@ -356,6 +356,19 @@ func _build_arch() -> void:
 	gantry.basis = Basis(Vector3.UP, heading_at(0))
 	add_child(gantry)
 	var box := Gfx.aabb_of(gantry)
+	# placa em cima do pórtico, com o nome em cada face (cada texto só de um lado, sem
+	# espelhar: Label3D é dupla face por padrão e os dois se sobrepunham ilegíveis)
+	var sign_y := box.size.y + 1.3
+	var panel := MeshInstance3D.new()
+	var pm := BoxMesh.new()
+	pm.size = Vector3(15.0, 2.4, 0.5)
+	panel.mesh = pm
+	var pmat := StandardMaterial3D.new()
+	pmat.albedo_color = Color(0.1, 0.1, 0.14)
+	panel.material_override = pmat
+	panel.position = Vector3(0, sign_y, 0)
+	panel.name = "StartSign"
+	gantry.add_child(panel)
 	for side in [1.0, -1.0]:
 		var lbl := Label3D.new()
 		lbl.text = "CAR'MUNDON'GO!"
@@ -363,7 +376,8 @@ func _build_arch() -> void:
 		lbl.pixel_size = 0.014
 		lbl.outline_size = 18
 		lbl.modulate = Color(1.0, 0.85, 0.2)
-		lbl.position = Vector3(0, box.size.y + 1.2, 0)
+		lbl.double_sided = false
+		lbl.position = Vector3(0, sign_y, side * 0.28)
 		if side < 0:
 			lbl.rotation.y = PI
 		gantry.add_child(lbl)
@@ -680,6 +694,7 @@ func _grandstand() -> void:
 	banner.modulate = Color(1.0, 0.85, 0.2)
 	banner.position = Vector3(side * -1.9, 6.3, 0)
 	banner.rotation.y = -PI / 2.0 * side
+	banner.double_sided = false  # sem texto espelhado por trás
 	stand.add_child(banner)
 	# torcida: cápsulas coloridas nos degraus
 	var rng := RandomNumberGenerator.new()

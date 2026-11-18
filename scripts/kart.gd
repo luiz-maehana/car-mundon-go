@@ -643,6 +643,7 @@ func _build_model() -> void:
 		num.outline_modulate = Color(0.05, 0.05, 0.08)
 		num.position = Vector3(side * 1.08, 0.55, 0.35)
 		num.rotation.y = PI / 2.0 * side
+		num.double_sided = false  # sem número espelhado
 		model.add_child(num)
 	# piloto
 	var look: Dictionary = Chars.find(char_id).get("look", {})
