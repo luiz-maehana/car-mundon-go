@@ -40,6 +40,7 @@ func _run() -> void:
 	await _test_assets()
 	await _test_settings()
 	await _test_hud_layout()
+	await _test_gp()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -705,3 +706,68 @@ func _test_hud_layout() -> void:
 		check(h.lbl_center.text == "3" and c.distance_to(mid) < 2.0 and h.lbl_center.size.x >= h.root.size.x - 2.0, "%d jogador(es): '3' centralizado (%s vs %s)" % [chars.size(), c, mid])
 		race.queue_free()
 		await process_frame
+
+
+func _test_gp() -> void:
+	var game = root.get_node_or_null("Game")
+	if game == null:
+		return
+	print("CA-35 pontuação do Grand Prix")
+	game.start_gp()
+	var ids := []
+	for c in load("res://scripts/characters.gd").LIST:
+		ids.append(c["id"])
+	var got: Dictionary = game.gp_award(ids)
+	var sum := 0
+	for v in got.values():
+		sum += v
+	check(sum == 58 and got[ids[0]] == 15 and got[ids[7]] == 1, "uma corrida distribui 58 pontos (15..1)")
+	check(game.gp_award(ids).is_empty(), "mesma corrida não pontua duas vezes")
+	# desempate: empata em pontos, decide por vitórias / última corrida
+	game.start_gp()
+	game.gp_points = {"a": 20, "b": 20, "c": 20, "d": 5}
+	game.gp_wins = {"a": 0, "b": 1, "c": 0, "d": 0}
+	game.gp_last_pos = {"a": 5, "b": 3, "c": 2, "d": 1}
+	check(game.gp_standings() == ["b", "c", "a", "d"], "classificação: pontos → vitórias → última corrida (%s)" % str(game.gp_standings()))
+
+	print("CA-36 Grand Prix completo simulado")
+	game.start_gp()
+	game.laps = 1
+	var tracks_seen := []
+	for r in 3:
+		var race = load("res://scripts/race.gd").new()
+		race.use_game_settings = false
+		race.autopilot_player = true
+		race.player_chars = ["shinando"]
+		race.track_id = game.track_id
+		race.laps = 1
+		root.add_child(race)
+		if race.karts.is_empty():
+			await process_frame
+		tracks_seen.append(race.track.def["id"])
+		var t := 0.0
+		while t < 200.0 and not race.results_shown:
+			race.step(1.0 / 60.0)
+			t += 1.0 / 60.0
+		race._award_gp()  # chamar de novo não pode pontuar 2x
+		race.queue_free()
+		await process_frame
+		if r < 2:
+			check(game.gp_next(), "avança pra corrida %d" % (r + 2))
+	var total := 0
+	for v in game.gp_points.values():
+		total += v
+	check(tracks_seen == game.GP_TRACKS, "pistas na ordem %s" % str(tracks_seen))
+	check(total == 174, "174 pontos distribuídos em 3 corridas (%d)" % total)
+	check(game.gp_is_over() and not game.gp_next(), "GP termina depois da 3ª corrida")
+
+	print("CA-37 tela final do Grand Prix")
+	var fin = load("res://scenes/gp_final.tscn").instantiate()
+	root.add_child(fin)
+	await process_frame
+	var st: Array = game.gp_standings()
+	check(fin.podium_ids.size() == 3 and fin.podium_ids.has(st[0]) and fin.podium_ids.has(st[1]) and fin.podium_ids.has(st[2]), "pódio com os 3 líderes (%s)" % str(st.slice(0, 3)))
+	fin.queue_free()
+	game.mode = "race"
+	game.laps = 3
+	await process_frame

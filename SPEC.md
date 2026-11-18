@@ -183,6 +183,14 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-184** Controles: tabela com as teclas/botões de cada ação para J1, J2 e controles; zona morta do analógico (5–50%).
 - [x] **RF-185** O antigo botão `GRÁFICOS` do menu vira `CONFIGURAÇÕES` (a qualidade passa a morar na aba Vídeo).
 
+### Grand Prix (v0.12)
+- [x] **RF-190** Menu tem `MODO: CORRIDA / GRAND PRIX` (canto superior esquerdo). No GP o botão de pista mostra `PISTAS: AS 3` e fica desativado; voltas, IA e jogadores valem pras 3 corridas.
+- [x] **RF-191** O GP são as 3 pistas em sequência: Circuito Queijo Suíço → Deserto do Parmesão → Cozinha à Meia-Noite.
+- [x] **RF-192** Pontos por corrida: 1º 15 · 2º 12 · 3º 10 · 4º 8 · 5º 6 · 6º 4 · 7º 2 · 8º 1 (quem não terminou pontua pela posição em que estava). Desempate da classificação: mais pontos → mais vitórias → melhor posição na última corrida.
+- [x] **RF-193** Durante a corrida o HUD mostra `GRAND PRIX · CORRIDA n/3`.
+- [x] **RF-194** Resultado no GP: cada piloto com tempo, `+pontos` e total; botão principal `PRÓXIMA: <pista>` (ou `PÓDIO DO GP` na última). `R`/"Correr de novo" ficam desativados depois do resultado (sem pontuar duas vezes); `Esc` abandona o GP e volta pro menu.
+- [x] **RF-195** Tela final do GP: "CAMPEÃO DO GRAND PRIX", pódio com o top 3 de corpo inteiro e os pontos, tabela com os 8, confete; botões `NOVO GRAND PRIX` e `MENU`.
+
 ## 5. Controles
 
 | Ação | Jogador 1 (teclado) | Jogador 2 (teclado) | Controle (J1..J4 = controle 1..4) |
@@ -210,6 +218,7 @@ Jogadores 3 e 4 só por controle. Com 1 jogador, as teclas do J2 também valem p
 scenes/intro.tscn    -> scripts/intro.gd       tela de abertura (cena principal)
 scenes/menu.tscn     -> scripts/menu.gd        jogadores, seleção de piloto e voltas
 scenes/race.tscn     -> scripts/race.gd        orquestra a corrida (estado, itens, colisões, ranking, câmera)
+scenes/gp_final.tscn -> scripts/gp_final.gd    pódio final do Grand Prix
 scripts/game.gd      (autoload "Game")         piloto escolhido, voltas, mapa de inputs
 scripts/characters.gd                          dados dos 8 pilotos
 scripts/track.gd                               pista procedural (Catmull-Rom -> amostras a cada 2 m) + malhas
@@ -260,6 +269,9 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-32** A tela de configurações monta as 4 abas com os controles, e `PADRÃO` restaura os valores.
 - [x] **CA-33** Na corrida, desligar nomes/minimapa/lista esconde esses elementos e o campo de visão base segue a configuração.
 - [x] **CA-34** A contagem fica no centro do quadro com 1 e 2 jogadores (regressão: com 1 jogador ela ia pro canto).
+- [x] **CA-35** Pontuação: a soma de pontos de uma corrida é 58; a classificação ordena por pontos, depois vitórias, depois última corrida.
+- [x] **CA-36** GP completo simulado (3 corridas de 1 volta só com IA): passa pelas 3 pistas na ordem, cada corrida pontua uma única vez, total 174, e no fim `gp_is_over()`.
+- [x] **CA-37** A tela final do GP monta o pódio com os 3 líderes da classificação.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
@@ -270,7 +282,7 @@ Teste manual (checklist por release):
 1. **Rostos/modelos dos amigos** — fotos já suportadas em `assets/faces/`; depois modelos low-poly.
 2. ~~**Multiplayer local** em tela dividida (2–4 jogadores).~~ → §4 RF-60..67.
 3. ~~**Áudio**~~ → §4 RF-80..83.
-4. ~~**Mais pistas**~~ → §4 RF-120..122. Falta: elevação, rampas, atalhos e modo Grand Prix (pontos somados nas 3 pistas).
+4. ~~**Mais pistas**~~ → §4 RF-120..122; ~~Grand Prix~~ → RF-190..195. Falta: elevação e atalhos.
 5. **Mais itens** (escudo, raio, item "assinatura" por piloto).
 6. ~~**Largada turbo**~~ → §4 RF-85..87.
 7. **Export web** (GitHub Pages) pra turma jogar no navegador.

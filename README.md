@@ -50,3 +50,6 @@ Medido numa RTX 5070: 1 jogador ~180 FPS (vsync), 4 jogadores ~90 FPS.
 
 ## Configurações
 Menu → **CONFIGURAÇÕES** (ou Esc → Configurações durante a corrida): volumes (geral/música/efeitos/motor), tela cheia, vsync, limite de FPS, qualidade, resolução 3D, campo de visão, FPS na tela, tremida, linhas de velocidade, partículas, nomes, minimapa, lista de posições, km/h ou mph e zona morta do analógico. Salvo em `user://settings.cfg`.
+
+## Grand Prix
+No menu, **MODO: GRAND PRIX** (canto superior esquerdo): as 3 pistas em sequência, pontos 15·12·10·8·6·4·2·1 por corrida, e pódio do campeão no final. Desempate: vitórias, depois a última corrida.

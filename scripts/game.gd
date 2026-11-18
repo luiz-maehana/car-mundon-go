@@ -155,6 +155,7 @@ static func build_theme() -> Theme:
 	t.set_stylebox("disabled", "Button", tex_box("button_grey_pressed.png"))
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 		t.set_color(c, "Button", Color(0.16, 0.17, 0.22))
+	t.set_color("font_disabled_color", "Button", Color(0.38, 0.4, 0.48))
 	return t
 
 
@@ -274,3 +275,82 @@ func apply_settings() -> void:
 func _process(_delta: float) -> void:
 	if fps_label and fps_label.visible:
 		fps_label.text = "%d FPS" % Engine.get_frames_per_second()
+
+
+# ---------------------------------------------------------------- Grand Prix (RF-190..195)
+
+const GP_POINTS := [15, 12, 10, 8, 6, 4, 2, 1]
+const GP_TRACKS := ["queijo", "deserto", "cozinha"]
+const CharsData = preload("res://scripts/characters.gd")
+
+var mode := "race"          # "race" | "gp"
+var gp_index := 0           # corrida atual (0..2)
+var gp_points := {}         # id -> pontos
+var gp_wins := {}           # id -> vitórias
+var gp_last_pos := {}       # id -> posição na última corrida
+var gp_awarded_race := -1   # índice da última corrida já pontuada (evita pontuar 2x)
+
+
+func start_gp() -> void:
+	mode = "gp"
+	gp_index = 0
+	gp_awarded_race = -1
+	gp_points.clear()
+	gp_wins.clear()
+	gp_last_pos.clear()
+	for c in CharsData.LIST:
+		gp_points[c["id"]] = 0
+		gp_wins[c["id"]] = 0
+		gp_last_pos[c["id"]] = 8
+	track_id = GP_TRACKS[0]
+
+
+func is_gp() -> bool:
+	return mode == "gp"
+
+
+## Pontua a corrida atual a partir da ordem final (ids, 1º primeiro). Devolve id -> pontos
+## ganhos; numa segunda chamada pra mesma corrida não pontua de novo e devolve {}.
+func gp_award(order_ids: Array) -> Dictionary:
+	if gp_awarded_race == gp_index:
+		return {}
+	gp_awarded_race = gp_index
+	var got := {}
+	for i in order_ids.size():
+		var id: String = order_ids[i]
+		var pts: int = GP_POINTS[i] if i < GP_POINTS.size() else 0
+		gp_points[id] = int(gp_points.get(id, 0)) + pts
+		gp_last_pos[id] = i + 1
+		if i == 0:
+			gp_wins[id] = int(gp_wins.get(id, 0)) + 1
+		got[id] = pts
+	return got
+
+
+## Classificação: pontos → vitórias → melhor posição na última corrida.
+func gp_standings() -> Array:
+	var ids: Array = gp_points.keys()
+	ids.sort_custom(func(a, b):
+		if gp_points[a] != gp_points[b]:
+			return gp_points[a] > gp_points[b]
+		if gp_wins[a] != gp_wins[b]:
+			return gp_wins[a] > gp_wins[b]
+		return gp_last_pos[a] < gp_last_pos[b])
+	return ids
+
+
+func gp_is_last() -> bool:
+	return gp_index >= GP_TRACKS.size() - 1
+
+
+func gp_is_over() -> bool:
+	return gp_is_last() and gp_awarded_race == gp_index
+
+
+## Vai pra próxima pista. Devolve false se o GP já acabou.
+func gp_next() -> bool:
+	if gp_is_last():
+		return false
+	gp_index += 1
+	track_id = GP_TRACKS[gp_index]
+	return true

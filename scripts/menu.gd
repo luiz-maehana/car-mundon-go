@@ -20,6 +20,8 @@ var track_btn: Button
 var diff_btn: Button
 var diff_i := 1
 var gfx_btn: Button
+var mode_btn: Button
+var gp_mode := false
 var settings_overlay: Control
 const SettingsMenu = preload("res://scripts/settings_menu.gd")
 const DIFF_NAMES := ["FÁCIL", "NORMAL", "DIFÍCIL"]
@@ -35,6 +37,7 @@ func _ready() -> void:
 		num_players = game.num_players
 		selected = Chars.index_of(game.selected_chars[0] if game.selected_chars.size() > 0 else "fejaum")
 		laps_i = maxi(0, LAP_OPTIONS.find(game.laps))
+		gp_mode = game.is_gp()
 		diff_i = game.difficulty
 		for ti in TrackScript.TRACKS.size():
 			if TrackScript.TRACKS[ti]["id"] == game.track_id:
@@ -117,6 +120,15 @@ func _build() -> void:
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(help)
 	add_child(gfx_btn)  # por cima do resto
+	# RF-190: modo de jogo (canto superior esquerdo)
+	mode_btn = _button("", 18)
+	mode_btn.custom_minimum_size = Vector2(300, 44)
+	mode_btn.position = Vector2(16, 12)
+	mode_btn.size = Vector2(300, 44)
+	mode_btn.pressed.connect(func():
+		gp_mode = not gp_mode
+		_refresh())
+	add_child(mode_btn)
 
 
 func _label(text: String, size: int, c: Color) -> Label:
@@ -236,7 +248,9 @@ func _refresh() -> void:
 		sub.add_theme_color_override("font_color", PLAYER_COLORS[cur])
 	players_btn.text = "JOGADORES: %d" % num_players
 	laps_btn.text = "VOLTAS: %d" % LAP_OPTIONS[laps_i]
-	track_btn.text = "PISTA: %s" % TrackScript.TRACKS[track_i]["name"]
+	track_btn.text = "PISTAS: AS 3" if gp_mode else "PISTA: %s" % TrackScript.TRACKS[track_i]["name"]
+	track_btn.disabled = gp_mode
+	mode_btn.text = "MODO: GRAND PRIX" if gp_mode else "MODO: CORRIDA"
 	diff_btn.text = "IA: %s" % DIFF_NAMES[diff_i]
 	go_btn.text = "CORRER!" if cur == num_players - 1 else "CONFIRMAR J%d" % (cur + 1)
 
@@ -298,5 +312,9 @@ func _confirm() -> void:
 		game.selected_chars = picks.map(func(i): return Chars.LIST[i]["id"])
 		game.laps = LAP_OPTIONS[laps_i]
 		game.track_id = TrackScript.TRACKS[track_i]["id"]
+		if gp_mode:
+			game.start_gp()  # RF-191: começa pela 1ª pista do GP
+		else:
+			game.mode = "race"
 		game.difficulty = diff_i
 	get_tree().change_scene_to_file("res://scenes/race.tscn")

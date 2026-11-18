@@ -142,6 +142,13 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 	lbl_laptime = _label(20)
 	lbl_laptime.position = Vector2(26, 98 if race.players.size() == 1 else 138)
 	lbl_laptime.modulate = Color(1, 1, 1, 0.85)
+	# RF-193: indicador do Grand Prix
+	var g := get_node_or_null("/root/Game")
+	if g and g.is_gp():
+		var gpl := _label(20)
+		gpl.text = "GRAND PRIX · CORRIDA %d/%d" % [g.gp_index + 1, g.GP_TRACKS.size()]
+		gpl.position = lbl_laptime.position + Vector2(0, 26)
+		gpl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.2))
 	# RF-131: velocímetro + barra de drift (canto inferior direito)
 	lbl_speed = _label(64)
 	lbl_speed.anchor_left = 1.0
@@ -441,7 +448,9 @@ func show_results() -> void:
 	outer.add_theme_constant_override("separation", 10)
 	results.add_child(outer)
 	var title := _label(44, outer)
-	title.text = "RESULTADO"
+	var game := get_node_or_null("/root/Game")
+	var gp: bool = game != null and game.is_gp()
+	title.text = "GRAND PRIX · CORRIDA %d/%d" % [game.gp_index + 1, game.GP_TRACKS.size()] if gp else "RESULTADO"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
 	var body := HBoxContainer.new()
@@ -449,7 +458,7 @@ func show_results() -> void:
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	outer.add_child(body)
 	var ranking: Array = race.ranking()
-	body.add_child(_podium(ranking))
+	body.add_child(_podium(ranking, 0.82 if gp else 1.0))
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 4)
 	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -462,28 +471,43 @@ func show_results() -> void:
 		vb.add_child(hb)
 		var pos := _label(26, hb)
 		pos.text = "%dº" % k.rank
-		pos.custom_minimum_size.x = 60
+		pos.custom_minimum_size.x = 48 if gp else 60
 		var face := Chars.art_rect(k.char_id, 34)
 		if face:
 			hb.add_child(face)
-		var nm := _label(26, hb)
+		var nm := _label(22 if gp else 26, hb)
 		var tag := ""
 		if k.is_player:
 			tag = "  (J%d)" % (k.player_index + 1) if multi else "  (você)"
 		nm.text = k.display_name + tag
 		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		nm.add_theme_color_override("font_color", k.color.lightened(0.2))
-		var tm := _label(26, hb)
+		var tm := _label(24 if gp else 26, hb)
 		tm.text = fmt_time(k.finish_time) if k.finished else "--:--"
+		if gp:  # RF-194: +pontos e total
+			var plus := _label(24, hb)
+			plus.text = "+%d" % int(race.gp_gained.get(k.char_id, 0))
+			plus.custom_minimum_size.x = 48
+			plus.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			plus.add_theme_color_override("font_color", Color(0.45, 1.0, 0.5))
+			var total := _label(24, hb)
+			total.text = "%d pts" % int(game.gp_points.get(k.char_id, 0))
+			total.custom_minimum_size.x = 84
+			total.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 16)
 	outer.add_child(buttons)
 	var again := Button.new()
-	again.text = "Correr de novo (R)"
+	if gp:
+		var TrackScript = load("res://scripts/track.gd")
+		again.text = "PÓDIO DO GP" if game.gp_is_last() else "PRÓXIMA: %s" % TrackScript.find(game.GP_TRACKS[game.gp_index + 1])["name"]
+		again.pressed.connect(race.gp_continue)
+	else:
+		again.text = "Correr de novo (R)"
+		again.pressed.connect(race.restart)
 	GameScript.make_primary(again)
 	again.add_theme_font_size_override("font_size", 22)
-	again.pressed.connect(race.restart)
 	buttons.add_child(again)
 	var menu := Button.new()
 	menu.text = "Menu (Esc)"
@@ -494,11 +518,11 @@ func show_results() -> void:
 
 
 ## RF-73: pódio com o top 3 de corpo inteiro (2º, 1º, 3º).
-func _podium(ranking: Array) -> Control:
+func _podium(ranking: Array, f := 1.0) -> Control:
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 6)
-	row.custom_minimum_size = Vector2(500, 0)
+	row.custom_minimum_size = Vector2(500 * f, 0)
 	var spec := [[1, 250.0, 60.0, Color(0.75, 0.77, 0.8)], [0, 300.0, 95.0, Color(1.0, 0.8, 0.2)], [2, 230.0, 40.0, Color(0.8, 0.5, 0.25)]]
 	for s in spec:
 		var i: int = s[0]
@@ -510,7 +534,7 @@ func _podium(ranking: Array) -> Control:
 		col.size_flags_vertical = Control.SIZE_FILL
 		col.add_theme_constant_override("separation", 0)
 		row.add_child(col)
-		var art := Chars.art_rect(k.char_id, s[1], "full")
+		var art := Chars.art_rect(k.char_id, s[1] * f, "full")
 		if art:
 			art.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 			col.add_child(art)
@@ -519,7 +543,7 @@ func _podium(ranking: Array) -> Control:
 		st.bg_color = s[3]
 		st.set_corner_radius_all(6)
 		block.add_theme_stylebox_override("panel", st)
-		block.custom_minimum_size = Vector2(155, s[2])
+		block.custom_minimum_size = Vector2(155 * f, s[2] * f)
 		col.add_child(block)
 		var lbl := _label(34, block)
 		lbl.text = "%dº %s" % [i + 1, k.display_name]

@@ -300,7 +300,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
 			pause_pressed = true
-		elif event.physical_keycode == KEY_R:
+		elif event.physical_keycode == KEY_R and not (results_shown and is_gp()):  # RF-194
 			restart()
 	elif event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_START:
 		pause_pressed = true
@@ -752,6 +752,7 @@ func _check_finish(delta: float) -> void:
 		end_timer -= delta
 		if end_timer <= 0.0 or all_finished():
 			results_shown = true
+			_award_gp()  # RF-192
 			if results_hud:
 				results_hud.show_results()
 
@@ -818,3 +819,36 @@ func apply_settings() -> void:
 			k.name_label.visible = names
 	for h in huds:
 		h.apply_settings()
+
+
+# ---------------------------------------------------------------- Grand Prix (RF-190..195)
+
+var gp_gained := {}   # id -> pontos ganhos nesta corrida
+
+
+func is_gp() -> bool:
+	var game := get_node_or_null("/root/Game")
+	return game != null and game.is_gp()
+
+
+func _award_gp() -> void:
+	if not is_gp():
+		return
+	var ids := []
+	for k in ranking():
+		ids.append(k.char_id)
+	var got: Dictionary = get_node("/root/Game").gp_award(ids)
+	if not got.is_empty():
+		gp_gained = got
+
+
+## Botão PRÓXIMA / PÓDIO DO GP.
+func gp_continue() -> void:
+	var game := get_node_or_null("/root/Game")
+	if game == null:
+		return
+	_leave()
+	if game.gp_next():
+		get_tree().reload_current_scene()
+	else:
+		get_tree().change_scene_to_file("res://scenes/gp_final.tscn")
