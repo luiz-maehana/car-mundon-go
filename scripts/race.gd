@@ -416,7 +416,8 @@ func _spawn_boxes() -> void:
 		node.add_child(q)
 		node.position = p
 		add_child(node)
-		boxes.append({"node": node, "pos": p, "cd": 0.0})
+		var bi: int = track.nearest_index(p)
+		boxes.append({"node": node, "pos": p, "cd": 0.0, "idx": bi, "lat": track.lateral_of(p, bi)})
 
 
 # ---------------------------------------------------------------- loop
@@ -696,14 +697,14 @@ func kart_behind(k: Node3D, dist: float) -> bool:
 	return false
 
 
-func kart_in_sight(k: Node3D) -> bool:
+func kart_in_sight(k: Node3D, max_dist := 45.0) -> bool:
 	var f: Vector3 = k.forward()
 	for o in karts:
 		if o == k:
 			continue
 		var to: Vector3 = o.position - k.position
 		var d := to.length()
-		if d > 3.0 and d < 45.0 and f.angle_to(to / d) < 0.2:
+		if d > 3.0 and d < max_dist and f.angle_to(to / d) < 0.2:
 			return true
 	return false
 
@@ -729,6 +730,8 @@ func _spawn_hazard(type: String, pos: Vector3, v: Vector3, life: float, owner_ka
 	add_child(mi)
 	mi.reset_physics_interpolation()
 	var idx: int = track.nearest_index(pos, owner_kart.track_idx, 12)
+	if track.points[idx].distance_to(Vector3(pos.x, 0, pos.z)) > 6.0:
+		idx = track.nearest_index(pos)  # dono longe do ponto (ex.: testes): busca global
 	hazards.append({"node": mi, "type": type, "pos": pos, "vel": v, "life": life, "owner": owner_kart, "age": 0.0, "idx": idx})
 
 
@@ -950,3 +953,50 @@ func gp_continue() -> void:
 		get_tree().reload_current_scene()
 	else:
 		get_tree().change_scene_to_file("res://scenes/gp_final.tscn")
+
+
+# ---------------------------------------------------------------- sensores da IA (RF-210..212)
+
+## Cascas/ratoeiras até `samples` amostras à frente do kart: [{id, lat}].
+func ground_hazards_ahead(k: Node3D, samples: int) -> Array:
+	var out := []
+	var n: int = track.sample_count()
+	for h in hazards:
+		if not GROUND_HAZARDS.has(h["type"]):
+			continue
+		var ds := wrapi(int(h["idx"]) - k.track_idx, 0, n)
+		if ds > 0 and ds < samples:
+			out.append({"id": h["node"].get_instance_id(), "lat": track.lateral_of(h["pos"], h["idx"])})
+	return out
+
+
+## Lateral da caixa ativa mais acessível na próxima fileira (até `samples` à frente), ou NAN.
+func box_ahead(k: Node3D, samples: int) -> float:
+	var n: int = track.sample_count()
+	var best := NAN
+	var best_ds := 1 << 30
+	var best_dl := INF
+	for b in boxes:
+		if b["cd"] > 0.0:
+			continue
+		var ds := wrapi(int(b["idx"]) - k.track_idx, 0, n)
+		if ds <= 2 or ds >= samples:
+			continue
+		var dl := absf(float(b["lat"]) - k.lateral)
+		if ds < best_ds - 3 or (absf(ds - best_ds) <= 3 and dl < best_dl):
+			best_ds = ds
+			best_dl = dl
+			best = b["lat"]
+	return best
+
+
+## Lateral de um kart mais lento até `dist` m à frente na faixa do kart (± lane_tol), ou NAN.
+func slow_kart_ahead(k: Node3D, dist: float, lane_tol: float) -> float:
+	var n: int = track.sample_count()
+	for o in karts:
+		if o == k:
+			continue
+		var ds := wrapi(o.track_idx - k.track_idx, 0, n)
+		if ds > 0 and ds * TrackScript.SPACING < dist and absf(o.lateral - k.ai_lane) < lane_tol and o.speed < k.speed - 1.0:
+			return o.lateral
+	return NAN

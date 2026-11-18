@@ -42,6 +42,7 @@ func _run() -> void:
 	await _test_hud_layout()
 	await _test_gp()
 	await _test_new_items()
+	await _test_smart_ai()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -850,3 +851,85 @@ func _test_new_items() -> void:
 	check(uses == 3 and b.item == "", "queijo triplo dá 3 turbos e acaba")
 	race.queue_free()
 	await process_frame
+
+
+## Corre o kart `k` em linha reta até passar da casca; devolve se bateu.
+func _run_at_banana(race, k, avoid: float) -> bool:
+	var dt := 1.0 / 60.0
+	for h in race.hazards.duplicate():
+		h["node"].queue_free()
+	race.hazards.clear()
+	var tr = race.track
+	var i0 := 30
+	_put(k, i0, 0.0, 24.0)
+	k.ai_lane = 0.0
+	k.ai_lane_timer = 99.0
+	k.ai_avoid = avoid
+	k.ai_seen.clear()
+	k.spin_time = 0.0
+	k.item = "x"  # não desvia pra caixa
+	race._spawn_hazard("casca", tr.points[i0 + 18], Vector3.ZERO, 30.0, race.karts[1])
+	for i in 150:
+		k.step(dt, true)
+		race._update_hazards(dt)
+		if k.spin_time > 0.0:
+			return true
+	return false
+
+
+func _test_smart_ai() -> void:
+	print("CA-39 IA desvia de casca")
+	var race = await _new_race(["telles"], true)
+	race.state = "racing"
+	var n: int = race.track.sample_count()
+	for i in race.karts.size():
+		_put(race.karts[i], (i * 70 + 200) % n, 0.0, 0.0)
+	var k = race.karts[0]
+	seed(20261118)  # determinístico: com cuidado 0 a IA ainda reage 25% das vezes
+	var dodged := 0
+	var hit_without := 0
+	for trial in 5:
+		if not _run_at_banana(race, k, 1.0):
+			dodged += 1
+		if _run_at_banana(race, k, 0.0):
+			hit_without += 1
+	check(dodged >= 4, "cuidado máximo: desviou %d/5" % dodged)
+	check(hit_without >= 3, "cuidado zero: bateu %d/5 (o desvio vem da IA)" % hit_without)
+	for h in race.hazards.duplicate():
+		h["node"].queue_free()
+	race.hazards.clear()
+
+	print("CA-40 caixas e ultrapassagem")
+	var b0: Dictionary = race.boxes[0]
+	for b in race.boxes:
+		b["cd"] = 99.0
+	b0["cd"] = 0.0
+	_put(k, wrapi(int(b0["idx"]) - 15, 0, n), -float(b0["lat"]), 20.0)
+	k.item = ""
+	k.ai_box_skip = false
+	k.ai_lane = -float(b0["lat"])
+	k._ai_tactics(n, 5.5)
+	check(absf(k.ai_lane - clampf(b0["lat"], -5.5, 5.5)) < 0.01, "sem item, mira na caixa (faixa %.1f → %.1f)" % [-float(b0["lat"]), k.ai_lane])
+	for b in race.boxes:
+		b["cd"] = 99.0
+	var slow = race.karts[1]
+	_put(k, 100, 2.0, 25.0)
+	_put(slow, 103, 2.0, 12.0)
+	k.ai_lane = 2.0
+	k.item = "x"
+	k._ai_tactics(n, 5.5)
+	check(absf(k.ai_lane - 2.0) > 3.0, "kart lento na frente: abre pra ultrapassar (faixa 2.0 → %.1f)" % k.ai_lane)
+	race.queue_free()
+	await process_frame
+
+	print("CA-41 personalidades")
+	var Chars = load("res://scripts/characters.gd")
+	var sigs := {}
+	var ok := true
+	for c in Chars.LIST:
+		var ai: Dictionary = c.get("ai", {})
+		for key in ["aggro", "avoid", "focus", "drift"]:
+			if not ai.has(key):
+				ok = false
+		sigs[str(ai)] = true
+	check(ok and sigs.size() == 8, "8 personalidades completas e diferentes")

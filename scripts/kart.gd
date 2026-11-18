@@ -94,6 +94,14 @@ var slip_flash := 0.0
 var item_roll := 0.0
 var ai_trick_chance := 0.7
 var ai_pad_target := -1
+# RF-213: personalidade (0..1)
+var ai_aggro := 0.5
+var ai_avoid := 0.5
+var ai_focus := 0.5
+var ai_drift := 0.5
+var ai_box_skip := false
+var ai_evading := 0.0
+var ai_seen := {}   # perigo (instance id) -> se a IA decidiu desviar
 var prev_drift := false
 var on_pad := false
 var bump_cd := 0.0
@@ -140,6 +148,11 @@ func setup(data: Dictionary, p_index: int, track_ref: Node3D, race_ref: Node) ->
 	accel = 9.0 + float(data["accel"]) * 2.2
 	turn_rate = 1.55 + float(data["handling"]) * 0.16
 	weight = 1.0 + float(data["weight"])
+	var ai: Dictionary = data.get("ai", {})
+	ai_aggro = float(ai.get("aggro", 0.5))
+	ai_avoid = float(ai.get("avoid", 0.5))
+	ai_focus = float(ai.get("focus", 0.5))
+	ai_drift = float(ai.get("drift", 0.5))
 	_build_model()
 
 
@@ -270,6 +283,7 @@ func step(delta: float, can_drive: bool) -> void:
 			item_charges -= 1
 			if item_charges <= 0:
 				item = ""
+				ai_box_skip = randf() > 0.4 + 0.6 * ai_aggro  # RF-212
 			else:
 				item_hold = 0.0
 		if shield_time > 0.0:
@@ -488,11 +502,74 @@ func _player_input() -> void:
 
 func _ai_input(delta: float) -> void:
 	var n: int = track.sample_count()
+	var m := TrackScript.ROAD_HALF - 2.5
 	ai_lane_timer -= delta
 	if ai_lane_timer <= 0.0:
-		var m := TrackScript.ROAD_HALF - 2.5
-		ai_lane = randf_range(-m, m)
-		ai_lane_timer = randf_range(2.0, 5.0)
+		# RF-213: quem tem mais "foco" troca menos de faixa à toa
+		ai_lane = clampf(lerpf(randf_range(-m, m), ai_lane, ai_focus * 0.6), -m, m)
+		ai_lane_timer = randf_range(2.0, 5.0) * (1.0 + ai_focus)
+	_ai_tactics(n, m)
+	# desviando: olha mais perto pra esterçar mais rápido (RF-210)
+	ai_evading = maxf(0.0, ai_evading - delta)
+	var look := (3 + int(absf(speed) * 0.12)) if ai_evading > 0.0 else (5 + int(absf(speed) * 0.3))
+	var ti := (track_idx + look) % n
+	var target: Vector3 = track.points[ti] + track.rights[ti] * ai_lane
+	var to := target - position
+	var desired := atan2(-to.x, -to.z)
+	var diff := wrapf(desired - heading, -PI, PI)
+	in_steer = clampf(-diff * 2.2, -1.0, 1.0)
+	in_throttle = 0.4 if absf(diff) > 1.2 else 1.0
+	var drift_start := lerpf(0.45, 0.25, ai_drift)  # RF-213: quem gosta de drift começa antes
+	if drifting:
+		in_drift = absf(diff) > 0.08 and signf(-diff) == drift_dir
+	else:
+		in_drift = absf(diff) > drift_start and speed > DRIFT_MIN_SPEED + 3.0
+
+	# itens (RF-42 + RF-205), agressividade adianta o uso (RF-213)
+	if item != "" and item_roll <= 0.0:
+		var eager := lerpf(1.5, 0.5, ai_aggro)
+		match item:
+			"turbo", "triplo":
+				in_item = item_hold > (0.8 if item == "turbo" else 1.2) * eager and absf(diff) < 0.2
+			"casca", "ratoeira":
+				in_item = item_hold > ai_item_delay * eager or race.kart_behind(self, 12.0 + 12.0 * ai_aggro)
+			"bomba":
+				in_item = item_hold > 8.0 * eager or (item_hold > 0.5 and race.kart_in_sight(self, 30.0 + 30.0 * ai_aggro))
+			"escudo":
+				in_item = item_hold > 1.0
+			"gato":
+				in_item = item_hold > 0.6 * eager
+
+
+## RF-210..212: desviar > caixa > ultrapassar > setas de turbo.
+func _ai_tactics(n: int, m: float) -> void:
+	# desvio de casca/ratoeira
+	var reach := int(10 + 14 * ai_avoid)
+	for hz in race.ground_hazards_ahead(self, reach):
+		var id: int = hz["id"]
+		if not ai_seen.has(id):
+			ai_seen[id] = randf() < 0.25 + 0.75 * ai_avoid
+		if ai_seen[id] and absf(float(hz["lat"]) - ai_lane) < 2.8:
+			var lat: float = hz["lat"]
+			var side := -1.0 if lat > 0.0 else 1.0
+			ai_lane = clampf(lat + side * 4.5, -m, m)
+			ai_evading = 1.0
+			ai_lane_timer = maxf(ai_lane_timer, 1.2)
+			return
+	# caixa de item
+	if item == "" and not ai_box_skip:
+		var box_lat: float = race.box_ahead(self, 30)
+		if not is_nan(box_lat):
+			ai_lane = clampf(box_lat, -m, m)
+			ai_lane_timer = maxf(ai_lane_timer, 0.8)
+			return
+	# ultrapassagem
+	var slow_lat: float = race.slow_kart_ahead(self, 10.0, 2.5)
+	if not is_nan(slow_lat):
+		var side := 1.0 if slow_lat < 0.0 else -1.0
+		ai_lane = clampf(slow_lat + side * 4.0, -m, m)
+		ai_lane_timer = maxf(ai_lane_timer, 1.5)
+		return
 	# RF-140: às vezes mira na seta de turbo à frente
 	for p in track.pads:
 		var dp := wrapi(int(p["idx"]) - track_idx, 0, n)
@@ -501,32 +578,6 @@ func _ai_input(delta: float) -> void:
 			if randf() < 0.5:
 				ai_lane = float(p["lat"])
 				ai_lane_timer = 3.0
-	var look := 5 + int(absf(speed) * 0.3)
-	var ti := (track_idx + look) % n
-	var target: Vector3 = track.points[ti] + track.rights[ti] * ai_lane
-	var to := target - position
-	var desired := atan2(-to.x, -to.z)
-	var diff := wrapf(desired - heading, -PI, PI)
-	in_steer = clampf(-diff * 2.2, -1.0, 1.0)
-	in_throttle = 0.4 if absf(diff) > 1.2 else 1.0
-	if drifting:
-		in_drift = absf(diff) > 0.08 and signf(-diff) == drift_dir
-	else:
-		in_drift = absf(diff) > 0.35 and speed > DRIFT_MIN_SPEED + 3.0
-
-	# itens (RF-42 + RF-205)
-	if item != "" and item_roll <= 0.0:
-		match item:
-			"turbo", "triplo":
-				in_item = item_hold > (0.8 if item == "turbo" else 1.2) and absf(diff) < 0.2
-			"casca", "ratoeira":
-				in_item = item_hold > ai_item_delay or race.kart_behind(self, 18.0)
-			"bomba":
-				in_item = item_hold > 8.0 or (item_hold > 0.5 and race.kart_in_sight(self))
-			"escudo":
-				in_item = item_hold > 1.0
-			"gato":
-				in_item = item_hold > 0.6
 
 
 # ---------------------------------------------------------------- visual

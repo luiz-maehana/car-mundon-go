@@ -199,6 +199,13 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-204** **QUEIJO TRIPLO**: 3 turbos, usados um de cada vez (HUD mostra `x3`, `x2`, `x1`).
 - [x] **RF-205** IA usa os itens novos: escudo logo que pega, gato em seguida, triplo nas retas, casca/ratoeira quando tem alguém colado atrás.
 
+### IA mais esperta (v0.14)
+- [x] **RF-210** **Desvio:** a IA olha a pista à frente (alcance cresce com o "cuidado") e, se tem casca/ratoeira perto da faixa dela, troca pro outro lado com folga. Cada perigo é avaliado uma vez (o cuidado define a chance de reagir).
+- [x] **RF-211** **Ultrapassagem:** kart mais lento até 10 m à frente na mesma faixa → a IA abre pro lado com mais espaço.
+- [x] **RF-212** **Caixas:** sem item, a IA mira na caixa ativa mais próxima da próxima fileira (chance pela agressividade).
+- [x] **RF-213** **Personalidade** por piloto (`ai` em `characters.gd`, 0–1): `aggro` (usa itens antes e mira bomba de mais longe), `avoid` (desvia mais e mais cedo), `focus` (troca menos de faixa à toa), `drift` (começa drift em curvas mais abertas).
+  - Burcca e Ortiz agressivos; Nanni e Mugurin cautelosos; Telles e Shinando focados; FeJauM e Digão equilibrados.
+
 ## 5. Controles
 
 | Ação | Jogador 1 (teclado) | Jogador 2 (teclado) | Controle (J1..J4 = controle 1..4) |
@@ -281,6 +288,9 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-36** GP completo simulado (3 corridas de 1 volta só com IA): passa pelas 3 pistas na ordem, cada corrida pontua uma única vez, total 174, e no fim `gp_is_over()`.
 - [x] **CA-37** A tela final do GP monta o pódio com os 3 líderes da classificação.
 - [x] **CA-38** Gato persegue e acerta o líder; ratoeira prende 1.2 s; escudo absorve um ataque e some; triplo dá 3 turbos; o sorteio nunca dá gato pros 4 primeiros nem dois gatos ao mesmo tempo.
+- [x] **CA-39** IA com cuidado máximo desvia de uma casca na faixa dela; com cuidado zero, bate.
+- [x] **CA-40** IA sem item vai pra faixa da caixa da próxima fileira; IA atrás de um kart lento na mesma faixa troca de faixa.
+- [x] **CA-41** Os 8 pilotos têm personalidade completa e diferente entre si.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
