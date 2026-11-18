@@ -2,6 +2,7 @@ extends SceneTree
 ## Gera a arte dos pilotos a partir das ilustrações originais (fundo cinza liso):
 ##   assets/chars/<id>.png       corpo inteiro, fundo transparente (metade da resolução)
 ##   assets/chars/<id>_head.png  busto (cabeça + orelhas), recortado justo
+##   assets/ui/intro.jpg         tela de abertura (se houver intro.png na origem)
 ## Uso: godot --headless --path . --script tools/process_characters.gd -- <pasta_origem>
 ## O arquivo de origem é <nome>.png (aceita "digão.png" para o id "digao").
 
@@ -39,6 +40,13 @@ func _initialize() -> void:
 		head = head.get_region(used)
 		head.save_png("res://assets/chars/%s_head.png" % id)
 		print("%-9s %dx%d  busto %dx%d  (%d ms)" % [id, img.get_width(), img.get_height(), head.get_width(), head.get_height(), Time.get_ticks_msec() - t])
+	# tela de abertura (RF-100): intro.png -> assets/ui/intro.jpg
+	var intro := Image.load_from_file(src_dir.path_join("intro.png"))
+	if intro:
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://assets/ui"))
+		intro.convert(Image.FORMAT_RGB8)
+		intro.save_jpg("res://assets/ui/intro.jpg", 0.9)
+		print("intro     %dx%d" % [intro.get_width(), intro.get_height()])
 	quit(1 if fails > 0 else 0)
 
 

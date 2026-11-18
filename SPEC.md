@@ -113,6 +113,12 @@ Conversão de stat para física (em `kart.gd`):
 - [x] **RF-87** A IA acerta a largada turbo 35% das vezes.
 - [x] **RF-90** **Pause:** `Esc` (ou Start no controle) pausa com menu Continuar / Reiniciar / Menu; `Esc` de novo continua. Na tela de resultado, `Esc` vai pro menu.
 
+### Tela de abertura (v0.5)
+- [x] **RF-100** O jogo abre numa tela de título com a arte `assets/ui/intro.jpg` cobrindo a tela inteira (sem distorcer, cortando as sobras) e a música tocando.
+- [x] **RF-101** Um aviso "APERTE ENTER PARA COMEÇAR" pisca embaixo; qualquer tecla, clique ou botão de controle vai pro menu (Esc fecha o jogo).
+- [x] **RF-102** A arte entra com um *fade-in* rápido e um leve zoom lento (efeito "vivo").
+- [x] **RF-103** No menu, `Esc` volta pra tela de abertura.
+
 ## 5. Controles
 
 | Ação | Jogador 1 (teclado) | Jogador 2 (teclado) | Controle (J1..J4 = controle 1..4) |
@@ -136,7 +142,8 @@ Jogadores 3 e 4 só por controle. Com 1 jogador, as teclas do J2 também valem p
 ## 7. Arquitetura
 
 ```
-scenes/menu.tscn     -> scripts/menu.gd        seleção de piloto/voltas
+scenes/intro.tscn    -> scripts/intro.gd       tela de abertura (cena principal)
+scenes/menu.tscn     -> scripts/menu.gd        jogadores, seleção de piloto e voltas
 scenes/race.tscn     -> scripts/race.gd        orquestra a corrida (estado, itens, colisões, ranking, câmera)
 scripts/game.gd      (autoload "Game")         piloto escolhido, voltas, mapa de inputs
 scripts/characters.gd                          dados dos 8 pilotos
@@ -166,6 +173,7 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-10** Todos os sons existem e não estão vazios; a música tem loop ligado e dura > 8 s.
 - [x] **CA-11** Largada: acelerar a 1.2 s do VAI dá turbo; acelerar desde o início queima; não acelerar não dá nada.
 - [x] **CA-12** Com a corrida pausada, `step()` não avança tempo nem karts.
+- [x] **CA-13** A tela de abertura carrega a arte, é a cena principal do projeto e um aperto de tecla leva pro menu.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

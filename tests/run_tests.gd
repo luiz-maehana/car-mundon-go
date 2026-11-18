@@ -27,6 +27,7 @@ func _run() -> void:
 	_test_sounds()
 	await _test_start()
 	await _test_pause()
+	await _test_intro()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -280,4 +281,26 @@ func _test_pause() -> void:
 		race.step(dt)
 	check(not race.paused and race.race_time > t0, "despausou: corrida continua")
 	race.queue_free()
+	await process_frame
+
+
+func _test_intro() -> void:
+	print("CA-13 tela de abertura")
+	check(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/intro.tscn", "intro é a cena principal")
+	var intro = load("res://scenes/intro.tscn").instantiate()
+	root.add_child(intro)
+	await process_frame
+	var tex: Texture2D = intro.art.texture
+	check(tex != null and tex.get_width() >= 1280, "arte da abertura carregada (%s)" % (str(tex.get_size()) if tex else "null"))
+	var ev := InputEventKey.new()
+	ev.physical_keycode = KEY_ENTER
+	ev.pressed = true
+	intro._unhandled_input(ev)
+	check(intro.leaving, "tecla leva pro menu")
+	await process_frame
+	await process_frame
+	var cur := current_scene
+	check(cur != null and cur.scene_file_path == "res://scenes/menu.tscn", "menu carregado depois da abertura")
+	if cur:
+		cur.queue_free()
 	await process_frame

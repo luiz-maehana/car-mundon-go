@@ -211,6 +211,9 @@ func _move_selection(step: int) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
+		get_tree().change_scene_to_file("res://scenes/intro.tscn")  # RF-103
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_BACKSPACE:
 		if not picks.is_empty():
 			selected = picks.pop_back()

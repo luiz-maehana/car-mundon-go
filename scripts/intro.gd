@@ -1,0 +1,86 @@
+extends Control
+## Tela de abertura (RF-100..102): arte cobrindo a tela, "aperte enter" piscando.
+
+const ART := "res://assets/ui/intro.jpg"
+
+var art: TextureRect
+var prompt: Label
+var t := 0.0
+var leaving := false
+
+
+func _ready() -> void:
+	var bg := ColorRect.new()
+	bg.color = Color.BLACK
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
+	art = TextureRect.new()
+	art.texture = _load_art()
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.set_anchors_preset(Control.PRESET_FULL_RECT)
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.modulate.a = 0.0
+	add_child(art)
+	var band := ColorRect.new()
+	band.color = Color(0, 0, 0, 0.5)
+	band.anchor_right = 1.0
+	band.anchor_top = 1.0
+	band.anchor_bottom = 1.0
+	band.offset_top = -78
+	band.offset_bottom = -12
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(band)
+	prompt = Label.new()
+	prompt.text = "APERTE ENTER PARA COMEÇAR"
+	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prompt.add_theme_font_size_override("font_size", 34)
+	prompt.add_theme_color_override("font_color", Color(1.0, 0.92, 0.5))
+	prompt.add_theme_color_override("font_outline_color", Color.BLACK)
+	prompt.add_theme_constant_override("outline_size", 12)
+	prompt.anchor_left = 0.0
+	prompt.anchor_right = 1.0
+	prompt.anchor_top = 1.0
+	prompt.anchor_bottom = 1.0
+	prompt.offset_top = -70
+	prompt.offset_bottom = -20
+	prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(prompt)
+
+
+func _load_art() -> Texture2D:
+	if ResourceLoader.exists(ART):
+		return load(ART)
+	var p := ProjectSettings.globalize_path(ART)
+	if FileAccess.file_exists(p):
+		return ImageTexture.create_from_image(Image.load_from_file(p))
+	return null
+
+
+func _process(delta: float) -> void:
+	t += delta
+	art.modulate.a = minf(1.0, t / 0.6)
+	# zoom lento a partir do centro (RF-102)
+	var z := 1.0 + 0.04 * (0.5 - 0.5 * cos(t * 0.35))
+	art.pivot_offset = size * 0.5
+	art.scale = Vector2(z, z)
+	prompt.modulate.a = 0.35 + 0.65 * (0.5 + 0.5 * sin(t * 4.0)) if t > 0.6 else 0.0
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if leaving:
+		return
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.physical_keycode == KEY_ESCAPE:
+			get_tree().quit()
+			return
+		if event.physical_keycode == KEY_M:
+			return  # M é o mute global
+		go()
+	elif (event is InputEventMouseButton or event is InputEventJoypadButton) and event.pressed:
+		go()
+
+
+func go() -> void:
+	leaving = true
+	get_tree().change_scene_to_file("res://scenes/menu.tscn")
