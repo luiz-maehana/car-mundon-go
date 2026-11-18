@@ -1,4 +1,4 @@
-# Kart'mundongos — Especificação (MVP)
+# Car'mundon'GO! — Especificação (MVP)
 
 > Spec viva do projeto. Toda feature nova entra aqui **antes** do código, com ID e critério de aceite.
 > Status: `[x]` feito · `[ ]` pendente · `[~]` parcial.

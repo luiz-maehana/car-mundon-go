@@ -42,7 +42,7 @@ func _build() -> void:
 	vb.add_theme_constant_override("separation", 14)
 	center.add_child(vb)
 
-	var title := _label("KART'MUNDONGOS", 76, Color(1.0, 0.82, 0.15))
+	var title := _label("CAR'MUNDON'GO!", 76, Color(1.0, 0.82, 0.15))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(title)
 	sub = _label("", 28, Color(0.85, 0.85, 0.95))

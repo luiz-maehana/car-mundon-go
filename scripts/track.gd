@@ -249,7 +249,7 @@ func _build_arch() -> void:
 	arch.add_child(bar)
 	for side in [1.0, -1.0]:
 		var lbl := Label3D.new()
-		lbl.text = "KART'MUNDONGOS"
+		lbl.text = "CAR'MUNDON'GO!"
 		lbl.font_size = 96
 		lbl.pixel_size = 0.012
 		lbl.outline_size = 16
