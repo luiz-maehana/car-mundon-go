@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b44pbpibvxhts"
-path="res://.godot/imported/digao.jpg-db77b4c4b4274ba2cf799759e46e59e9.ctex"
+uid="uid://5gkauuv6jykb"
+path="res://.godot/imported/nanni_head.png-d7f685a6d898617bd1dfbd1d47d5bc4f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/faces/digao.jpg"
-dest_files=["res://.godot/imported/digao.jpg-db77b4c4b4274ba2cf799759e46e59e9.ctex"]
+source_file="res://assets/chars/nanni_head.png"
+dest_files=["res://.godot/imported/nanni_head.png-d7f685a6d898617bd1dfbd1d47d5bc4f.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

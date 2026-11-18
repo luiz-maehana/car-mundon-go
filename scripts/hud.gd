@@ -53,14 +53,14 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 	lbl_pos.offset_left = -300
 	lbl_pos.offset_right = -24
 	lbl_pos.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	var face := Chars.face_rect(kart.char_id, 96)  # RF-73
+	var face := Chars.art_rect(kart.char_id, 104)  # RF-73
 	if face:
 		face.anchor_left = 1.0
 		face.anchor_right = 1.0
-		face.offset_left = -330
-		face.offset_right = -234
-		face.offset_top = 14
-		face.offset_bottom = 110
+		face.offset_left = -236 - face.custom_minimum_size.x
+		face.offset_right = -236
+		face.offset_top = 8
+		face.offset_bottom = 112
 		root.add_child(face)
 
 	var item_panel := PanelContainer.new()
@@ -205,26 +205,38 @@ func show_results() -> void:
 	results.anchor_right = 0.5
 	results.anchor_top = 0.5
 	results.anchor_bottom = 0.5
-	results.offset_left = -280
-	results.offset_right = 280
-	results.offset_top = -270
-	results.offset_bottom = 270
+	results.offset_left = -580
+	results.offset_right = 580
+	results.offset_top = -320
+	results.offset_bottom = 320
 	root.add_child(results)
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 6)
-	results.add_child(vb)
-	var title := _label(44, vb)
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 10)
+	results.add_child(outer)
+	var title := _label(44, outer)
 	title.text = "RESULTADO"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 24)
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	outer.add_child(body)
+	var ranking: Array = race.ranking()
+	body.add_child(_podium(ranking))
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 4)
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	body.add_child(vb)
 	var multi: bool = race.players.size() > 1
-	for k in race.ranking():
+	for k in ranking:
 		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 10)
 		vb.add_child(hb)
 		var pos := _label(26, hb)
 		pos.text = "%dº" % k.rank
 		pos.custom_minimum_size.x = 60
-		var face := Chars.face_rect(k.char_id, 36)
+		var face := Chars.art_rect(k.char_id, 34)
 		if face:
 			hb.add_child(face)
 		var nm := _label(26, hb)
@@ -239,7 +251,7 @@ func show_results() -> void:
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 16)
-	vb.add_child(buttons)
+	outer.add_child(buttons)
 	var again := Button.new()
 	again.text = "Correr de novo (R)"
 	again.add_theme_font_size_override("font_size", 22)
@@ -251,3 +263,39 @@ func show_results() -> void:
 	menu.pressed.connect(race.to_menu)
 	buttons.add_child(menu)
 	again.grab_focus()
+
+
+## RF-73: pódio com o top 3 de corpo inteiro (2º, 1º, 3º).
+func _podium(ranking: Array) -> Control:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 6)
+	row.custom_minimum_size = Vector2(500, 0)
+	var spec := [[1, 250.0, 60.0, Color(0.75, 0.77, 0.8)], [0, 300.0, 95.0, Color(1.0, 0.8, 0.2)], [2, 230.0, 40.0, Color(0.8, 0.5, 0.25)]]
+	for s in spec:
+		var i: int = s[0]
+		if i >= ranking.size():
+			continue
+		var k: Node3D = ranking[i]
+		var col := VBoxContainer.new()
+		col.alignment = BoxContainer.ALIGNMENT_END
+		col.size_flags_vertical = Control.SIZE_FILL
+		col.add_theme_constant_override("separation", 0)
+		row.add_child(col)
+		var art := Chars.art_rect(k.char_id, s[1], "full")
+		if art:
+			art.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			col.add_child(art)
+		var block := PanelContainer.new()
+		var st := StyleBoxFlat.new()
+		st.bg_color = s[3]
+		st.set_corner_radius_all(6)
+		block.add_theme_stylebox_override("panel", st)
+		block.custom_minimum_size = Vector2(155, s[2])
+		col.add_child(block)
+		var lbl := _label(34, block)
+		lbl.text = "%dº %s" % [i + 1, k.display_name]
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.add_theme_font_size_override("font_size", 22)
+	return row

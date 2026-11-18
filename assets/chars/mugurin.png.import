@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bkretlvrxap1x"
-path="res://.godot/imported/fejaum.jpg-46739d1b9c5183e1c73af384aed3a317.ctex"
+uid="uid://ml110jdib34u"
+path="res://.godot/imported/mugurin.png-5cb83506ab03713ccedc0c298be5cacf.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/faces/fejaum.jpg"
-dest_files=["res://.godot/imported/fejaum.jpg-46739d1b9c5183e1c73af384aed3a317.ctex"]
+source_file="res://assets/chars/mugurin.png"
+dest_files=["res://.godot/imported/mugurin.png-5cb83506ab03713ccedc0c298be5cacf.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

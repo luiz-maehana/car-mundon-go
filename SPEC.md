@@ -96,12 +96,12 @@ Conversão de stat para física (em `kart.gd`):
 - [x] **RF-66** O *rubber band* da IA usa como referência o humano mais adiantado.
 - [x] **RF-67** Com 1 jogador, WASD e setas controlam o mesmo kart (como no MVP).
 
-### Rostos da turma (v0.3)
-- [x] **RF-70** Cada piloto tem foto em `assets/faces/<id>.jpg` (ou `.png`). Recorte circular configurado por piloto em `characters.gd` (`face_center`, `face_zoom`).
-- [x] **RF-71** No kart, a foto substitui o capacete: "cabeção" redondo (*bobblehead*) sempre virado pra câmera, com borda na cor do piloto e orelhas de camundongo.
-- [x] **RF-72** Os cards do menu mostram a foto do piloto.
-- [x] **RF-73** O HUD mostra a foto do jogador ao lado da posição; o resultado mostra a foto de cada piloto.
-- [x] **RF-74** Sem foto, o piloto usa o capacete colorido (o jogo não quebra).
+### Arte dos camundongos (v0.3 — substitui as fotos)
+- [x] **RF-70** Cada piloto tem ilustração de camundongo de corpo inteiro. `tools/process_characters.gd` remove o fundo e gera `assets/chars/<id>.png` (corpo) e `assets/chars/<id>_head.png` (busto com orelhas).
+- [x] **RF-71** No kart, o busto é a cabeça do piloto (*sticker* sempre virado pra câmera), em cima do corpo na cor do piloto.
+- [x] **RF-72** Os cards do menu mostram o busto.
+- [x] **RF-73** O HUD mostra o busto do jogador ao lado da posição; o resultado tem **pódio** com o top 3 de corpo inteiro e o busto de cada piloto na lista.
+- [x] **RF-74** Sem arte, o piloto usa capacete colorido com orelhinhas (o jogo não quebra).
 
 ## 5. Controles
 
@@ -151,7 +151,7 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-06** Itens são pegos e usados durante a corrida.
 - [x] **CA-07** Corrida com 4 humanos (em piloto automático) cria 4 câmeras/quadros, coloca os humanos nas 4 últimas posições do grid e termina com os 8 karts.
 - [x] **CA-08** Mapa de controles: cada ação existe para J1..J4, e os eventos de controle de cada jogador só aceitam o seu próprio controle.
-- [x] **CA-09** Os 8 pilotos têm foto carregável e recorte dentro da imagem (`face_center ± face_zoom/2` em 0..1).
+- [x] **CA-09** Os 8 pilotos têm arte de corpo e busto carregável, com fundo transparente (cantos com alpha 0).
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

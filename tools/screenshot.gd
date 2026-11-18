@@ -23,6 +23,22 @@ func _run() -> void:
 	await _shot(out + "/menu.png")
 	menu.queue_free()
 	var setups := [["race1", ["fejaum"]], ["race2", ["fejaum", "digao"]], ["race4", ["fejaum", "digao", "nanni", "ortiz"]]]
+	# resultado: corrida de 1 volta acelerada até o fim
+	game.num_players = 1
+	game.selected_chars = ["burcca"]
+	game.laps = 1
+	var rr = load("res://scenes/race.tscn").instantiate()
+	rr.autopilot_player = true
+	root.add_child(rr)
+	await process_frame
+	while not rr.results_shown:
+		rr.step(1.0 / 60.0)
+	for i in 30:
+		await process_frame
+	await _shot(out + "/results.png")
+	rr.queue_free()
+	await process_frame
+	game.laps = 3
 	for s in setups:
 		game.num_players = s[1].size()
 		game.selected_chars = s[1]

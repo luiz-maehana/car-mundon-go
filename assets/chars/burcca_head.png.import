@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c8wtaeafo7jto"
-path="res://.godot/imported/nanni.jpg-fe468d504c0490f12d28058c5c7ba580.ctex"
+uid="uid://d0iogbjkf8fy1"
+path="res://.godot/imported/burcca_head.png-26d17edb1b5f244bd965e207912bd16c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/faces/nanni.jpg"
-dest_files=["res://.godot/imported/nanni.jpg-fe468d504c0490f12d28058c5c7ba580.ctex"]
+source_file="res://assets/chars/burcca_head.png"
+dest_files=["res://.godot/imported/burcca_head.png-26d17edb1b5f244bd965e207912bd16c.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

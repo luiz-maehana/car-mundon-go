@@ -107,7 +107,7 @@ func _make_card(i: int) -> Button:
 	var col: Color = c["color"]
 	var b := Button.new()
 	b.focus_mode = Control.FOCUS_NONE
-	b.custom_minimum_size = Vector2(285, 150)
+	b.custom_minimum_size = Vector2(300, 160)
 	var st := StyleBoxFlat.new()
 	st.set_corner_radius_all(12)
 	for s in ["normal", "hover", "pressed"]:
@@ -147,12 +147,12 @@ func _make_card(i: int) -> Button:
 		hb.add_child(l)
 		for k in 5:
 			var r := ColorRect.new()
-			r.custom_minimum_size = Vector2(15, 11)
+			r.custom_minimum_size = Vector2(12, 11)
 			r.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			r.color = col if k < int(c[s[0]]) else Color(1, 1, 1, 0.12)
 			hb.add_child(r)
-	var face := Chars.face_rect(c["id"], 96)  # RF-72
+	var face := Chars.art_rect(c["id"], 112)  # RF-72
 	if face:
 		face.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hbox.add_child(face)

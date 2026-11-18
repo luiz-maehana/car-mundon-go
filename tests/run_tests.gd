@@ -41,14 +41,18 @@ func _test_characters() -> void:
 			total += c[s]
 		check(total == 12, "%s soma 12 (=%d)" % [c["name"], total])
 	check(ids.size() == 8, "IDs únicos")
-	print("CA-09 fotos")
+	print("CA-09 arte dos camundongos")
 	var Chars = load("res://scripts/characters.gd")
 	for c in chars:
-		var tex: Texture2D = Chars.face_texture(c["id"])
-		check(tex != null and tex.get_width() > 64, "%s tem foto" % c["name"])
-		var ctr: Vector2 = c["face_center"]
-		var half: float = c["face_zoom"] * 0.5
-		check(ctr.x - half >= 0.0 and ctr.x + half <= 1.0 and ctr.y - half >= 0.0 and ctr.y + half <= 1.0, "%s recorte dentro da imagem" % c["name"])
+		for kind in ["full", "head"]:
+			var tex: Texture2D = Chars.art(c["id"], kind)
+			var ok: bool = tex != null and tex.get_width() > 64
+			if ok:
+				var img := tex.get_image()
+				if img.is_compressed():
+					img.decompress()
+				ok = img.get_pixel(0, 0).a < 0.05 or img.get_pixel(img.get_width() - 1, 0).a < 0.05
+			check(ok, "%s: arte '%s' com fundo transparente" % [c["name"], kind])
 
 
 func _test_track() -> void:

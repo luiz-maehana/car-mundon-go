@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://qf51dquc75v0"
-path="res://.godot/imported/burcca.jpg-9ed7277eb14aa8a330ad231e5fa3508a.ctex"
+uid="uid://7d0mriij7wfj"
+path="res://.godot/imported/shinando_head.png-3b000da7e2dda13949c2f7953308d64f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/faces/burcca.jpg"
-dest_files=["res://.godot/imported/burcca.jpg-9ed7277eb14aa8a330ad231e5fa3508a.ctex"]
+source_file="res://assets/chars/shinando_head.png"
+dest_files=["res://.godot/imported/shinando_head.png-3b000da7e2dda13949c2f7953308d64f.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

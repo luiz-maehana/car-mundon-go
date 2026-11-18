@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bmalbipvqg240"
-path="res://.godot/imported/shinando.jpg-6c973498283542818f0531f6816a1370.ctex"
+uid="uid://b21sc3ob5iotg"
+path="res://.godot/imported/digao_head.png-758721d77218750547688dee8efbc3e8.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/faces/shinando.jpg"
-dest_files=["res://.godot/imported/shinando.jpg-6c973498283542818f0531f6816a1370.ctex"]
+source_file="res://assets/chars/digao_head.png"
+dest_files=["res://.godot/imported/digao_head.png-758721d77218750547688dee8efbc3e8.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

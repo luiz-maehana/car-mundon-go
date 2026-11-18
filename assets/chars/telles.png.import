@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b3cg4l8m5k07h"
-path="res://.godot/imported/ortiz.jpg-cf4a203b364b8b2576f5f4bc93df6772.ctex"
+uid="uid://bv57mutug1yyf"
+path="res://.godot/imported/telles.png-6d0a1be0b015c9908fbbd028bcb2860c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/faces/ortiz.jpg"
-dest_files=["res://.godot/imported/ortiz.jpg-cf4a203b364b8b2576f5f4bc93df6772.ctex"]
+source_file="res://assets/chars/telles.png"
+dest_files=["res://.godot/imported/telles.png-6d0a1be0b015c9908fbbd028bcb2860c.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

@@ -5,7 +5,6 @@ extends Node3D
 const TrackScript = preload("res://scripts/track.gd")
 const GameScript = preload("res://scripts/game.gd")
 const Chars = preload("res://scripts/characters.gd")
-const FaceShader = preload("res://shaders/face_billboard.gdshader")
 const LABEL_LAYER_BASE := 10  # camada do nome do jogador N = 10+N (escondida na câmera dele)
 
 const DRIFT_MIN_SPEED := 12.0
@@ -32,8 +31,6 @@ var accel := 16.0
 var turn_rate := 2.0
 var weight := 3.0
 var ai_skill := 1.0
-var data_face_center := Vector2(0.5, 0.45)
-var data_face_zoom := 0.62
 var rubber := 1.0
 
 # estado
@@ -88,8 +85,6 @@ func setup(data: Dictionary, p_index: int, track_ref: Node3D, race_ref: Node) ->
 	accel = 9.0 + float(data["accel"]) * 2.2
 	turn_rate = 1.55 + float(data["handling"]) * 0.16
 	weight = 1.0 + float(data["weight"])
-	data_face_center = data.get("face_center", Vector2(0.5, 0.45))
-	data_face_zoom = data.get("face_zoom", 0.62)
 	_build_model()
 
 
@@ -354,43 +349,42 @@ func _build_model() -> void:
 	torso.radius = 0.33
 	torso.height = 0.8
 	_part(torso, trim, Vector3(0, 1.0, 0.25))
-	var face_tex: Texture2D = Chars.face_texture(char_id)
-	var ear_y := 2.17
-	var ear_x := 0.32
-	var ear_s := 1.0
-	if face_tex:
-		# RF-71: cabeção com a foto, sempre virado pra câmera
+	var head_top := 2.4
+	var head_tex: Texture2D = Chars.art(char_id, "head")
+	if head_tex:
+		# RF-71: busto do camundongo como sticker sempre virado pra câmera
+		var w := 2.1
+		var h := w * float(head_tex.get_height()) / float(head_tex.get_width())
 		var quad := QuadMesh.new()
-		quad.size = Vector2(1.3, 1.3)
-		var fm := ShaderMaterial.new()
-		fm.shader = FaceShader
-		fm.set_shader_parameter("face", face_tex)
-		fm.set_shader_parameter("ring", color)
-		fm.set_shader_parameter("center", data_face_center)
-		fm.set_shader_parameter("zoom", data_face_zoom)
-		var face := _part(quad, fm, Vector3(0, 2.1, 0.25))
-		face.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		ear_y = 2.65
-		ear_x = 0.52
-		ear_s = 1.3
+		quad.size = Vector2(w, h)
+		var hm := StandardMaterial3D.new()
+		hm.albedo_texture = head_tex
+		hm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		hm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		hm.alpha_scissor_threshold = 0.5
+		hm.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		hm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		hm.cull_mode = BaseMaterial3D.CULL_DISABLED
+		var head := _part(quad, hm, Vector3(0, 1.3 + h * 0.5, 0.25))
+		head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		head_top = 1.3 + h
 	else:
-		# RF-74: sem foto, capacete colorido
+		# RF-74: sem arte, capacete colorido com orelhinhas
 		var head := SphereMesh.new()
 		head.radius = 0.4
 		head.height = 0.8
 		_part(head, body_mat, Vector3(0, 1.8, 0.25))
 		_part(_box(Vector3(0.55, 0.2, 0.12)), dark, Vector3(0, 1.82, -0.12))
-	# orelhas de camundongo
-	var ear := SphereMesh.new()
-	ear.radius = 0.24
-	ear.height = 0.48
-	var ear_in := SphereMesh.new()
-	ear_in.radius = 0.15
-	ear_in.height = 0.3
-	var pink := _mat(Color(1.0, 0.6, 0.7))
-	for x in [-ear_x, ear_x]:
-		_part(ear, body_mat, Vector3(x, ear_y, 0.3), Vector3.ZERO).scale = Vector3(1, 1, 0.35) * ear_s
-		_part(ear_in, pink, Vector3(x, ear_y, 0.21), Vector3.ZERO).scale = Vector3(1, 1, 0.3) * ear_s
+		var ear := SphereMesh.new()
+		ear.radius = 0.24
+		ear.height = 0.48
+		var ear_in := SphereMesh.new()
+		ear_in.radius = 0.15
+		ear_in.height = 0.3
+		var pink := _mat(Color(1.0, 0.6, 0.7))
+		for x in [-0.32, 0.32]:
+			_part(ear, body_mat, Vector3(x, 2.17, 0.3), Vector3.ZERO).scale = Vector3(1, 1, 0.35)
+			_part(ear_in, pink, Vector3(x, 2.17, 0.21), Vector3.ZERO).scale = Vector3(1, 1, 0.3)
 	var lbl := Label3D.new()
 	lbl.text = display_name
 	lbl.font_size = 40
@@ -399,7 +393,7 @@ func _build_model() -> void:
 	lbl.fixed_size = true
 	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	lbl.modulate = color.lightened(0.25)
-	lbl.position = Vector3(0, 3.3 if face_tex else 2.7, 0)
+	lbl.position = Vector3(0, head_top + 0.35, 0)
 	if is_player:
 		lbl.layers = 1 << (LABEL_LAYER_BASE + player_index)  # RF-63
 	add_child(lbl)
