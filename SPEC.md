@@ -191,6 +191,14 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-194** Resultado no GP: cada piloto com tempo, `+pontos` e total; botão principal `PRÓXIMA: <pista>` (ou `PÓDIO DO GP` na última). `R`/"Correr de novo" ficam desativados depois do resultado (sem pontuar duas vezes); `Esc` abandona o GP e volta pro menu.
 - [x] **RF-195** Tela final do GP: "CAMPEÃO DO GRAND PRIX", pódio com o top 3 de corpo inteiro e os pontos, tabela com os 8, confete; botões `NOVO GRAND PRIX` e `MENU`.
 
+### Itens novos (v0.13)
+- [x] **RF-200** Sorteio ponderado por posição (1º–2º: casca/ratoeira/escudo/bomba/turbo; 3º–4º: + triplo; 5º–8º: bomba/turbo/triplo/escudo/casca/**gato**). O gato só sai de 5º pra trás e só existe um por vez.
+- [x] **RF-201** **GATO**: corre pela pista atrás do 1º colocado (ou do 2º, se quem soltou é o líder), dá o bote quando chega perto e faz rodar 1.6× mais tempo. Miado de aviso quando o alvo é humano.
+- [x] **RF-202** **RATOEIRA**: armadilha de madeira com isca de queijo; quem passa fica preso 1.2 s parado e perde 3 queijinhos.
+- [x] **RF-203** **ESCUDO DE QUEIJO**: bolha por 8 s que absorve um ataque (casca, bomba, ratoeira ou gato); pisca no final.
+- [x] **RF-204** **QUEIJO TRIPLO**: 3 turbos, usados um de cada vez (HUD mostra `x3`, `x2`, `x1`).
+- [x] **RF-205** IA usa os itens novos: escudo logo que pega, gato em seguida, triplo nas retas, casca/ratoeira quando tem alguém colado atrás.
+
 ## 5. Controles
 
 | Ação | Jogador 1 (teclado) | Jogador 2 (teclado) | Controle (J1..J4 = controle 1..4) |
@@ -272,6 +280,7 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-35** Pontuação: a soma de pontos de uma corrida é 58; a classificação ordena por pontos, depois vitórias, depois última corrida.
 - [x] **CA-36** GP completo simulado (3 corridas de 1 volta só com IA): passa pelas 3 pistas na ordem, cada corrida pontua uma única vez, total 174, e no fim `gp_is_over()`.
 - [x] **CA-37** A tela final do GP monta o pódio com os 3 líderes da classificação.
+- [x] **CA-38** Gato persegue e acerta o líder; ratoeira prende 1.2 s; escudo absorve um ataque e some; triplo dá 3 turbos; o sorteio nunca dá gato pros 4 primeiros nem dois gatos ao mesmo tempo.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
@@ -283,7 +292,7 @@ Teste manual (checklist por release):
 2. ~~**Multiplayer local** em tela dividida (2–4 jogadores).~~ → §4 RF-60..67.
 3. ~~**Áudio**~~ → §4 RF-80..83.
 4. ~~**Mais pistas**~~ → §4 RF-120..122; ~~Grand Prix~~ → RF-190..195. Falta: elevação e atalhos.
-5. **Mais itens** (escudo, raio, item "assinatura" por piloto).
+5. ~~**Mais itens**~~ → RF-200..205 (gato, ratoeira, escudo, triplo). Falta: item "assinatura" por piloto.
 6. ~~**Largada turbo**~~ → §4 RF-85..87.
 7. **Export web** (GitHub Pages) pra turma jogar no navegador.
 8. **Multiplayer online.**

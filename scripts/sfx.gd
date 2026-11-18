@@ -4,7 +4,7 @@ extends RefCounted
 
 const RATE := 22050
 const MUSIC_RATE := 16000
-const NAMES := ["beep", "go", "item", "boost", "mini_turbo", "drop", "shoot", "hit", "lap", "finish", "start_turbo", "stall", "bump", "cheese", "pad", "trick", "slip", "engine"]
+const NAMES := ["beep", "go", "item", "boost", "mini_turbo", "drop", "shoot", "hit", "lap", "finish", "start_turbo", "stall", "bump", "cheese", "pad", "trick", "slip", "engine", "meow", "shield", "shield_break", "snap"]
 
 static var _cache := {}
 
@@ -66,6 +66,20 @@ static func _make(sound_name: String) -> AudioStreamWAV:
 			var notes := [523.0, 659.0, 784.0, 1046.0, 784.0, 1046.0]
 			for i in notes.size():
 				_tone(b, r, i * 0.12, 0.2 if i < 5 else 0.6, notes[i], notes[i], "square", 0.22)
+		"meow":
+			_tone(b, r, 0.0, 0.18, 600.0, 1100.0, "tri", 0.3, 1.0)
+			_tone(b, r, 0.16, 0.45, 1100.0, 520.0, "tri", 0.3, 2.5)
+			_tone(b, r, 0.0, 0.6, 1200.0, 900.0, "pulse", 0.05, 3.0)
+		"shield":
+			for i in 5:
+				_tone(b, r, i * 0.05, 0.25, 520.0 * pow(1.19, i), 520.0 * pow(1.19, i), "sine", 0.2, 2.0)
+		"shield_break":
+			_tone(b, r, 0.0, 0.35, 0.0, 0.0, "noise", 0.3, 5.0)
+			_tone(b, r, 0.0, 0.3, 1800.0, 400.0, "tri", 0.25, 4.0)
+		"snap":
+			_tone(b, r, 0.0, 0.06, 0.0, 0.0, "noise", 0.6, 10.0)
+			_tone(b, r, 0.0, 0.12, 2400.0, 300.0, "square", 0.3, 8.0)
+			_tone(b, r, 0.05, 0.5, 90.0, 60.0, "square", 0.2, 5.0)
 		"engine":
 			return _engine_loop()
 		"music":

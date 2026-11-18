@@ -9,6 +9,7 @@ const Chars = preload("res://scripts/characters.gd")
 const Sfx = preload("res://scripts/sfx.gd")
 const Gfx = preload("res://scripts/gfx.gd")
 const GameScript = preload("res://scripts/game.gd")
+const HazardModels = preload("res://scripts/hazard_models.gd")
 const CHEESE_MODEL := "res://assets/kenney/food/cheese.glb"
 const BANANA_MODEL := "res://assets/kenney/food/banana.glb"
 
@@ -615,26 +616,84 @@ func _update_boxes(delta: float) -> void:
 				break
 
 
+## RF-200: sorteio ponderado pela posição. O GATO só sai de 5º pra trás e só um por vez.
+const ITEM_TABLE := {
+	"front": [["casca", 35], ["ratoeira", 20], ["escudo", 25], ["bomba", 15], ["turbo", 5]],
+	"mid": [["casca", 15], ["ratoeira", 15], ["escudo", 15], ["bomba", 25], ["turbo", 20], ["triplo", 10]],
+	"back": [["bomba", 20], ["turbo", 20], ["triplo", 30], ["escudo", 10], ["casca", 5], ["gato", 15]],
+}
+const ITEM_SFX := {"turbo": "boost", "triplo": "boost", "casca": "drop", "ratoeira": "drop", "bomba": "shoot", "gato": "meow", "escudo": "shield"}
+const GATO_SPEED := 50.0
+const GATO_LIFE := 15.0
+
+
 func _roll_item(rank: int) -> String:
-	var r := rng.randf()
-	if rank <= 2:
-		return "casca" if r < 0.6 else ("bomba" if r < 0.9 else "turbo")
-	if rank <= 5:
-		return "casca" if r < 0.3 else ("bomba" if r < 0.7 else "turbo")
-	return "casca" if r < 0.1 else ("bomba" if r < 0.5 else "turbo")
+	var table: Array = ITEM_TABLE["front"] if rank <= 2 else (ITEM_TABLE["mid"] if rank <= 4 else ITEM_TABLE["back"])
+	if gato_active():
+		table = table.filter(func(e): return e[0] != "gato")
+	var total := 0
+	for e in table:
+		total += int(e[1])
+	var r := rng.randi_range(1, total)
+	for e in table:
+		r -= int(e[1])
+		if r <= 0:
+			return e[0]
+	return "turbo"
+
+
+func gato_active() -> bool:
+	for h in hazards:
+		if h["type"] == "gato":
+			return true
+	return false
+
+
+## Alvo do GATO: o 1º colocado (se quem soltou é o 1º, vai no 2º).
+func gato_target(owner_kart: Node3D) -> Node3D:
+	var order: Array = ranking()
+	for k in order:
+		if k != owner_kart and not k.finished:
+			return k
+	return null
 
 
 func use_item(k: Node3D, it: String) -> void:
 	if k.is_player:
-		sfx({"turbo": "boost", "casca": "drop", "bomba": "shoot"}[it])
+		sfx(ITEM_SFX.get(it, "boost"))
 	match it:
-		"turbo":
+		"turbo", "triplo":
 			k.boost_time = maxf(k.boost_time, KartScript.ITEM_BOOST)
-		"casca":
-			_spawn_hazard("casca", k.position - k.forward() * 2.4, Vector3.ZERO, 90.0, k)
+		"casca", "ratoeira":
+			_spawn_hazard(it, k.position - k.forward() * 2.4, Vector3.ZERO, 90.0, k)
 		"bomba":
 			var v: Vector3 = k.forward() * (maxf(k.speed, 0.0) + 40.0)
 			_spawn_hazard("bomba", k.position + k.forward() * 2.5 + Vector3.UP * 0.5, v, 4.0, k)
+		"escudo":
+			k.shield_time = KartScript.SHIELD_TIME
+		"gato":
+			var target := gato_target(k)
+			if target:
+				_spawn_hazard("gato", k.position + k.forward() * 2.5, Vector3.ZERO, GATO_LIFE, k)
+				var h: Dictionary = hazards[-1]
+				h["target"] = target
+				h["prog"] = float(k.track_idx)
+				h["lat"] = k.lateral
+				if target.is_player:
+					sfx("meow")
+
+
+## Tem kart vindo logo atrás (até `dist` m, num cone de ~25°)? (IA solta casca/ratoeira)
+func kart_behind(k: Node3D, dist: float) -> bool:
+	var back: Vector3 = -k.forward()
+	for o in karts:
+		if o == k:
+			continue
+		var to: Vector3 = o.position - k.position
+		var d := to.length()
+		if d > 2.0 and d < dist and back.angle_to(to / d) < 0.45:
+			return true
+	return false
 
 
 func kart_in_sight(k: Node3D) -> bool:
@@ -651,31 +710,30 @@ func kart_in_sight(k: Node3D) -> bool:
 
 func _spawn_hazard(type: String, pos: Vector3, v: Vector3, life: float, owner_kart: Node3D) -> void:
 	var mi: Node3D
-	if type == "casca":
-		# RF-172: banana do Food Kit (Kenney), deitada no chão
-		mi = Gfx.prop(BANANA_MODEL, 1.5)
-		mi.rotation.y = randf() * TAU
-		pos.y = 0.0
-	else:
-		var bomb := MeshInstance3D.new()
-		var mat := StandardMaterial3D.new()
-		var m := SphereMesh.new()
-		m.radius = 0.5
-		m.height = 1.0
-		bomb.mesh = m
-		mat.albedo_color = Color(0.08, 0.08, 0.08)
-		mat.metallic = 0.4
-		mat.roughness = 0.3
-		mat.emission_enabled = true
-		mat.emission = Color(1.0, 0.15, 0.05)
-		mat.emission_energy_multiplier = 0.8
-		bomb.material_override = mat
-		mi = bomb
+	match type:
+		"casca":
+			# RF-172: banana do Food Kit (Kenney), deitada no chão
+			mi = Gfx.prop(BANANA_MODEL, 1.5)
+			mi.rotation.y = randf() * TAU
+			pos.y = 0.0
+		"ratoeira":
+			mi = HazardModels.mousetrap()
+			mi.rotation.y = randf() * TAU
+			pos.y = 0.0
+		"gato":
+			mi = HazardModels.cat()
+			pos.y = 0.0
+		_:
+			mi = HazardModels.bomb()
 	mi.position = pos
 	add_child(mi)
 	mi.reset_physics_interpolation()
 	var idx: int = track.nearest_index(pos, owner_kart.track_idx, 12)
 	hazards.append({"node": mi, "type": type, "pos": pos, "vel": v, "life": life, "owner": owner_kart, "age": 0.0, "idx": idx})
+
+
+## Perigos que ficam no chão (alvo de bombas e da IA que desvia).
+const GROUND_HAZARDS := ["casca", "ratoeira"]
 
 
 func _update_hazards(delta: float) -> void:
@@ -686,19 +744,24 @@ func _update_hazards(delta: float) -> void:
 		if h["life"] <= 0.0:
 			dead.append(h)
 			continue
-		if h["type"] == "bomba":
-			h["pos"] += h["vel"] * delta
-			h["idx"] = track.nearest_index(h["pos"], h["idx"], 12)
-			if absf(track.lateral_of(h["pos"], h["idx"])) > TrackScript.WALL - 0.4:
-				dead.append(h)
-				continue
-			# bomba x casca: as duas somem
-			for o in hazards:
-				if o["type"] == "casca" and not dead.has(o) and o["pos"].distance_squared_to(h["pos"]) < 1.6 * 1.6:
-					dead.append(o)
+		match h["type"]:
+			"bomba":
+				h["pos"] += h["vel"] * delta
+				h["idx"] = track.nearest_index(h["pos"], h["idx"], 12)
+				if absf(track.lateral_of(h["pos"], h["idx"])) > TrackScript.WALL - 0.4:
 					dead.append(h)
-					break
-			if dead.has(h):
+					continue
+				# bomba x casca/ratoeira: os dois somem
+				for o in hazards:
+					if GROUND_HAZARDS.has(o["type"]) and not dead.has(o) and o["pos"].distance_squared_to(h["pos"]) < 1.6 * 1.6:
+						dead.append(o)
+						dead.append(h)
+						break
+				if dead.has(h):
+					continue
+			"gato":
+				if _move_gato(h, delta):
+					dead.append(h)
 				continue
 		h["node"].position = h["pos"]
 		var radius := 1.7 if h["type"] == "bomba" else 1.5
@@ -707,14 +770,49 @@ func _update_hazards(delta: float) -> void:
 				continue
 			var p: Vector3 = h["pos"]
 			var kp: Vector3 = k.position
-			if Vector2(p.x - kp.x, p.z - kp.z).length() < radius:
-				k.hit()
+			if Vector2(p.x - kp.x, p.z - kp.z).length() < radius and kp.y < 1.5:
+				if h["type"] == "ratoeira":
+					k.trap()
+				else:
+					k.hit()
 				dead.append(h)
 				break
 	for h in dead:
 		if hazards.has(h):
 			hazards.erase(h)
 			h["node"].queue_free()
+
+
+## RF-201: o GATO corre pela pista atrás do alvo e, quando chega perto, dá o bote.
+## Devolve true quando acabou (pegou o alvo ou o alvo terminou a corrida).
+func _move_gato(h: Dictionary, delta: float) -> bool:
+	var target: Node3D = h.get("target")
+	if target == null or not is_instance_valid(target) or target.finished:
+		return true
+	var n: int = track.sample_count()
+	var tp: Vector3 = target.position
+	var pos: Vector3 = h["pos"]
+	if Vector2(tp.x - pos.x, tp.z - pos.z).length() < 18.0:
+		pos = pos.move_toward(Vector3(tp.x, 0.0, tp.z), GATO_SPEED * 1.2 * delta)
+	else:
+		h["prog"] = float(h["prog"]) + GATO_SPEED * delta / TrackScript.SPACING
+		h["lat"] = lerpf(float(h["lat"]), target.lateral, 1.0 - exp(-1.5 * delta))
+		var i := int(floor(h["prog"])) % n
+		var j := (i + 1) % n
+		var f: float = fmod(h["prog"], 1.0)
+		var c: Vector3 = track.points[i].lerp(track.points[j], f)
+		var r: Vector3 = track.rights[i]
+		pos = c + r * float(h["lat"])
+	var dir: Vector3 = pos - h["pos"]
+	if dir.length() > 0.01:
+		h["node"].rotation.y = atan2(-dir.x, -dir.z)
+	h["pos"] = pos
+	h["node"].position = pos + Vector3.UP * absf(sin(h["age"] * 14.0)) * 0.35  # pulinhos
+	if Vector2(tp.x - pos.x, tp.z - pos.z).length() < 2.0:
+		target.hit(1.6)
+		shake(target, 0.7)
+		return true
+	return false
 
 
 func _update_ranks() -> void:

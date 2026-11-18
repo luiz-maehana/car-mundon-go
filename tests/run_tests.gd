@@ -41,6 +41,7 @@ func _run() -> void:
 	await _test_settings()
 	await _test_hud_layout()
 	await _test_gp()
+	await _test_new_items()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -770,4 +771,82 @@ func _test_gp() -> void:
 	fin.queue_free()
 	game.mode = "race"
 	game.laps = 3
+	await process_frame
+
+
+func _test_new_items() -> void:
+	print("CA-38 itens novos")
+	var dt := 1.0 / 60.0
+	var race = await _new_race(["telles"], true)
+	race.state = "racing"
+	var n: int = race.track.sample_count()
+	for i in race.karts.size():
+		_put(race.karts[i], (i * 70 + 10) % n, 0.0, 0.0)
+	var a = race.karts[0]
+	var b = race.karts[1]
+	# gato: b na frente (líder), a solta o gato
+	_put(a, 20, 0.0, 0.0)
+	_put(b, 80, 0.0, 0.0)
+	a.progress = 20.0
+	b.progress = 500.0
+	race._update_ranks()
+	race.use_item(a, "gato")
+	check(race.gato_active() and race.hazards[-1]["target"] == b, "gato mira no líder")
+	var hit := false
+	for i in 300:
+		race._update_hazards(dt)
+		if b.spin_time > 0.0:
+			hit = true
+			break
+	check(hit and not race.gato_active() and b.spin_time > 1.3, "gato alcança e derruba o líder (rodada %.2f s)" % b.spin_time)
+	# sorteio: nunca gato pros 4 primeiros nem com gato ativo
+	var bad := 0
+	for i in 400:
+		if race._roll_item(1 + i % 4) == "gato":
+			bad += 1
+	race.use_item(a, "gato")
+	for i in 400:
+		if race._roll_item(8) == "gato":
+			bad += 1
+	check(bad == 0, "sem gato pros 4 primeiros nem gato duplicado")
+	for h in race.hazards.duplicate():
+		h["node"].queue_free()
+	race.hazards.clear()
+	# ratoeira
+	b.spin_time = 0.0
+	_put(b, 120, 0.0, 20.0)
+	b.cheese = 5
+	b.trap()
+	var stuck := true
+	for i in 60:
+		b._move(dt)
+		if b.speed > 0.01:
+			stuck = false
+	check(stuck and b.cheese == 2, "ratoeira prende (velocidade 0 por 1 s) e tira 3 queijos")
+	for i in 20:
+		b.in_throttle = 1.0
+		b._move(dt)
+	check(b.trap_time <= 0.0 and b.speed > 0.0, "solta depois de 1.2 s")
+	# escudo
+	b.shield_time = 8.0
+	b.spin_time = 0.0
+	b.hit()
+	check(b.spin_time == 0.0 and b.shield_time == 0.0, "escudo absorve o ataque e some")
+	b.hit()
+	check(b.spin_time > 0.0, "sem escudo, o ataque pega")
+	# triplo
+	b.spin_time = 0.0
+	b.give_item("triplo")
+	b.item_roll = 0.0
+	var uses := 0
+	for i in 3:
+		b.in_item = true
+		if b.can_use_item():
+			race.use_item(b, b.item)
+			b.item_charges -= 1
+			if b.item_charges <= 0:
+				b.item = ""
+			uses += 1
+	check(uses == 3 and b.item == "", "queijo triplo dá 3 turbos e acaba")
+	race.queue_free()
 	await process_frame

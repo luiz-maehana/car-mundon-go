@@ -6,13 +6,13 @@ extends CanvasLayer
 const MinimapScript = preload("res://scripts/minimap.gd")
 const IconScript = preload("res://scripts/icons.gd")
 const KartScript = preload("res://scripts/kart.gd")
-const ROLL_ORDER := ["turbo", "casca", "bomba"]
+const ROLL_ORDER := ["turbo", "casca", "gato", "bomba", "escudo", "ratoeira", "triplo"]
 const SpeedLinesShader = preload("res://shaders/speed_lines.gdshader")
 const Chars = preload("res://scripts/characters.gd")
 const GameScript = preload("res://scripts/game.gd")
 const Gfx = preload("res://scripts/gfx.gd")
-const ITEM_NAMES := {"turbo": "TURBO", "casca": "CASCA", "bomba": "BOMBA"}
-const ITEM_COLORS := {"turbo": Color(1.0, 0.55, 0.1), "casca": Color(1.0, 0.88, 0.15), "bomba": Color(0.9, 0.2, 0.15)}
+const ITEM_NAMES := {"turbo": "TURBO", "casca": "CASCA", "bomba": "BOMBA", "triplo": "QUEIJO TRIPLO", "ratoeira": "RATOEIRA", "escudo": "ESCUDO", "gato": "GATO!"}
+const ITEM_COLORS := {"turbo": Color(1.0, 0.55, 0.1), "casca": Color(1.0, 0.88, 0.15), "bomba": Color(0.9, 0.2, 0.15), "triplo": Color(1.0, 0.82, 0.25), "ratoeira": Color(0.75, 0.5, 0.28), "escudo": Color(0.5, 0.85, 1.0), "gato": Color(1.0, 0.55, 0.15)}
 const FINISH_TEXT_TIME := 2.5
 
 var race: Node
@@ -368,7 +368,9 @@ func update_hud(delta: float) -> void:
 	else:
 		item_icon.set_kind(p.item)
 		item_style.border_color = ITEM_COLORS.get(p.item, Color(1, 1, 1, 0.4))
-	lbl_item.text = ITEM_NAMES.get(p.item, "") if p.item_roll <= 0.0 else ""
+	lbl_item.text = (ITEM_NAMES.get(p.item, "") + (" x%d" % p.item_charges if p.item == "triplo" else "")) if p.item_roll <= 0.0 else ""
+	if p.shield_time > 0.0 and p.item == "":
+		lbl_item.text = "ESCUDO %ds" % int(ceil(p.shield_time))
 	# RF-135: queijinhos
 	lbl_cheese.text = "%d/10" % p.cheese
 	lbl_cheese.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3) if p.cheese >= 10 else Color.WHITE)

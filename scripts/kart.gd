@@ -10,6 +10,7 @@ const MouseModel = preload("res://scripts/mouse_model.gd")
 const KenneyKart = preload("res://assets/kenney/karts/kart-oopi.glb")
 const RecolorShader = preload("res://shaders/kart_recolor.gdshader")
 const KART_SCALE := 2.3
+const ShieldShader = preload("res://shaders/shield.gdshader")
 const LABEL_LAYER_BASE := 10  # camada do nome do jogador N = 10+N (escondida na câmera dele)
 
 const DRIFT_MIN_SPEED := 12.0
@@ -20,6 +21,8 @@ const GRAVITY := 28.0
 const PAD_BOOST := 0.8
 const TRICK_BOOST := 0.7
 const ITEM_ROLL := 1.0      # roleta (RF-130)
+const SHIELD_TIME := 8.0    # RF-203
+const TRAP_TIME := 1.2      # RF-202
 const MAX_CHEESE := 10
 const ITEM_BOOST := 1.3
 const BOOST_MULT := 1.3
@@ -94,6 +97,10 @@ var ai_pad_target := -1
 var prev_drift := false
 var on_pad := false
 var bump_cd := 0.0
+var shield_time := 0.0
+var trap_time := 0.0
+var item_charges := 0
+var shield_bubble: MeshInstance3D
 
 # input do frame
 var in_throttle := 0.0
@@ -157,10 +164,35 @@ func place(idx: int, lat: float) -> void:
 	reset_physics_interpolation()
 
 
-func hit() -> void:
-	if spin_time > 0.0:
+## RF-203: o escudo segura um ataque. Devolve true se absorveu.
+func _shield_absorbs() -> bool:
+	if shield_time <= 0.0:
+		return false
+	shield_time = 0.0
+	if is_player:
+		race.sfx("shield_break")
+	return true
+
+
+## RF-202: preso na ratoeira — para na hora e fica TRAP_TIME sem andar.
+func trap() -> void:
+	if trap_time > 0.0 or _shield_absorbs():
 		return
-	spin_time = 1.1
+	trap_time = TRAP_TIME
+	drifting = false
+	boost_time = 0.0
+	speed = 0.0
+	vel = Vector3.ZERO
+	cheese = maxi(0, cheese - 3)
+	race.shake(self, 0.4)
+	if is_player:
+		race.sfx("snap")
+
+
+func hit(strength := 1.0) -> void:
+	if spin_time > 0.0 or _shield_absorbs():
+		return
+	spin_time = 1.1 * strength
 	drifting = false
 	boost_time = 0.0
 	speed *= 0.35
@@ -185,6 +217,7 @@ func give_item(it: String) -> void:
 	item = it
 	item_hold = 0.0
 	item_roll = ITEM_ROLL
+	item_charges = 3 if it == "triplo" else 1  # RF-204
 
 
 func can_use_item() -> bool:
@@ -233,8 +266,14 @@ func step(delta: float, can_drive: bool) -> void:
 			item_roll -= delta
 		if in_item and can_use_item():
 			race.use_item(self, item)
-			item = ""
 			items_used += 1
+			item_charges -= 1
+			if item_charges <= 0:
+				item = ""
+			else:
+				item_hold = 0.0
+		if shield_time > 0.0:
+			shield_time = maxf(0.0, shield_time - delta)
 		if item != "" and item_roll <= 0.0:
 			item_hold += delta
 	prev_drift = in_drift
@@ -251,6 +290,11 @@ func _move(delta: float) -> void:
 		throttle = 0.0
 		steer = 0.0
 		speed = move_toward(speed, 0.0, 30.0 * delta)
+	if trap_time > 0.0:  # RF-202: preso
+		trap_time -= delta
+		throttle = 0.0
+		steer = 0.0
+		speed = 0.0
 	if start_stall > 0.0:
 		start_stall -= delta
 		throttle = 0.0
@@ -470,15 +514,19 @@ func _ai_input(delta: float) -> void:
 	else:
 		in_drift = absf(diff) > 0.35 and speed > DRIFT_MIN_SPEED + 3.0
 
-	# itens (RF-42)
-	if item != "":
+	# itens (RF-42 + RF-205)
+	if item != "" and item_roll <= 0.0:
 		match item:
-			"turbo":
-				in_item = item_hold > 0.8 and absf(diff) < 0.2
-			"casca":
-				in_item = item_hold > ai_item_delay
+			"turbo", "triplo":
+				in_item = item_hold > (0.8 if item == "turbo" else 1.2) and absf(diff) < 0.2
+			"casca", "ratoeira":
+				in_item = item_hold > ai_item_delay or race.kart_behind(self, 18.0)
 			"bomba":
 				in_item = item_hold > 8.0 or (item_hold > 0.5 and race.kart_in_sight(self))
+			"escudo":
+				in_item = item_hold > 1.0
+			"gato":
+				in_item = item_hold > 0.6
 
 
 # ---------------------------------------------------------------- visual
@@ -654,6 +702,7 @@ func _update_visuals(delta: float) -> void:
 		if boosting:
 			f.scale = Vector3.ONE * randf_range(0.8, 1.3)
 	p_dust.emitting = not airborne and absf(speed) > 5.0 and absf(lateral) > TrackScript.ROAD_HALF + TrackScript.CURB
+	_update_shield_fx()
 
 
 static func drift_color(charge: float) -> Color:
@@ -664,3 +713,24 @@ static func drift_color(charge: float) -> Color:
 	if charge >= MINI_TURBO_1:
 		return Color(0.3, 0.7, 1.0)
 	return Color(0.7, 0.7, 0.7)
+
+
+## RF-203: bolha do escudo (pisca nos últimos 1.5 s).
+func _update_shield_fx() -> void:
+	if shield_time > 0.0 and shield_bubble == null:
+		shield_bubble = MeshInstance3D.new()
+		var s := SphereMesh.new()
+		s.radius = 2.1
+		s.height = 4.2
+		shield_bubble.mesh = s
+		var m := ShaderMaterial.new()
+		m.shader = ShieldShader
+		shield_bubble.material_override = m
+		shield_bubble.position = Vector3(0, 1.3, 0)
+		shield_bubble.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(shield_bubble)
+	if shield_bubble:
+		var on := shield_time > 0.0
+		if on and shield_time < 1.5:
+			on = int(shield_time * 8.0) % 2 == 0
+		shield_bubble.visible = on
