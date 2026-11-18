@@ -32,6 +32,7 @@ func _run() -> void:
 	await _test_all_tracks()
 	await _test_v08()
 	await _test_graphics()
+	await _test_assets()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -544,3 +545,76 @@ func _test_graphics() -> void:
 	check(race.track.get_node_or_null("Grandstand") != null and race.track.scenery_count > 100, "arquibancada + cenário (%d instâncias)" % race.track.scenery_count)
 	race.queue_free()
 	await process_frame
+
+
+func _has_part(n: Node, part: String) -> bool:
+	return n.find_child(part, true, false) != null
+
+
+func _test_assets() -> void:
+	var race = await _new_race(["burcca"], true)
+	print("CA-26 kart do Kenney")
+	var ok := true
+	for k in race.karts:
+		var kk = k.model.get_node_or_null("KenneyKart")
+		var ch = kk.find_child("character", true, false) if kk else null
+		if kk == null or ch == null or ch.visible or k.wheels.size() != 4 or k.front_wheels.size() != 2 or k.kart_body == null:
+			ok = false
+	check(ok, "8 karts com GLB do Car Kit, piloto original escondido, 4 rodas (2 dianteiras)")
+	var sm = race.karts[0].kart_body.material_override
+	check(sm is ShaderMaterial and sm.get_shader_parameter("tint") == race.karts[0].color, "carroceria recolorida na cor do piloto")
+
+	print("CA-27 visual de cada amigo")
+	var Chars = load("res://scripts/characters.gd")
+	var looks_ok := true
+	for c in Chars.LIST:
+		var lk: Dictionary = c.get("look", {})
+		for key in ["fur", "hair", "hair_color", "beard", "glasses", "shirt"]:
+			if not lk.has(key):
+				looks_ok = false
+	check(looks_ok, "8 pilotos com look completo")
+	var by_id := {}
+	for k in race.karts:
+		by_id[k.char_id] = k.driver
+	var b = by_id["burcca"]
+	var t = by_id["telles"]
+	check(_has_part(b, "Glasses") and _has_part(b, "Beard") and _has_part(b, "Headphones"), "Burcca: óculos + barba + fone")
+	check(_has_part(t, "Glasses") and _has_part(t, "Beard") and not _has_part(t, "Headphones"), "Telles: óculos escuros + cavanhaque, sem fone")
+	check(not _has_part(by_id["mugurin"], "Glasses") and not _has_part(by_id["digao"], "Glasses"), "Mugurin e Digão sem óculos")
+
+	print("CA-28 itens e cenário do Kenney")
+	check(race.cheeses.size() > 0 and race.cheeses[0]["node"].name == "cheese", "queijinhos com o queijo do Food Kit")
+	var k0 = race.karts[0]
+	race._spawn_hazard("casca", k0.position, Vector3.ZERO, 5.0, k0)
+	check(race.hazards[-1]["node"].name == "banana", "casca é a banana do Food Kit")
+	var tr = race.track
+	check(tr.get_node_or_null("StartGantry") != null, "pórtico de largada do Racing Kit")
+	var props := 0
+	for c in tr.get_children():
+		if c.name.begins_with("pits") or c.name.begins_with("tent") or c.name.begins_with("banner") or c.name.begins_with("billboard"):
+			props += 1
+	check(props >= 4, "props do Racing Kit no cenário (%d)" % props)
+	var tank := 0
+	var zaw := 0
+	for mi in tr.find_children("*", "MeshInstance3D", true, false):
+		for s in mi.mesh.get_surface_count():
+			var m = mi.get_active_material(s)
+			if m and m.resource_name.to_lower().contains("tankco"):
+				tank += 1
+			if m and m.resource_name == "zawsze":
+				zaw += 1
+	check(tank == 0 and zaw > 0, "marca ZAWSZE no lugar de TANKCO (%d banners)" % zaw)
+	race.queue_free()
+	await process_frame
+
+	print("CA-29 fonte e tema")
+	var Game = load("res://scripts/game.gd")
+	var th: Theme = Game.build_theme()
+	var f: Font = th.default_font
+	check(f != null and f.resource_path.ends_with("Kenney Future Narrow.ttf"), "tema usa Kenney Future Narrow")
+	var need := "CAR'MUNDON'GO! Digão CONTRAMÃO VÁCUO 1º/8 Começar · ç ã õ é í ó ú"
+	var missing := ""
+	for ch in need:
+		if ch != " " and not f.has_char(ch.unicode_at(0)):
+			missing += ch
+	check(missing == "", "fonte tem todos os caracteres do jogo%s" % ("" if missing == "" else " (faltam: %s)" % missing))

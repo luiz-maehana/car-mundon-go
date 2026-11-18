@@ -3,6 +3,7 @@ extends Control
 ## Com 2+ jogadores cada um confirma o seu piloto em sequência; Backspace desfaz.
 
 const Chars = preload("res://scripts/characters.gd")
+const GameScript = preload("res://scripts/game.gd")
 const STATS := [["speed", "VEL"], ["accel", "ACE"], ["handling", "CTR"], ["weight", "PES"]]
 const LAP_OPTIONS := [1, 2, 3, 5]
 const TrackScript = preload("res://scripts/track.gd")
@@ -111,6 +112,7 @@ func _build() -> void:
 	go_btn = _button("", 30)
 	go_btn.custom_minimum_size = Vector2(220, 64)
 	go_btn.pressed.connect(_confirm)
+	GameScript.make_primary(go_btn)  # RF-174
 	row.add_child(go_btn)
 
 	var help := _label("Setas: escolher · Enter: confirmar · Backspace: desfazer · J1 = WASD/controle 1 · J2 = setas/controle 2 · J3/J4 = controles 3/4 · M: som", 15, Color(1, 1, 1, 0.6))

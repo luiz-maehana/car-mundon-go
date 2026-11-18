@@ -121,7 +121,7 @@ Conversão de stat para física (em `kart.gd`):
 
 ### Ajustes do primeiro playtest (v0.6)
 - [x] **RF-110** Volume: todo som gerado é normalizado (efeitos com pico 0.9, música 0.75) e o master tem limitador em -0.5 dB. Pico medido na corrida entre -6 e -0.5 dB (antes: -11 a -15 dB, "som baixo").
-- [x] **RF-111** No kart, o piloto é um camundongo de capacete na cor do piloto, com orelhonas e nome em cima. A arte dos rostos **não** aparece na pista.
+- [x] **RF-111** (substituído pelo RF-171) No kart, o piloto é um camundongo de capacete na cor do piloto, com orelhonas e nome em cima. A arte dos rostos **não** aparece na pista.
 - [x] **RF-112** O minimapa mostra o busto de cada piloto no lugar do pontinho (o jogador com borda branca, por cima dos outros).
 - [x] **RF-113** O HUD tem a lista de posições ao vivo (busto + nome, 1º a 8º) na lateral esquerda; a linha do jogador fica destacada.
 
@@ -164,6 +164,15 @@ Conversão de stat para física (em `kart.gd`):
 - [x] **RF-166** Linhas de velocidade na tela durante o turbo; tremida de câmera em batida, pancada e pouso.
 - [x] **RF-167** Cenário: arquibancada com torcida colorida na largada, bandeirolas na reta, pilhas de pneu nas curvas mais fechadas, tufos de grama/pedras (ou queijos gigantes na cozinha).
 - [x] **RF-168** Caixas de item com brilho arco-íris animado (shader).
+
+### Modelos e assets (v0.10)
+Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack, Fonts), copiados para `assets/kenney/` com as licenças. Créditos em `CREDITS.md`.
+- [x] **RF-170** Kart = modelo do Car Kit (`kart-*.glb`) escalado pro tamanho do jogo, com o piloto original escondido. Carroceria recolorida na cor do piloto (shader troca só as partes coloridas, mantém branco/cinza). Rodas do modelo giram e as dianteiras esterçam.
+- [x] **RF-171** Camundongo novo feito em código: cabeção com focinho claro, olhos com brilho, nariz rosa, bigodes, orelhonas e rabo. Cada amigo tem o seu **visual** (`look` em `characters.gd`): cor do pelo, tipo/cor de cabelo, barba, óculos (grau ou escuros), fone de ouvido e cor da camiseta, tirados das ilustrações.
+- [x] **RF-172** Itens 3D do Food Kit: a casca é uma banana de verdade, os queijinhos são queijos.
+- [x] **RF-173** Cenário do Racing Kit: pórtico de largada com semáforo no lugar do arco, arquibancadas cobertas, torres de faixa, tendas e boxes perto da largada, outdoors e árvores do kit.
+- [x] **RF-174** Interface com fonte **Kenney Future Narrow** (tema global com fallback pra fonte padrão) e botões do UI Pack (amarelo = ação principal, cinza = opções) no menu, pause e resultado; sons de clique do UI Pack.
+- [x] **RF-175** Marca do jogo nos cenários: **ZAWSZE** (combustível/patrocínio). O banner "TANKCO" do Racing Kit é trocado em todos os props por `assets/brand/zawsze_banner.png`, gerado por `tools/make_brand.gd`.
 
 ## 5. Controles
 
@@ -233,6 +242,10 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-23** Qualidade ALTO liga glow e SSAO no ambiente; BAIXO desliga os dois e zera o MSAA.
 - [x] **CA-24** Kart tem emissores de partículas; drift carregado liga as faíscas, turbo liga o fogo, grama liga a poeira.
 - [x] **CA-25** O material da pista e o do chão têm textura; o cenário tem arquibancada, pneus e decoração (> 0 instâncias).
+- [x] **CA-26** Cada kart instancia o GLB do Car Kit, com o piloto original escondido e 4 rodas encontradas (2 dianteiras).
+- [x] **CA-27** Os 8 pilotos têm `look` completo; o modelo de cada um tem as peças do visual (ex.: Burcca com óculos + barba + fone; Telles com óculos escuros + cabelo comprido).
+- [x] **CA-28** Casca e queijinho usam os modelos do Food Kit; o cenário tem pórtico, arquibancadas e props do Racing Kit.
+- [x] **CA-29** O tema global usa a fonte Kenney Future Narrow e ela tem todos os caracteres do jogo (acentos e º).
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

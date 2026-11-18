@@ -6,6 +6,10 @@ const TrackScript = preload("res://scripts/track.gd")
 const GameScript = preload("res://scripts/game.gd")
 const Chars = preload("res://scripts/characters.gd")
 const Gfx = preload("res://scripts/gfx.gd")
+const MouseModel = preload("res://scripts/mouse_model.gd")
+const KenneyKart = preload("res://assets/kenney/karts/kart-oopi.glb")
+const RecolorShader = preload("res://shaders/kart_recolor.gdshader")
+const KART_SCALE := 2.3
 const LABEL_LAYER_BASE := 10  # camada do nome do jogador N = 10+N (escondida na câmera dele)
 
 const DRIFT_MIN_SPEED := 12.0
@@ -109,7 +113,9 @@ var p_land: CPUParticles3D
 var p_confetti: CPUParticles3D
 
 var wheels: Array = []        # MeshInstance3D (giram)
-var front_pivots: Array = []  # Node3D (esterçam)
+var front_wheels: Array = []  # MeshInstance3D (esterçam)
+var kart_body: MeshInstance3D
+var driver: Node3D
 var wheel_spin := 0.0
 
 
@@ -499,164 +505,51 @@ func _box(size: Vector3) -> BoxMesh:
 	return b
 
 
-func _paint(c: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = c
-	m.metallic = 0.35
-	m.roughness = 0.28
-	m.clearcoat_enabled = true
-	m.clearcoat = 0.7
-	m.clearcoat_roughness = 0.15
-	return m
-
-
-## RF-164: kart arredondado com pintura metálica, volante, escapamento e número.
+## RF-170: kart do Car Kit (Kenney, CC0) recolorido + camundongo do RF-171 no assento.
 func _build_model() -> void:
 	model = Node3D.new()
 	add_child(model)
-	var paint := _paint(color)
-	var trim := _paint(color.darkened(0.35))
-	var dark := _mat(Color(0.08, 0.08, 0.1))
-	dark.roughness = 0.6
-	var rubber := _mat(Color(0.06, 0.06, 0.07))
-	rubber.roughness = 0.95
-	var chrome := StandardMaterial3D.new()
-	chrome.albedo_color = Color(0.55, 0.56, 0.6)
-	chrome.metallic = 1.0
-	chrome.roughness = 0.32
-	# chassi e carroceria
-	_part(_box(Vector3(1.5, 0.16, 2.7)), dark, Vector3(0, 0.3, 0))
-	var hull := CapsuleMesh.new()
-	hull.radius = 0.5
-	hull.height = 2.7
-	_part(hull, paint, Vector3(0, 0.58, 0.05), Vector3(PI / 2, 0, 0)).scale = Vector3(1.3, 1.0, 0.6)
-	var nose := CylinderMesh.new()
-	nose.top_radius = 0.16
-	nose.bottom_radius = 0.42
-	nose.height = 0.7
-	_part(nose, paint, Vector3(0, 0.48, -1.5), Vector3(-PI / 2, 0, 0)).scale = Vector3(1.5, 1.0, 0.6)
-	var bar := CapsuleMesh.new()
-	bar.radius = 0.09
-	bar.height = 1.9
-	_part(bar, dark, Vector3(0, 0.34, -1.98), Vector3(0, 0, PI / 2))
-	_part(bar, dark, Vector3(0, 0.34, 1.6), Vector3(0, 0, PI / 2))
-	var pod := CapsuleMesh.new()
-	pod.radius = 0.26
-	pod.height = 1.3
-	for x in [-0.74, 0.74]:
-		_part(pod, trim, Vector3(x, 0.48, 0.25), Vector3(PI / 2, 0, 0))
-	# motor + escapamento duplo
-	_part(_box(Vector3(0.9, 0.42, 0.6)), _mat(Color(0.3, 0.3, 0.33)), Vector3(0, 0.78, 1.05))
-	var pipe := CylinderMesh.new()
-	pipe.top_radius = 0.09
-	pipe.bottom_radius = 0.09
-	pipe.height = 0.55
-	for x in [-0.25, 0.25]:
-		_part(pipe, chrome, Vector3(x, 0.78, 1.45), Vector3(PI / 2, 0, 0))
-	# aerofólio
-	_part(_box(Vector3(1.9, 0.08, 0.45)), paint, Vector3(0, 1.22, 1.32))
-	_part(_box(Vector3(0.08, 0.42, 0.08)), dark, Vector3(-0.55, 0.98, 1.3))
-	_part(_box(Vector3(0.08, 0.42, 0.08)), dark, Vector3(0.55, 0.98, 1.3))
-	# banco e volante
-	_part(_box(Vector3(0.62, 0.62, 0.14)), dark, Vector3(0, 1.0, 0.6))
-	var wheel_ring := TorusMesh.new()
-	wheel_ring.inner_radius = 0.13
-	wheel_ring.outer_radius = 0.19
-	_part(wheel_ring, dark, Vector3(0, 1.06, -0.28), Vector3(deg_to_rad(65), 0, 0))
-	var column := CylinderMesh.new()
-	column.top_radius = 0.03
-	column.bottom_radius = 0.03
-	column.height = 0.5
-	_part(column, dark, Vector3(0, 0.88, -0.45), Vector3(deg_to_rad(-25), 0, 0))
-	# número do grid (placa branca nos dois lados)
+	var kart_root: Node3D = KenneyKart.instantiate()
+	kart_root.name = "KenneyKart"
+	kart_root.rotation.y = PI  # o modelo olha pra +Z; o nosso kart olha pra -Z
+	kart_root.scale = Vector3.ONE * KART_SCALE
+	model.add_child(kart_root)
+	for mi in kart_root.find_children("*", "MeshInstance3D", true, false):
+		var n: String = mi.name
+		if n == "character":
+			mi.visible = false  # piloto original do kit
+		elif n.begins_with("wheel"):
+			wheels.append(mi)
+			if n.contains("front"):
+				front_wheels.append(mi)
+		elif n.begins_with("kart"):
+			var src: Material = mi.mesh.surface_get_material(0)
+			var sm := ShaderMaterial.new()
+			sm.shader = RecolorShader
+			if src is BaseMaterial3D:
+				sm.set_shader_parameter("tex", (src as BaseMaterial3D).albedo_texture)
+			sm.set_shader_parameter("tint", color)
+			mi.material_override = sm
+			kart_body = mi
+	# número do grid nas laterais
 	var number := str(Chars.index_of(char_id) + 1)
-	var plate := CylinderMesh.new()
-	plate.top_radius = 0.26
-	plate.bottom_radius = 0.26
-	plate.height = 0.02
-	var white := _mat(Color(0.95, 0.95, 0.95))
 	for side in [-1.0, 1.0]:
-		_part(plate, white, Vector3(side * 0.66, 0.6, -0.35), Vector3(0, 0, PI / 2)).scale = Vector3(1, 1, 1)
 		var num := Label3D.new()
 		num.text = number
-		num.font_size = 72
+		num.font_size = 96
 		num.pixel_size = 0.005
-		num.modulate = Color(0.05, 0.05, 0.05)
-		num.outline_size = 0
-		num.position = Vector3(side * 0.68, 0.6, -0.35)
+		num.modulate = Color(1, 1, 1)
+		num.outline_size = 18
+		num.outline_modulate = Color(0.05, 0.05, 0.08)
+		num.position = Vector3(side * 1.08, 0.55, 0.35)
 		num.rotation.y = PI / 2.0 * side
 		model.add_child(num)
-	# rodas: pneu + aro cromado + faixa pra ver o giro (RF-145)
-	var tire := CylinderMesh.new()
-	tire.top_radius = 0.4
-	tire.bottom_radius = 0.4
-	tire.height = 0.38
-	var rim := CylinderMesh.new()
-	rim.top_radius = 0.24
-	rim.bottom_radius = 0.24
-	rim.height = 0.4
-	var spoke := _box(Vector3(0.44, 0.42, 0.09))
-	for x in [-0.95, 0.95]:
-		for z in [-0.92, 0.92]:
-			var pivot := Node3D.new()
-			pivot.position = Vector3(x, 0.4, z)
-			model.add_child(pivot)
-			var w := MeshInstance3D.new()
-			w.mesh = tire
-			w.material_override = rubber
-			w.rotation = Vector3(0, 0, PI / 2)
-			pivot.add_child(w)
-			var r := MeshInstance3D.new()
-			r.mesh = rim
-			r.material_override = chrome
-			w.add_child(r)
-			var sp := MeshInstance3D.new()
-			sp.mesh = spoke
-			sp.material_override = dark
-			w.add_child(sp)
-			wheels.append(w)
-			if z < 0.0:
-				front_pivots.append(pivot)
-	# piloto camundongo (RF-111) com braços no volante
-	var torso := CapsuleMesh.new()
-	torso.radius = 0.33
-	torso.height = 0.8
-	_part(torso, trim, Vector3(0, 1.05, 0.3))
-	var arm := CapsuleMesh.new()
-	arm.radius = 0.09
-	arm.height = 0.62
-	var glove := SphereMesh.new()
-	glove.radius = 0.1
-	glove.height = 0.2
-	for x in [-0.25, 0.25]:
-		_part(arm, trim, Vector3(x, 1.12, 0.0), Vector3(deg_to_rad(-70), 0, -x * 0.6))
-		_part(glove, white, Vector3(x * 0.75, 1.08, -0.25))
-	var fur := _mat(Color(0.86, 0.7, 0.55))
-	var pink := _mat(Color(1.0, 0.55, 0.62))
-	var head := SphereMesh.new()
-	head.radius = 0.42
-	head.height = 0.84
-	_part(head, fur, Vector3(0, 1.8, 0.3))
-	var helmet := SphereMesh.new()
-	helmet.radius = 0.46
-	helmet.height = 0.46
-	helmet.is_hemisphere = true
-	_part(helmet, paint, Vector3(0, 1.84, 0.3))
-	_part(_box(Vector3(0.6, 0.16, 0.1)), dark, Vector3(0, 1.98, -0.12))
-	var nose_m := SphereMesh.new()
-	nose_m.radius = 0.09
-	nose_m.height = 0.18
-	_part(nose_m, pink, Vector3(0, 1.72, -0.13))
-	var ear := SphereMesh.new()
-	ear.radius = 0.34
-	ear.height = 0.68
-	var ear_in := SphereMesh.new()
-	ear_in.radius = 0.24
-	ear_in.height = 0.48
-	for x in [-0.5, 0.5]:
-		_part(ear, fur, Vector3(x, 2.25, 0.37)).scale = Vector3(1, 1, 0.3)
-		_part(ear_in, pink, Vector3(x, 2.25, 0.3)).scale = Vector3(1, 1, 0.25)
-	var head_top := 2.6
+	# piloto
+	var look: Dictionary = Chars.find(char_id).get("look", {})
+	driver = MouseModel.build(look)
+	driver.position = Vector3(0, 0.62, 0.2)
+	model.add_child(driver)
+	var head_top := 2.75
 	var lbl := Label3D.new()
 	lbl.text = display_name
 	lbl.font_size = 40
@@ -669,7 +562,7 @@ func _build_model() -> void:
 	if is_player:
 		lbl.layers = 1 << (LABEL_LAYER_BASE + player_index)  # RF-63
 	add_child(lbl)
-	# chama do turbo (cone) + partículas (RF-165)
+	# chama do turbo + partículas (RF-165)
 	var cone := CylinderMesh.new()
 	cone.top_radius = 0.0
 	cone.bottom_radius = 0.2
@@ -677,8 +570,8 @@ func _build_model() -> void:
 	var flame_mat := StandardMaterial3D.new()
 	flame_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	flame_mat.albedo_color = Color(1.6, 0.7, 0.15)
-	for x in [-0.25, 0.25]:
-		var f := _part(cone, flame_mat, Vector3(x, 0.78, 1.95), Vector3(PI / 2, 0, 0))
+	for x in [-0.3, 0.3]:
+		var f := _part(cone, flame_mat, Vector3(x, 0.75, 1.85), Vector3(PI / 2, 0, 0))
 		f.visible = false
 		flames.append(f)
 	_build_particles()
@@ -734,11 +627,9 @@ func _update_visuals(delta: float) -> void:
 	var shake := 0.0
 	if not airborne and absf(lateral) > TrackScript.ROAD_HALF + TrackScript.CURB and absf(speed) > 4.0:
 		shake = randf_range(-0.04, 0.04)
-	wheel_spin = fmod(wheel_spin + speed * delta / 0.38, TAU)
+	wheel_spin = fmod(wheel_spin + speed * delta / (0.21 * KART_SCALE), TAU)
 	for w in wheels:
-		w.rotation.x = -wheel_spin
-	for p in front_pivots:
-		p.rotation.y = -in_steer * 0.45
+		w.rotation = Vector3(wheel_spin, -in_steer * 0.45 if front_wheels.has(w) else 0.0, 0.0)
 	# manobra no ar: um giro completo no eixo X
 	if trick_spin > 0.0:
 		trick_spin = maxf(0.0, trick_spin - delta * TAU * 2.2)

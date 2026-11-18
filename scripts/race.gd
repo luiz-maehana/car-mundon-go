@@ -8,6 +8,9 @@ const HudScript = preload("res://scripts/hud.gd")
 const Chars = preload("res://scripts/characters.gd")
 const Sfx = preload("res://scripts/sfx.gd")
 const Gfx = preload("res://scripts/gfx.gd")
+const GameScript = preload("res://scripts/game.gd")
+const CHEESE_MODEL := "res://assets/kenney/food/cheese.glb"
+const BANANA_MODEL := "res://assets/kenney/food/banana.glb"
 
 
 const COUNTDOWN := 3.0
@@ -173,6 +176,7 @@ func _build_pause() -> void:
 		b.pressed.connect(o[1])
 		vb.add_child(b)
 		if pause_resume_btn == null:
+			GameScript.make_primary(b)
 			pause_resume_btn = b
 	var hint := Label.new()
 	hint.text = "M: liga/desliga o som"
@@ -537,30 +541,17 @@ func _update_slipstream(delta: float) -> void:
 
 ## RF-150: queijinhos.
 func _spawn_cheese() -> void:
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.6
-	mesh.bottom_radius = 0.6
-	mesh.height = 0.35
-	mesh.radial_segments = 3
-	mesh.rings = 1
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.82, 0.25)
-	mat.emission_enabled = true
-	mat.emission = Color(0.6, 0.45, 0.05)
-	mat.emission_energy_multiplier = 0.4
+	# RF-172: queijo do Food Kit (Kenney)
 	for p in track.cheese_positions():
-		var mi := MeshInstance3D.new()
-		mi.mesh = mesh
-		mi.material_override = mat
-		mi.position = p
-		mi.rotation.x = PI / 2.0
-		add_child(mi)
-		cheeses.append({"node": mi, "pos": p, "cd": 0.0})
+		var node := Gfx.prop(CHEESE_MODEL, 1.2)
+		node.position = p - Vector3.UP * 0.35
+		add_child(node)
+		cheeses.append({"node": node, "pos": p, "cd": 0.0})
 
 
 func _update_cheese(delta: float) -> void:
 	for c in cheeses:
-		var node: MeshInstance3D = c["node"]
+		var node: Node3D = c["node"]
 		node.rotate_y(delta * 2.0)
 		if c["cd"] > 0.0:
 			c["cd"] -= delta
@@ -637,25 +628,27 @@ func kart_in_sight(k: Node3D) -> bool:
 
 
 func _spawn_hazard(type: String, pos: Vector3, v: Vector3, life: float, owner_kart: Node3D) -> void:
-	var mi := MeshInstance3D.new()
-	var mat := StandardMaterial3D.new()
+	var mi: Node3D
 	if type == "casca":
-		var m := SphereMesh.new()
-		m.radius = 0.55
-		m.height = 0.5
-		mi.mesh = m
-		mat.albedo_color = Color(1.0, 0.88, 0.15)
-		pos.y = 0.25
+		# RF-172: banana do Food Kit (Kenney), deitada no chão
+		mi = Gfx.prop(BANANA_MODEL, 1.5)
+		mi.rotation.y = randf() * TAU
+		pos.y = 0.0
 	else:
+		var bomb := MeshInstance3D.new()
+		var mat := StandardMaterial3D.new()
 		var m := SphereMesh.new()
 		m.radius = 0.5
 		m.height = 1.0
-		mi.mesh = m
+		bomb.mesh = m
 		mat.albedo_color = Color(0.08, 0.08, 0.08)
+		mat.metallic = 0.4
+		mat.roughness = 0.3
 		mat.emission_enabled = true
 		mat.emission = Color(1.0, 0.15, 0.05)
 		mat.emission_energy_multiplier = 0.8
-	mi.material_override = mat
+		bomb.material_override = mat
+		mi = bomb
 	mi.position = pos
 	add_child(mi)
 	mi.reset_physics_interpolation()
@@ -746,7 +739,7 @@ func _update_cameras(delta: float, snap: bool) -> void:
 		var cam: Camera3D = cameras[i]
 		var p: Node3D = players[i]
 		var f: Vector3 = p.forward()
-		var desired: Vector3 = p.position - f * 7.5 + Vector3.UP * 3.3
+		var desired: Vector3 = p.position - f * 8.0 + Vector3.UP * 4.1
 		# outro kart colado na câmera: sobe um pouco pra ele não tapar a visão
 		var near := 99.0
 		for o in karts:
@@ -758,7 +751,7 @@ func _update_cameras(delta: float, snap: bool) -> void:
 			cam.position = desired
 		else:
 			cam.position = cam.position.lerp(desired, 1.0 - exp(-8.0 * delta))
-		cam.look_at(p.position + f * 5.0 + Vector3.UP * 1.2)
+		cam.look_at(p.position + f * 9.0 + Vector3.UP * 1.0)
 		var target_fov := 82.0 if p.boost_time > 0.0 else 72.0
 		cam.fov = lerpf(cam.fov, target_fov, 1.0 - exp(-5.0 * delta))
 		# RF-166: tremida (h/v_offset não atrapalha a suavização da posição)

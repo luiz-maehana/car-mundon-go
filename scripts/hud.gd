@@ -9,6 +9,7 @@ const KartScript = preload("res://scripts/kart.gd")
 const ROLL_ORDER := ["turbo", "casca", "bomba"]
 const SpeedLinesShader = preload("res://shaders/speed_lines.gdshader")
 const Chars = preload("res://scripts/characters.gd")
+const GameScript = preload("res://scripts/game.gd")
 const ITEM_NAMES := {"turbo": "TURBO", "casca": "CASCA", "bomba": "BOMBA"}
 const ITEM_COLORS := {"turbo": Color(1.0, 0.55, 0.1), "casca": Color(1.0, 0.88, 0.15), "bomba": Color(0.9, 0.2, 0.15)}
 const FINISH_TEXT_TIME := 2.5
@@ -54,6 +55,9 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 	root = Control.new()
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.scale = Vector2(s, s)
+	var game := get_node_or_null("/root/Game")
+	if game and game.theme:
+		root.theme = game.theme  # SubViewport não herda o tema da janela
 	add_child(root)
 	_fit()
 	if kart == null:
@@ -461,6 +465,7 @@ func show_results() -> void:
 	outer.add_child(buttons)
 	var again := Button.new()
 	again.text = "Correr de novo (R)"
+	GameScript.make_primary(again)
 	again.add_theme_font_size_override("font_size", 22)
 	again.pressed.connect(race.restart)
 	buttons.add_child(again)

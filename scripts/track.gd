@@ -4,6 +4,7 @@ extends Node3D
 ## Tudo (grama, muro, progresso, IA) é resolvido pela distância lateral à linha central.
 
 const Gfx = preload("res://scripts/gfx.gd")
+const RACING := "res://assets/kenney/racing/"
 
 const ROAD_HALF := 8.0
 const CURB := 1.2
@@ -347,41 +348,75 @@ func _build_ground() -> void:
 	add_child(mi)
 
 
+## RF-173: pórtico de largada com semáforo (Racing Kit) e o nome do jogo.
 func _build_arch() -> void:
-	var arch := Node3D.new()
-	arch.position = points[0]
-	arch.rotation.y = heading_at(0)
-	add_child(arch)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.95, 0.75, 0.1)
-	for side in [-1.0, 1.0]:
-		var post := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = Vector3(0.8, 7.0, 0.8)
-		post.mesh = bm
-		post.material_override = mat
-		post.position = Vector3(side * (ROAD_HALF + 2.5), 3.5, 0)
-		arch.add_child(post)
-	var bar := MeshInstance3D.new()
-	var bb := BoxMesh.new()
-	bb.size = Vector3((ROAD_HALF + 2.5) * 2.0 + 0.8, 1.8, 0.6)
-	bar.mesh = bb
-	var bar_mat := StandardMaterial3D.new()
-	bar_mat.albedo_color = Color(0.1, 0.1, 0.15)
-	bar.material_override = bar_mat
-	bar.position = Vector3(0, 7.0, 0)
-	arch.add_child(bar)
+	var gantry := Gfx.prop(RACING + "overheadLights.glb", (ROAD_HALF + 3.0) * 2.0)
+	gantry.name = "StartGantry"
+	gantry.position = points[0]
+	gantry.basis = Basis(Vector3.UP, heading_at(0))
+	add_child(gantry)
+	var box := Gfx.aabb_of(gantry)
 	for side in [1.0, -1.0]:
 		var lbl := Label3D.new()
 		lbl.text = "CAR'MUNDON'GO!"
-		lbl.font_size = 96
-		lbl.pixel_size = 0.012
-		lbl.outline_size = 16
+		lbl.font_size = 110
+		lbl.pixel_size = 0.014
+		lbl.outline_size = 18
 		lbl.modulate = Color(1.0, 0.85, 0.2)
-		lbl.position = Vector3(0, 7.0, side * 0.32)
+		lbl.position = Vector3(0, box.size.y + 1.2, 0)
 		if side < 0:
 			lbl.rotation.y = PI
-		arch.add_child(lbl)
+		gantry.add_child(lbl)
+
+
+## RF-173: boxes, tendas, torres de faixa e outdoors do Racing Kit perto da largada.
+func _racing_props() -> void:
+	var n := points.size()
+	# lado oposto ao da arquibancada
+	var side := -1.0 if _clear_of_track(points[0] + rights[0] * (WALL + 20.0), 6.0) else 1.0
+	var placed := 0
+	var spots := [
+		[-14, "pitsGarage.glb", 13.0], [-7, "pitsGarage.glb", 13.0], [0, "pitsOffice.glb", 13.0],
+		[7, "tentLong.glb", 12.0], [14, "tent.glb", 9.0],
+	]
+	for sp in spots:
+		var i := wrapi(int(sp[0]), 0, n)
+		var pos: Vector3 = points[i] + rights[i] * side * (WALL + 11.0)
+		if not _clear_of_track(pos, 7.0):
+			continue
+		var p := Gfx.prop(RACING + String(sp[1]), float(sp[2]))
+		p.position = pos
+		p.basis = Basis.looking_at(rights[i] * side)  # frente (+Z) virada pra pista
+		add_child(p)
+		placed += 1
+	# torres de faixa nas pontas da reta
+	for k in [-22, 22]:
+		for s in [-1.0, 1.0]:
+			var i := wrapi(k, 0, n)
+			var pos: Vector3 = points[i] + rights[i] * s * (WALL + 3.5)
+			if not _clear_of_track(pos, 2.0):
+				continue
+			var t := Gfx.prop(RACING + ("bannerTowerRed.glb" if s > 0 else "bannerTowerGreen.glb"), 9.0, true)
+			t.position = pos
+			t.basis = Basis(Vector3.UP, heading_at(i))
+			add_child(t)
+			placed += 1
+	# outdoors espalhados pela pista, virados pra ela
+	for f in [0.22, 0.42, 0.62, 0.84]:
+		var i := int(n * f)
+		var s := 1.0 if (int(f * 100) / 2) % 2 == 0 else -1.0
+		var pos: Vector3 = points[i] + rights[i] * s * (WALL + 7.0)
+		if not _clear_of_track(pos, 4.0):
+			s = -s
+			pos = points[i] + rights[i] * s * (WALL + 7.0)
+			if not _clear_of_track(pos, 4.0):
+				continue
+		var b := Gfx.prop(RACING + "billboard.glb", 9.0)
+		b.position = pos
+		b.basis = Basis.looking_at(rights[i] * s)
+		add_child(b)
+		placed += 1
+	scenery_count += placed
 
 
 func _build_trees() -> void:
@@ -455,18 +490,39 @@ func _build_trees() -> void:
 			_multimesh(bulb, xforms, Vector3(0, 6.2, 0))
 			_multimesh(halo, xforms, Vector3(0, 6.2, 0))
 		_:
-			var trunk := CylinderMesh.new()
-			trunk.top_radius = 0.35
-			trunk.bottom_radius = 0.45
-			trunk.height = 2.0
-			trunk.material = _deco_mat(Color(0.4, 0.25, 0.12))
-			var leaves := CylinderMesh.new()
-			leaves.top_radius = 0.0
-			leaves.bottom_radius = 2.4
-			leaves.height = 5.0
-			leaves.material = _deco_mat(deco_color)
-			_multimesh(trunk, xforms, Vector3(0, 1.0, 0))
-			_multimesh(leaves, xforms, Vector3(0, 4.3, 0))
+			# RF-173: árvores do Racing Kit (Kenney), metade grandes, metade pequenas
+			var big: Array[Transform3D] = []
+			var small: Array[Transform3D] = []
+			for i in xforms.size():
+				var x := xforms[i]
+				var t := Transform3D(x.basis.scaled(Vector3.ONE * 9.0), x.origin)
+				(big if i % 2 == 0 else small).append(t)
+			_multimesh_scene(RACING + "treeLarge.glb", big)
+			_multimesh_scene(RACING + "treeSmall.glb", small)
+
+
+## MultiMesh a partir das malhas de um modelo (.glb), uma MultiMesh por malha.
+func _multimesh_scene(path: String, xforms: Array[Transform3D]) -> void:
+	if xforms.is_empty():
+		return
+	var inst: Node3D = (load(path) as PackedScene).instantiate()
+	for c in inst.find_children("*", "MeshInstance3D", true, false):
+		var mi := c as MeshInstance3D
+		var local := Gfx._rel_transform(inst, mi)
+		var offs: Array[Transform3D] = []
+		for x in xforms:
+			offs.append(x * local)
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = mi.mesh
+		mm.instance_count = offs.size()
+		for i in offs.size():
+			mm.set_instance_transform(i, offs[i])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		add_child(mmi)
+		scenery_count += offs.size()
+	inst.free()
 
 
 func _deco_mat(c: Color) -> StandardMaterial3D:
@@ -537,6 +593,7 @@ var scenery_count := 0
 
 func _build_scenery() -> void:
 	_grandstand()
+	_racing_props()
 	_flags()
 	_tire_stacks()
 	_scatter()

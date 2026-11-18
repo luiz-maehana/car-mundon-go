@@ -19,6 +19,7 @@ var music: AudioStreamPlayer
 
 func _ready() -> void:
 	setup_inputs()
+	_setup_ui()
 	# RF-82: música contínua entre menu e corrida
 	music = AudioStreamPlayer.new()
 	music.stream = Sfx.get_sound("music")
@@ -93,3 +94,68 @@ static func setup_inputs() -> void:
 					e.axis_value = j[1]
 					e.device = p
 					InputMap.action_add_event(act, e)
+
+
+# ---------------------------------------------------------------- tema da interface (RF-174)
+
+const UI := "res://assets/kenney/ui/"
+const FONT_PATH := "res://assets/kenney/fonts/Kenney Future Narrow.ttf"
+
+var theme: Theme
+var click: AudioStreamPlayer
+
+
+static func tex_box(file: String) -> StyleBoxTexture:
+	var s := StyleBoxTexture.new()
+	s.texture = load(UI + file)
+	s.texture_margin_left = 18
+	s.texture_margin_right = 18
+	s.texture_margin_top = 16
+	s.texture_margin_bottom = 22
+	s.content_margin_left = 18
+	s.content_margin_right = 18
+	s.content_margin_top = 8
+	s.content_margin_bottom = 14
+	return s
+
+
+static func build_theme() -> Theme:
+	var t := Theme.new()
+	t.default_font = load(FONT_PATH)
+	t.default_font_size = 22
+	t.set_stylebox("normal", "Button", tex_box("button_grey.png"))
+	t.set_stylebox("hover", "Button", tex_box("button_grey_hover.png"))
+	t.set_stylebox("pressed", "Button", tex_box("button_grey_pressed.png"))
+	t.set_stylebox("focus", "Button", tex_box("button_yellow_hover.png"))
+	t.set_stylebox("disabled", "Button", tex_box("button_grey_pressed.png"))
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		t.set_color(c, "Button", Color(0.16, 0.17, 0.22))
+	return t
+
+
+## Botão de ação principal (amarelo do UI Pack).
+static func make_primary(b: Button) -> void:
+	b.add_theme_stylebox_override("normal", tex_box("button_yellow.png"))
+	b.add_theme_stylebox_override("hover", tex_box("button_yellow_hover.png"))
+	b.add_theme_stylebox_override("pressed", tex_box("button_yellow_pressed.png"))
+	b.add_theme_stylebox_override("focus", tex_box("button_yellow_hover.png"))
+
+
+func _setup_ui() -> void:
+	theme = build_theme()
+	get_tree().root.theme = theme
+	click = AudioStreamPlayer.new()
+	click.stream = load(UI + "sounds/click-a.ogg")
+	click.volume_db = -6.0
+	add_child(click)
+	get_tree().node_added.connect(_on_node_added)
+
+
+func _on_node_added(n: Node) -> void:
+	if n is BaseButton and not n.pressed.is_connected(_play_click):
+		n.pressed.connect(_play_click)
+
+
+func _play_click() -> void:
+	if click:
+		click.play()

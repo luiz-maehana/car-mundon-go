@@ -337,3 +337,65 @@ static func particles(kind: String, tint := Color.WHITE) -> CPUParticles3D:
 			p.color_initial_ramp = g
 	p.amount = maxi(4, int(amount * particle_scale()))
 	return p
+
+
+# ---------------------------------------------------------------- modelos do Kenney (v0.10)
+
+static func aabb_of(n: Node3D) -> AABB:
+	var box := AABB()
+	var first := true
+	var inv := n.global_transform.affine_inverse() if n.is_inside_tree() else Transform3D()
+	for c in n.find_children("*", "MeshInstance3D", true, false):
+		var mi := c as MeshInstance3D
+		var t := _rel_transform(n, mi)
+		var b: AABB = t * mi.get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	return box
+
+
+static func _rel_transform(root: Node3D, n: Node3D) -> Transform3D:
+	var t := Transform3D()
+	var cur: Node = n
+	while cur != null and cur != root:
+		if cur is Node3D:
+			t = (cur as Node3D).transform * t
+		cur = cur.get_parent()
+	return t
+
+
+## Instancia um modelo e escala pra que a maior dimensão (ou a altura, se by_height)
+## fique com `size` metros; a base fica em y = 0 e o centro em x/z = 0.
+static func prop(path: String, size: float, by_height := false) -> Node3D:
+	var scene: PackedScene = load(path)
+	var inner: Node3D = scene.instantiate()
+	rebrand(inner)
+	var holder := Node3D.new()
+	holder.name = path.get_file().get_basename()
+	holder.add_child(inner)
+	var box := aabb_of(holder)
+	var dim := box.size.y if by_height else maxf(box.size.x, maxf(box.size.y, box.size.z))
+	var s := size / maxf(dim, 0.001)
+	inner.scale = Vector3.ONE * s
+	var c := box.get_center()
+	inner.position = Vector3(-c.x * s, -box.position.y * s, -c.z * s)
+	return holder
+
+
+## RF-175: a marca fictícia do Racing Kit ("TANKCO") vira ZAWSZE, a marca do jogo.
+const BRAND_TEX := "res://assets/brand/zawsze_banner.png"
+
+
+static func rebrand(n: Node) -> int:
+	var changed := 0
+	for c in n.find_children("*", "MeshInstance3D", true, false):
+		var mi := c as MeshInstance3D
+		for s in mi.mesh.get_surface_count():
+			var m := mi.mesh.surface_get_material(s)
+			if m is BaseMaterial3D and m.resource_name.to_lower().contains("tankco"):
+				var nm := (m as BaseMaterial3D).duplicate() as BaseMaterial3D
+				nm.albedo_texture = load(BRAND_TEX)
+				nm.resource_name = "zawsze"
+				mi.set_surface_override_material(s, nm)
+				changed += 1
+	return changed
