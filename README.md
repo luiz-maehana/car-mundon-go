@@ -28,7 +28,7 @@ godot --path . --script tools/screenshot.gd -- <pasta_saida>
 ## Personalizar
 - Stats/cores dos pilotos: `scripts/characters.gd`
 - Arte dos pilotos: coloque as ilustrações (fundo liso) numa pasta e rode `godot --headless --path . --script tools/process_characters.gd -- <pasta>`; gera `assets/chars/`
-- Traçado da pista: `CONTROL_POINTS` em `scripts/track.gd` (o teste CA-02 avisa se trechos se sobrepuserem)
+- Pistas: `TRACKS` em `scripts/track.gd` (pontos + tema). O teste CA-02 avisa se trechos se sobrepuserem.
 
 ## Multiplayer local
 No menu, `JOGADORES: N` (1–4). Cada jogador confirma o seu piloto em sequência (Backspace desfaz).

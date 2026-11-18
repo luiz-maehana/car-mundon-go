@@ -1,5 +1,5 @@
 extends Node3D
-## Pista procedural "Circuito Queijo Suíço".
+## Pista procedural. As pistas são dados (TRACKS, RF-120): nome, pontos de controle e tema.
 ## Linha central = spline Catmull-Rom fechada, reamostrada a cada SPACING metros.
 ## Tudo (grama, muro, progresso, IA) é resolvido pela distância lateral à linha central.
 
@@ -12,13 +12,58 @@ const WALL_T := 0.8
 const SPACING := 2.0
 const ITEM_ROWS := [0.18, 0.47, 0.76]
 
-const CONTROL_POINTS := [
-	Vector2(-120, 80), Vector2(0, 92), Vector2(110, 80), Vector2(165, 30),
-	Vector2(140, -30), Vector2(70, -45), Vector2(35, -95), Vector2(65, -150),
-	Vector2(140, -160), Vector2(175, -215), Vector2(110, -265), Vector2(-20, -255),
-	Vector2(-100, -205), Vector2(-70, -130), Vector2(-140, -75), Vector2(-170, 10),
+## RF-121. deco: "pine" | "cactus" | "lamp". sun = [energia, pitch em graus, cor].
+const TRACKS := [
+	{
+		"id": "queijo", "name": "Circuito Queijo Suíço",
+		"points": [
+			Vector2(-120, 80), Vector2(0, 92), Vector2(110, 80), Vector2(165, 30),
+			Vector2(140, -30), Vector2(70, -45), Vector2(35, -95), Vector2(65, -150),
+			Vector2(140, -160), Vector2(175, -215), Vector2(110, -265), Vector2(-20, -255),
+			Vector2(-100, -205), Vector2(-70, -130), Vector2(-140, -75), Vector2(-170, 10),
+		],
+		"ground": Color(0.22, 0.42, 0.16), "offroad": Color(0.42, 0.55, 0.22),
+		"road": [Color(0.2, 0.2, 0.22), Color(0.23, 0.23, 0.25)],
+		"curb": [Color(0.85, 0.1, 0.1), Color(0.95, 0.95, 0.95)],
+		"wall": [Color(0.15, 0.35, 0.9), Color(0.95, 0.95, 0.95)],
+		"sky_top": Color(0.25, 0.5, 0.9), "sky_horizon": Color(0.7, 0.82, 0.95),
+		"ambient": Color(0.62, 0.64, 0.7), "sun": [1.1, -55.0, Color(1, 1, 1)],
+		"deco": "pine", "deco_color": Color(0.13, 0.42, 0.18),
+	},
+	{
+		"id": "deserto", "name": "Deserto do Parmesão",
+		"points": [
+			Vector2(-180, 0), Vector2(-150, -90), Vector2(-60, -130), Vector2(40, -110),
+			Vector2(90, -150), Vector2(170, -120), Vector2(190, -30), Vector2(140, 40),
+			Vector2(170, 110), Vector2(100, 160), Vector2(0, 130), Vector2(-80, 170),
+			Vector2(-160, 120),
+		],
+		"ground": Color(0.62, 0.45, 0.27), "offroad": Color(0.55, 0.4, 0.25),
+		"road": [Color(0.32, 0.27, 0.24), Color(0.35, 0.3, 0.26)],
+		"curb": [Color(0.95, 0.55, 0.1), Color(1.0, 0.95, 0.8)],
+		"wall": [Color(0.9, 0.45, 0.15), Color(1.0, 0.92, 0.75)],
+		"sky_top": Color(0.35, 0.45, 0.8), "sky_horizon": Color(1.0, 0.7, 0.45),
+		"ambient": Color(0.75, 0.62, 0.55), "sun": [1.25, -25.0, Color(1.0, 0.85, 0.65)],
+		"deco": "cactus", "deco_color": Color(0.3, 0.55, 0.25),
+	},
+	{
+		"id": "cozinha", "name": "Cozinha à Meia-Noite",
+		"points": [
+			Vector2(-150, 60), Vector2(-40, 70), Vector2(30, 20), Vector2(110, 60),
+			Vector2(170, 10), Vector2(150, -70), Vector2(60, -90), Vector2(0, -50),
+			Vector2(-60, -100), Vector2(-150, -90), Vector2(-190, -20),
+		],
+		"ground": Color(0.12, 0.1, 0.16), "offroad": Color(0.22, 0.18, 0.28),
+		"road": [Color(0.16, 0.16, 0.2), Color(0.19, 0.19, 0.24)],
+		"curb": [Color(0.1, 0.85, 0.9), Color(0.9, 0.2, 0.8)],
+		"wall": [Color(0.55, 0.2, 0.85), Color(0.1, 0.8, 0.9)],
+		"sky_top": Color(0.02, 0.02, 0.08), "sky_horizon": Color(0.18, 0.1, 0.3),
+		"ambient": Color(0.45, 0.45, 0.65), "sun": [0.45, -60.0, Color(0.6, 0.7, 1.0)],
+		"deco": "lamp", "deco_color": Color(1.0, 0.85, 0.4),
+	},
 ]
 
+var def: Dictionary
 var points := PackedVector3Array()
 var tangents := PackedVector3Array()
 var rights := PackedVector3Array()
@@ -27,8 +72,16 @@ var bounds_min := Vector2.ZERO
 var bounds_max := Vector2.ZERO
 
 
-func _init() -> void:
+func _init(track_id := "queijo") -> void:
+	def = find(track_id)
 	_build_path()
+
+
+static func find(track_id: String) -> Dictionary:
+	for t in TRACKS:
+		if t["id"] == track_id:
+			return t
+	return TRACKS[0]
 
 
 func _ready() -> void:
@@ -94,7 +147,7 @@ func _cr(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector
 
 
 func _build_path() -> void:
-	var cps: Array = CONTROL_POINTS
+	var cps: Array = def["points"]
 	var m := cps.size()
 	var dense: Array[Vector3] = []
 	for i in m:
@@ -138,15 +191,15 @@ func _build_visuals() -> void:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var n := points.size()
 	for i in n:
-		var road_c := Color(0.2, 0.2, 0.22) if (i / 4) % 2 == 0 else Color(0.23, 0.23, 0.25)
+		var road_c: Color = def["road"][(i / 4) % 2]
 		_strip(st, i, -ROAD_HALF, ROAD_HALF, 0.03, 0.03, road_c)
-		var curb_c := Color(0.85, 0.1, 0.1) if (i / 2) % 2 == 0 else Color(0.95, 0.95, 0.95)
+		var curb_c: Color = def["curb"][(i / 2) % 2]
 		_strip(st, i, ROAD_HALF, ROAD_HALF + CURB, 0.04, 0.04, curb_c)
 		_strip(st, i, -ROAD_HALF - CURB, -ROAD_HALF, 0.04, 0.04, curb_c)
-		var off_c := Color(0.42, 0.55, 0.22)
+		var off_c: Color = def["offroad"]
 		_strip(st, i, ROAD_HALF + CURB, WALL, 0.02, 0.02, off_c)
 		_strip(st, i, -WALL, -ROAD_HALF - CURB, 0.02, 0.02, off_c)
-		var wall_c := Color(0.15, 0.35, 0.9) if (i / 3) % 2 == 0 else Color(0.95, 0.95, 0.95)
+		var wall_c: Color = def["wall"][(i / 3) % 2]
 		# muro direito: face interna, topo, face externa
 		_strip(st, i, WALL, WALL, 0.0, WALL_H, wall_c)
 		_strip(st, i, WALL, WALL + WALL_T, WALL_H, WALL_H, wall_c)
@@ -214,7 +267,7 @@ func _build_ground() -> void:
 	var plane := PlaneMesh.new()
 	plane.size = size
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.22, 0.42, 0.16)
+	mat.albedo_color = def["ground"]
 	mat.roughness = 1.0
 	var mi := MeshInstance3D.new()
 	mi.mesh = plane
@@ -273,22 +326,82 @@ func _build_trees() -> void:
 			continue
 		var s := rng.randf_range(0.8, 1.6)
 		xforms.append(Transform3D(Basis().scaled(Vector3(s, s, s)), p))
-	var trunk := CylinderMesh.new()
-	trunk.top_radius = 0.35
-	trunk.bottom_radius = 0.45
-	trunk.height = 2.0
-	var trunk_mat := StandardMaterial3D.new()
-	trunk_mat.albedo_color = Color(0.4, 0.25, 0.12)
-	trunk.material = trunk_mat
-	var leaves := CylinderMesh.new()
-	leaves.top_radius = 0.0
-	leaves.bottom_radius = 2.4
-	leaves.height = 5.0
-	var leaves_mat := StandardMaterial3D.new()
-	leaves_mat.albedo_color = Color(0.13, 0.42, 0.18)
-	leaves.material = leaves_mat
-	_multimesh(trunk, xforms, Vector3(0, 1.0, 0))
-	_multimesh(leaves, xforms, Vector3(0, 4.3, 0))
+	var deco_color: Color = def["deco_color"]
+	match def["deco"]:
+		"cactus":
+			var body := CylinderMesh.new()
+			body.top_radius = 0.5
+			body.bottom_radius = 0.55
+			body.height = 4.5
+			body.material = _deco_mat(deco_color)
+			var arm := CylinderMesh.new()
+			arm.top_radius = 0.32
+			arm.bottom_radius = 0.32
+			arm.height = 1.8
+			arm.material = body.material
+			_multimesh(body, xforms, Vector3(0, 2.25, 0))
+			_multimesh(arm, xforms, Vector3(0.75, 2.8, 0))
+			_multimesh(arm, xforms, Vector3(-0.7, 2.1, 0))
+		"lamp":
+			# postes em fila do lado de fora do muro, alternando os lados
+			xforms.clear()
+			for i in range(0, points.size(), 18):
+				var side := 1.0 if (i / 18) % 2 == 0 else -1.0
+				xforms.append(Transform3D(Basis(), points[i] + rights[i] * side * (WALL + 2.0)))
+			var post := CylinderMesh.new()
+			post.top_radius = 0.12
+			post.bottom_radius = 0.18
+			post.height = 6.0
+			post.material = _deco_mat(Color(0.2, 0.2, 0.25))
+			var bulb := SphereMesh.new()
+			bulb.radius = 0.55
+			bulb.height = 1.1
+			var bulb_mat := StandardMaterial3D.new()
+			bulb_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			bulb_mat.albedo_color = deco_color
+			bulb.material = bulb_mat
+			var halo := QuadMesh.new()
+			halo.size = Vector2(4.0, 4.0)
+			var halo_mat := StandardMaterial3D.new()
+			halo_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			halo_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			halo_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			halo_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+			halo_mat.albedo_color = Color(deco_color.r, deco_color.g, deco_color.b, 0.5)
+			var grad := Gradient.new()
+			grad.set_color(0, Color(1, 1, 1, 1))
+			grad.set_color(1, Color(1, 1, 1, 0))
+			var glow := GradientTexture2D.new()
+			glow.gradient = grad
+			glow.fill = GradientTexture2D.FILL_RADIAL
+			glow.fill_from = Vector2(0.5, 0.5)
+			glow.fill_to = Vector2(0.5, 0.0)
+			glow.width = 64
+			glow.height = 64
+			halo_mat.albedo_texture = glow
+			halo.material = halo_mat
+			_multimesh(post, xforms, Vector3(0, 3.0, 0))
+			_multimesh(bulb, xforms, Vector3(0, 6.2, 0))
+			_multimesh(halo, xforms, Vector3(0, 6.2, 0))
+		_:
+			var trunk := CylinderMesh.new()
+			trunk.top_radius = 0.35
+			trunk.bottom_radius = 0.45
+			trunk.height = 2.0
+			trunk.material = _deco_mat(Color(0.4, 0.25, 0.12))
+			var leaves := CylinderMesh.new()
+			leaves.top_radius = 0.0
+			leaves.bottom_radius = 2.4
+			leaves.height = 5.0
+			leaves.material = _deco_mat(deco_color)
+			_multimesh(trunk, xforms, Vector3(0, 1.0, 0))
+			_multimesh(leaves, xforms, Vector3(0, 4.3, 0))
+
+
+func _deco_mat(c: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = c
+	return m
 
 
 func _multimesh(mesh: Mesh, xforms: Array[Transform3D], offset: Vector3) -> void:

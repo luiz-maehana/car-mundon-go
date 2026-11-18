@@ -21,6 +21,7 @@ var engines_enabled := DisplayServer.get_name() != "headless"
 var autopilot_player := false
 var player_chars: Array = ["fejaum"]  # um por jogador humano (1..4)
 var laps := 3
+var track_id := "queijo"
 
 var track: Node3D
 var karts: Array = []
@@ -55,11 +56,12 @@ func _ready() -> void:
 	if use_game_settings and game:
 		player_chars = game.selected_chars.slice(0, game.num_players)
 		laps = game.laps
+		track_id = game.track_id
 	if player_chars.is_empty():
 		player_chars = ["fejaum"]
 	rng.randomize()
+	track = TrackScript.new(track_id)
 	_build_environment()
-	track = TrackScript.new()
 	add_child(track)
 	_spawn_karts()
 	_spawn_boxes()
@@ -328,13 +330,15 @@ func _build_environment() -> void:
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.25, 0.5, 0.9)
-	sky_mat.sky_horizon_color = Color(0.7, 0.82, 0.95)
-	sky_mat.ground_horizon_color = Color(0.5, 0.6, 0.45)
+	var d: Dictionary = track.def
+	sky_mat.sky_top_color = d["sky_top"]
+	sky_mat.sky_horizon_color = d["sky_horizon"]
+	sky_mat.ground_horizon_color = (d["ground"] as Color).lerp(d["sky_horizon"], 0.4)
+	sky_mat.ground_bottom_color = d["ground"]
 	sky.sky_material = sky_mat
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.62, 0.64, 0.7)
+	env.ambient_light_color = d["ambient"]
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	env.ambient_light_energy = 0.55
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
@@ -342,8 +346,9 @@ func _build_environment() -> void:
 	we.environment = env
 	add_child(we)
 	var sun := DirectionalLight3D.new()
-	sun.rotation = Vector3(deg_to_rad(-55), deg_to_rad(-35), 0)
-	sun.light_energy = 1.1
+	sun.rotation = Vector3(deg_to_rad(d["sun"][1]), deg_to_rad(-35), 0)
+	sun.light_color = d["sun"][2]
+	sun.light_energy = d["sun"][0]
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 120.0
 	add_child(sun)

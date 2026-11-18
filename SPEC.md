@@ -125,6 +125,14 @@ Conversão de stat para física (em `kart.gd`):
 - [x] **RF-112** O minimapa mostra o busto de cada piloto no lugar do pontinho (o jogador com borda branca, por cima dos outros).
 - [x] **RF-113** O HUD tem a lista de posições ao vivo (busto + nome, 1º a 8º) na lateral esquerda; a linha do jogador fica destacada.
 
+### Mais pistas (v0.7)
+- [x] **RF-120** Pistas são dados (`TRACKS` em `track.gd`): nome, pontos de controle e tema (céu, chão, grama, muros, sol, decoração).
+- [x] **RF-121** Três pistas:
+  - **Circuito Queijo Suíço** — dia, gramado com pinheiros (a original).
+  - **Deserto do Parmesão** — fim de tarde, areia, muros laranja/creme, cactos.
+  - **Cozinha à Meia-Noite** — noite, piso escuro, muros roxo/ciano, postes com luz.
+- [x] **RF-122** O menu tem o botão `PISTA: <nome>` que alterna entre as pistas; a escolha fica salva no `Game` entre corridas.
+
 ## 5. Controles
 
 | Ação | Jogador 1 (teclado) | Jogador 2 (teclado) | Controle (J1..J4 = controle 1..4) |
@@ -182,6 +190,7 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-12** Com a corrida pausada, `step()` não avança tempo nem karts.
 - [x] **CA-13** A tela de abertura carrega a arte, é a cena principal do projeto e um aperto de tecla leva pro menu.
 - [x] **CA-14** Nenhum kart tem a arte do rosto como malha; o minimapa desenha 8 bustos e o HUD lista os 8 pilotos na ordem do ranking.
+- [x] **CA-15** As 3 pistas passam no CA-02 (fechadas, uniformes, sem sobreposição) e uma corrida de 1 volta só com IA termina em cada uma.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
@@ -192,7 +201,7 @@ Teste manual (checklist por release):
 1. **Rostos/modelos dos amigos** — fotos já suportadas em `assets/faces/`; depois modelos low-poly.
 2. ~~**Multiplayer local** em tela dividida (2–4 jogadores).~~ → §4 RF-60..67.
 3. ~~**Áudio**~~ → §4 RF-80..83.
-4. **Mais pistas** com elevação, rampas e atalhos; modo Grand Prix (4 pistas, pontos).
+4. ~~**Mais pistas**~~ → §4 RF-120..122. Falta: elevação, rampas, atalhos e modo Grand Prix (pontos somados nas 3 pistas).
 5. **Mais itens** (escudo, raio, item "assinatura" por piloto).
 6. ~~**Largada turbo**~~ → §4 RF-85..87.
 7. **Export web** (GitHub Pages) pra turma jogar no navegador.

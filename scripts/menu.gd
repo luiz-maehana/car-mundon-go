@@ -5,6 +5,7 @@ extends Control
 const Chars = preload("res://scripts/characters.gd")
 const STATS := [["speed", "VEL"], ["accel", "ACE"], ["handling", "CTR"], ["weight", "PES"]]
 const LAP_OPTIONS := [1, 2, 3, 5]
+const TrackScript = preload("res://scripts/track.gd")
 const PLAYER_COLORS := [Color(1.0, 0.85, 0.2), Color(0.3, 0.8, 1.0), Color(0.4, 1.0, 0.4), Color(1.0, 0.45, 0.8)]
 
 var selected := 0
@@ -14,6 +15,8 @@ var picks: Array = []  # índices de Chars.LIST já confirmados (J1, J2, ...)
 var card_styles: Array = []
 var card_tags: Array = []
 var laps_btn: Button
+var track_btn: Button
+var track_i := 0
 var players_btn: Button
 var go_btn: Button
 var sub: Label
@@ -25,6 +28,9 @@ func _ready() -> void:
 		num_players = game.num_players
 		selected = Chars.index_of(game.selected_chars[0] if game.selected_chars.size() > 0 else "fejaum")
 		laps_i = maxi(0, LAP_OPTIONS.find(game.laps))
+		for ti in TrackScript.TRACKS.size():
+			if TrackScript.TRACKS[ti]["id"] == game.track_id:
+				track_i = ti
 	_build()
 	_refresh()
 
@@ -61,17 +67,23 @@ func _build() -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 20)
 	vb.add_child(row)
-	players_btn = _button("", 26)
+	players_btn = _button("", 22)
 	players_btn.pressed.connect(func():
 		num_players = num_players % 4 + 1
 		picks.clear()
 		_refresh())
 	row.add_child(players_btn)
-	laps_btn = _button("", 26)
+	laps_btn = _button("", 22)
 	laps_btn.pressed.connect(func():
 		laps_i = (laps_i + 1) % LAP_OPTIONS.size()
 		_refresh())
 	row.add_child(laps_btn)
+	track_btn = _button("", 22)  # RF-122
+	track_btn.custom_minimum_size = Vector2(380, 64)
+	track_btn.pressed.connect(func():
+		track_i = (track_i + 1) % TrackScript.TRACKS.size()
+		_refresh())
+	row.add_child(track_btn)
 	go_btn = _button("", 30)
 	go_btn.custom_minimum_size = Vector2(280, 64)
 	go_btn.pressed.connect(_confirm)
@@ -199,6 +211,7 @@ func _refresh() -> void:
 		sub.add_theme_color_override("font_color", PLAYER_COLORS[cur])
 	players_btn.text = "JOGADORES: %d" % num_players
 	laps_btn.text = "VOLTAS: %d" % LAP_OPTIONS[laps_i]
+	track_btn.text = "PISTA: %s" % TrackScript.TRACKS[track_i]["name"]
 	go_btn.text = "CORRER!" if cur == num_players - 1 else "CONFIRMAR J%d" % (cur + 1)
 
 
@@ -248,4 +261,5 @@ func _confirm() -> void:
 		game.num_players = num_players
 		game.selected_chars = picks.map(func(i): return Chars.LIST[i]["id"])
 		game.laps = LAP_OPTIONS[laps_i]
+		game.track_id = TrackScript.TRACKS[track_i]["id"]
 	get_tree().change_scene_to_file("res://scenes/race.tscn")

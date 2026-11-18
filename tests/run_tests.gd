@@ -29,6 +29,7 @@ func _run() -> void:
 	await _test_pause()
 	await _test_intro()
 	await _test_faces()
+	await _test_all_tracks()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -61,9 +62,16 @@ func _test_characters() -> void:
 
 
 func _test_track() -> void:
-	print("CA-02 pista")
 	var Track = load("res://scripts/track.gd")
-	var t = Track.new()
+	for td in Track.TRACKS:
+		_test_one_track(td["id"])
+
+
+func _test_one_track(track_id: String) -> void:
+	var Track = load("res://scripts/track.gd")
+	var t = Track.new(track_id)
+	print("CA-02 pista: %s" % t.def["name"])
+	check(t.def["id"] == track_id, "pista '%s' encontrada" % track_id)
 	var n: int = t.sample_count()
 	check(t.length > 800.0, "comprimento %.0f m > 800" % t.length)
 	var min_s := INF
@@ -333,3 +341,29 @@ func _test_faces() -> void:
 	check(hud.minimap.heads_drawn == 8, "minimapa desenha 8 bustos (%d)" % hud.minimap.heads_drawn)
 	race.queue_free()
 	await process_frame
+
+
+func _test_all_tracks() -> void:
+	print("CA-15 corrida de 1 volta em cada pista")
+	var Track = load("res://scripts/track.gd")
+	for td in Track.TRACKS:
+		var race = load("res://scripts/race.gd").new()
+		race.use_game_settings = false
+		race.autopilot_player = true
+		race.player_chars = ["nanni"]
+		race.track_id = td["id"]
+		race.laps = 1
+		root.add_child(race)
+		if race.karts.is_empty():
+			await process_frame
+		var t := 0.0
+		while t < 150.0 and not race.all_finished():
+			race.step(1.0 / 60.0)
+			t += 1.0 / 60.0
+		var max_lat := 0.0
+		for k in race.karts:
+			max_lat = maxf(max_lat, k.max_abs_lateral)
+		check(race.track.def["id"] == td["id"] and race.all_finished(), "%s: 8 terminaram em %.1f s" % [td["name"], t])
+		check(max_lat <= Track.WALL + 0.5, "%s: ninguém atravessou o muro (%.2f)" % [td["name"], max_lat])
+		race.queue_free()
+		await process_frame

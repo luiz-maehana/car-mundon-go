@@ -10,6 +10,7 @@ const Sfx = preload("res://scripts/sfx.gd")
 var num_players := 1
 var selected_chars: Array = ["fejaum"]
 var laps := 3
+var track_id := "queijo"
 var muted := false
 var music: AudioStreamPlayer
 
