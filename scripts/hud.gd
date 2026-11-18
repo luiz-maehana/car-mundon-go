@@ -67,7 +67,7 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 		return
 	# RF-166: linhas de velocidade (atrás do resto do HUD)
 	speed_lines = ColorRect.new()
-	speed_lines.set_anchors_preset(Control.PRESET_FULL_RECT)
+	speed_lines.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	speed_lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var slm := ShaderMaterial.new()
 	slm.shader = SpeedLinesShader
@@ -180,7 +180,7 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 	drift_bar_bg.add_child(drift_bar)
 
 	lbl_center = _label(140)
-	lbl_center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	lbl_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	lbl_center.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl_center.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl_center.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
@@ -378,14 +378,23 @@ func update_hud(delta: float) -> void:
 	if p.slip_flash > 1.1 and msg_time < 0.5:
 		_flash("VÁCUO!", 0.9)
 
+	# RF-31: contagem no centro; cada número entra grande e encolhe, "VAI!" em verde
+	var pop := 0.0
+	var center_color := Color(1.0, 0.85, 0.2)
 	if race.state == "countdown":
 		lbl_center.text = str(int(ceil(race.countdown)))
+		pop = fmod(race.countdown, 1.0)
 	elif race.race_time < 0.8:
 		lbl_center.text = "VAI!"
+		pop = 1.0 - race.race_time / 0.8
+		center_color = Color(0.35, 1.0, 0.45)
 	elif p.finished and race.race_time - p.finish_time < FINISH_TEXT_TIME:
 		lbl_center.text = "CHEGOU! %dº" % p.rank
 	else:
 		lbl_center.text = ""
+	lbl_center.add_theme_color_override("font_color", center_color)
+	lbl_center.pivot_offset = lbl_center.size * 0.5
+	lbl_center.scale = Vector2.ONE * (1.0 + 0.6 * pop * pop)
 
 	if p.start_result != "" and not start_shown:
 		start_shown = true

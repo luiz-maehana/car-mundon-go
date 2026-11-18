@@ -159,10 +159,10 @@ func _build_pause() -> void:
 	add_child(pause_layer)
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.55)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	pause_layer.add_child(dim)
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	pause_layer.add_child(center)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 14)
@@ -231,14 +231,14 @@ func _build_views() -> void:
 	add_child(layer)
 	var bg := ColorRect.new()
 	bg.color = Color.BLACK
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(bg)
 	var grid := GridContainer.new()
 	grid.columns = 1 if n == 2 else 2
 	grid.add_theme_constant_override("h_separation", 4)
 	grid.add_theme_constant_override("v_separation", 4)
-	grid.set_anchors_preset(Control.PRESET_FULL_RECT)
+	grid.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(grid)
 	var ui_scale := 0.7 if n == 2 else 0.55

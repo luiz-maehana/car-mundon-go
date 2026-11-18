@@ -39,6 +39,7 @@ func _run() -> void:
 	await _test_graphics()
 	await _test_assets()
 	await _test_settings()
+	await _test_hud_layout()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -688,3 +689,19 @@ func _test_settings() -> void:
 	race.queue_free()
 	await process_frame
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(game.settings_path))
+
+
+## Regressão: com 1 jogador a contagem ficava num canto (label não esticava pra tela toda).
+func _test_hud_layout() -> void:
+	print("CA-34 contagem no centro da tela")
+	for chars in [["telles"], ["telles", "nanni"]]:
+		var race = await _new_race(chars, true)
+		for i in 3:
+			await process_frame
+		race.step(1.0 / 60.0)
+		var h = race.huds[0]
+		var c: Vector2 = h.lbl_center.position + h.lbl_center.size * 0.5
+		var mid: Vector2 = h.root.size * 0.5
+		check(h.lbl_center.text == "3" and c.distance_to(mid) < 2.0 and h.lbl_center.size.x >= h.root.size.x - 2.0, "%d jogador(es): '3' centralizado (%s vs %s)" % [chars.size(), c, mid])
+		race.queue_free()
+		await process_frame

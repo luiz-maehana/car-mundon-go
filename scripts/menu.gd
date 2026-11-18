@@ -46,7 +46,7 @@ func _ready() -> void:
 func _build() -> void:
 	var bg := ColorRect.new()
 	bg.color = Color(0.07, 0.08, 0.15)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	# RF-185: botão de configurações (canto superior direito)
 	gfx_btn = _button("CONFIGURAÇÕES", 18)
@@ -60,7 +60,7 @@ func _build() -> void:
 	gfx_btn.pressed.connect(open_settings)
 
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 14)
@@ -160,7 +160,7 @@ func _make_card(i: int) -> Button:
 			_refresh())
 
 	var hbox := HBoxContainer.new()
-	hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hbox.offset_left = 12
 	hbox.offset_top = 8
 	hbox.offset_right = -10

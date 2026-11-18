@@ -70,7 +70,7 @@ Conversão de stat para física (em `kart.gd`):
 
 ### Corrida
 - [x] **RF-30** Grid de largada 2×4 atrás da linha; jogador larga em último.
-- [x] **RF-31** Contagem 3-2-1-VAI! Ninguém se move antes do VAI.
+- [x] **RF-31** Contagem 3-2-1-VAI! no centro da tela (cada número entra grande e encolhe; VAI! em verde). Ninguém se move antes do VAI.
 - [x] **RF-32** Volta só conta andando pra frente (progresso contínuo ao longo da pista; andar de ré desconta).
 - [x] **RF-33** Posição em tempo real: quem terminou ordena por tempo, o resto por progresso.
 - [x] **RF-34** Ao terminar, o jogador vira piloto automático; resultado aparece 3 s depois com posição e tempo de todos.
@@ -259,6 +259,7 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-31** Aplicar volumes muda os buses (`Music`/`SFX`/`Engine`); 0% silencia o bus.
 - [x] **CA-32** A tela de configurações monta as 4 abas com os controles, e `PADRÃO` restaura os valores.
 - [x] **CA-33** Na corrida, desligar nomes/minimapa/lista esconde esses elementos e o campo de visão base segue a configuração.
+- [x] **CA-34** A contagem fica no centro do quadro com 1 e 2 jogadores (regressão: com 1 jogador ela ia pro canto).
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
