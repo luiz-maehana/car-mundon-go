@@ -133,6 +133,27 @@ Conversão de stat para física (em `kart.gd`):
   - **Cozinha à Meia-Noite** — noite, piso escuro, muros roxo/ciano, postes com luz.
 - [x] **RF-122** O menu tem o botão `PISTA: <nome>` que alterna entre as pistas; a escolha fica salva no `Game` entre corridas.
 
+### HUD, física e gameplay (v0.8)
+**HUD**
+- [x] **RF-130** Itens com ícone desenhado (turbo = setas laranja, casca = banana amarela, bomba = bola preta com pavio). Ao pegar a caixa, uma **roleta** de 1 s gira os ícones; o item só pode ser usado depois dela (vale pra IA também).
+- [x] **RF-131** Velocímetro em km/h no canto inferior direito (laranja durante turbo) com a barra de carga do drift na cor do nível (azul/laranja/roxo).
+- [x] **RF-132** A posição "pula" (escala) quando muda e tem cor de pódio: 1º ouro, 2º prata, 3º bronze.
+- [x] **RF-133** Tempo da volta atual e melhor volta embaixo do cronômetro; ao fechar uma volta aparece o tempo dela.
+- [x] **RF-134** Volta final: indicador de volta em vermelho e a música acelera 8%.
+- [x] **RF-135** Contador de queijinhos ao lado do item (ícone de queijo + `x/10`).
+
+**Física**
+- [x] **RF-140** Setas de turbo no asfalto (2 por pista): passar por cima dá 0.8 s de turbo. A IA mira nelas às vezes.
+- [x] **RF-141** Rampa (1 por pista): o kart decola (altura e gravidade de verdade), vira menos no ar e não pega grama. **Manobra:** apertar drift no ar faz uma pirueta e dá 0.7 s de turbo ao pousar. A IA faz a manobra 70% das vezes.
+- [x] **RF-142** Vácuo: andar logo atrás de outro kart (4–14 m, no cone de 15°, ambos acima de 15 m/s) por 1.2 s dá 0.8 s de turbo ("VÁCUO!").
+- [x] **RF-143** Drift nível 3: ≥ 2.4 s de drift = turbo roxo de 1.6 s.
+- [x] **RF-144** Batidas: impacto proporcional à velocidade de aproximação; o mais leve perde mais velocidade. Som de batida (kart×kart e muro forte) para humanos.
+- [x] **RF-145** Visual: rodas giram com a velocidade, as dianteiras esterçam, a carroceria inclina na curva e treme na grama.
+
+**Gameplay**
+- [x] **RF-150** Queijinhos: fileiras de queijos na pista (voltam 8 s depois de pegos). Cada um dá +1% de velocidade máxima, até 10. Quem é atingido (casca/bomba) perde 3.
+- [x] **RF-151** Dificuldade da IA no menu (`IA: FÁCIL / NORMAL / DIFÍCIL`): habilidade 0.84–0.90 / 0.90–0.97 / 0.97–1.02 e *rubber band* mais forte no difícil.
+
 ## 5. Controles
 
 | Ação | Jogador 1 (teclado) | Jogador 2 (teclado) | Controle (J1..J4 = controle 1..4) |
@@ -140,7 +161,7 @@ Conversão de stat para física (em `kart.gd`):
 | Acelerar | W | ↑ | A ou RT |
 | Frear / ré | S | ↓ | B ou LT |
 | Virar | A / D | ← / → | Analógico esquerdo |
-| Drift | Espaço / Shift esq. | Shift dir. / Numpad 0 | RB |
+| Drift (no ar: manobra) | Espaço / Shift esq. | Shift dir. / Numpad 0 | RB |
 | Usar item | E / Ctrl esq. | Enter / Ctrl dir. | LB ou X |
 | Reiniciar | R | R | — |
 | Pausar | Esc | Esc | Start |
@@ -191,6 +212,13 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-13** A tela de abertura carrega a arte, é a cena principal do projeto e um aperto de tecla leva pro menu.
 - [x] **CA-14** Nenhum kart tem a arte do rosto como malha; o minimapa desenha 8 bustos e o HUD lista os 8 pilotos na ordem do ranking.
 - [x] **CA-15** As 3 pistas passam no CA-02 (fechadas, uniformes, sem sobreposição) e uma corrida de 1 volta só com IA termina em cada uma.
+- [x] **CA-16** Kart em cima de uma seta de turbo ganha turbo.
+- [x] **CA-17** Kart que passa pela rampa sobe mais de 1 m e volta ao chão; com a manobra no ar, pousa com turbo.
+- [x] **CA-18** Kart 8 m atrás de outro, alinhado e rápido, ganha turbo de vácuo em menos de 2 s; de lado, não ganha.
+- [x] **CA-19** Pegar queijinho soma 1 (máx. 10) e aumenta a velocidade máxima; levar uma casca tira 3.
+- [x] **CA-20** Dificuldade muda a faixa de habilidade da IA.
+- [x] **CA-21** Roleta: item recém-pego não pode ser usado antes de 1 s.
+- [x] **CA-22** Soltar o drift com 2.5 s de carga dá turbo ≥ 1.5 s.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

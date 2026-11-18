@@ -4,6 +4,9 @@ extends CanvasLayer
 ## Com kart == null vira só a camada do resultado.
 
 const MinimapScript = preload("res://scripts/minimap.gd")
+const IconScript = preload("res://scripts/icons.gd")
+const KartScript = preload("res://scripts/kart.gd")
+const ROLL_ORDER := ["turbo", "casca", "bomba"]
 const Chars = preload("res://scripts/characters.gd")
 const ITEM_NAMES := {"turbo": "TURBO", "casca": "CASCA", "bomba": "BOMBA"}
 const ITEM_COLORS := {"turbo": Color(1.0, 0.55, 0.1), "casca": Color(1.0, 0.88, 0.15), "bomba": Color(0.9, 0.2, 0.15)}
@@ -19,6 +22,18 @@ var lbl_pos: Label
 var lbl_center: Label
 var lbl_msg: Label
 var lbl_item: Label
+var item_icon: Control
+var lbl_cheese: Label
+var lbl_laptime: Label
+var lbl_speed: Label
+var drift_bar_bg: ColorRect
+var drift_bar: ColorRect
+var roll_t := 0.0
+var last_rank := 0
+var pos_pop := 0.0
+var lap_start := 0.0
+var best_lap := INF
+var final_lap_counted := false
 var item_style: StyleBoxFlat
 var results: PanelContainer
 var last_lap := 1
@@ -78,9 +93,72 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 	item_panel.offset_bottom = 92
 	item_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(item_panel)
-	lbl_item = _label(30, item_panel)
+	item_icon = IconScript.new()
+	item_icon.custom_minimum_size = Vector2(60, 60)
+	item_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	item_panel.add_child(item_icon)
+	lbl_item = _label(14)
+	lbl_item.anchor_left = 0.5
+	lbl_item.anchor_right = 0.5
+	lbl_item.offset_left = -80
+	lbl_item.offset_right = 80
+	lbl_item.offset_top = 94
 	lbl_item.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl_item.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# RF-135: queijinhos ao lado do item
+	var cheese_icon: Control = IconScript.new()
+	cheese_icon.kind = "cheese"
+	cheese_icon.anchor_left = 0.5
+	cheese_icon.anchor_right = 0.5
+	cheese_icon.offset_left = 90
+	cheese_icon.offset_right = 136
+	cheese_icon.offset_top = 22
+	cheese_icon.offset_bottom = 68
+	cheese_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(cheese_icon)
+	lbl_cheese = _label(30)
+	lbl_cheese.anchor_left = 0.5
+	lbl_cheese.anchor_right = 0.5
+	lbl_cheese.offset_left = 138
+	lbl_cheese.offset_top = 24
+	# RF-133: tempo da volta
+	lbl_laptime = _label(20)
+	lbl_laptime.position = Vector2(26, 98 if race.players.size() == 1 else 138)
+	lbl_laptime.modulate = Color(1, 1, 1, 0.85)
+	# RF-131: velocímetro + barra de drift (canto inferior direito)
+	lbl_speed = _label(64)
+	lbl_speed.anchor_left = 1.0
+	lbl_speed.anchor_right = 1.0
+	lbl_speed.anchor_top = 1.0
+	lbl_speed.anchor_bottom = 1.0
+	lbl_speed.offset_left = -260
+	lbl_speed.offset_right = -96
+	lbl_speed.offset_top = -150
+	lbl_speed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	var kmh := _label(22)
+	kmh.text = "km/h"
+	kmh.anchor_left = 1.0
+	kmh.anchor_right = 1.0
+	kmh.anchor_top = 1.0
+	kmh.anchor_bottom = 1.0
+	kmh.offset_left = -90
+	kmh.offset_top = -112
+	drift_bar_bg = ColorRect.new()
+	drift_bar_bg.color = Color(0, 0, 0, 0.5)
+	drift_bar_bg.anchor_left = 1.0
+	drift_bar_bg.anchor_right = 1.0
+	drift_bar_bg.anchor_top = 1.0
+	drift_bar_bg.anchor_bottom = 1.0
+	drift_bar_bg.offset_left = -250
+	drift_bar_bg.offset_right = -30
+	drift_bar_bg.offset_top = -66
+	drift_bar_bg.offset_bottom = -52
+	drift_bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	drift_bar_bg.visible = false
+	root.add_child(drift_bar_bg)
+	drift_bar = ColorRect.new()
+	drift_bar.size = Vector2(0, 14)
+	drift_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	drift_bar_bg.add_child(drift_bar)
 
 	lbl_center = _label(140)
 	lbl_center.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -234,17 +312,45 @@ func update_hud(delta: float) -> void:
 	_update_ranking()
 	var lap: int = race.lap_of(p)
 	lbl_lap.text = "VOLTA %d/%d" % [lap, race.laps]
+	# RF-134: volta final em vermelho
+	lbl_lap.add_theme_color_override("font_color", Color(1.0, 0.35, 0.3) if lap == race.laps and race.laps > 1 and not p.finished else Color.WHITE)
 	lbl_time.text = fmt_time(race.race_time)
+	# RF-133: tempo da volta atual e melhor volta
+	if race.state != "countdown" and not p.finished:
+		lbl_laptime.text = "Volta %s" % fmt_time(race.race_time - lap_start) + ("   Melhor %s" % fmt_time(best_lap) if best_lap < INF else "")
+	# RF-132: posição com cor de pódio e "pulo" quando muda
 	lbl_pos.text = "%dº/%d" % [p.rank, race.karts.size()]
-	lbl_pos.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2) if p.rank == 1 else Color.WHITE)
+	var pod := [Color(1.0, 0.82, 0.15), Color(0.85, 0.88, 0.95), Color(0.9, 0.55, 0.25)]
+	lbl_pos.add_theme_color_override("font_color", pod[p.rank - 1] if p.rank <= 3 else Color.WHITE)
+	if p.rank != last_rank:
+		pos_pop = 1.0 if last_rank != 0 else 0.0
+		last_rank = p.rank
+	pos_pop = maxf(0.0, pos_pop - delta * 3.0)
+	lbl_pos.pivot_offset = lbl_pos.size * Vector2(1.0, 0.5)
+	lbl_pos.scale = Vector2.ONE * (1.0 + 0.35 * pos_pop)
 
-	if p.item == "":
-		lbl_item.text = "—"
-		item_style.border_color = Color(1, 1, 1, 0.4)
+	# RF-130: ícone do item com roleta
+	if p.item_roll > 0.0:
+		roll_t += delta
+		item_icon.set_kind(ROLL_ORDER[int(roll_t * 14.0) % ROLL_ORDER.size()])
+		item_style.border_color = Color(1, 1, 1, 0.9)
 	else:
-		lbl_item.text = ITEM_NAMES[p.item]
-		item_style.border_color = ITEM_COLORS[p.item]
-	lbl_item.add_theme_color_override("font_color", ITEM_COLORS.get(p.item, Color(1, 1, 1, 0.5)))
+		item_icon.set_kind(p.item)
+		item_style.border_color = ITEM_COLORS.get(p.item, Color(1, 1, 1, 0.4))
+	lbl_item.text = ITEM_NAMES.get(p.item, "") if p.item_roll <= 0.0 else ""
+	# RF-135: queijinhos
+	lbl_cheese.text = "%d/10" % p.cheese
+	lbl_cheese.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3) if p.cheese >= 10 else Color.WHITE)
+	# RF-131: velocímetro + carga do drift
+	lbl_speed.text = "%d" % int(absf(p.speed) * 3.6)
+	lbl_speed.add_theme_color_override("font_color", Color(1.0, 0.6, 0.15) if p.boost_time > 0.0 else Color.WHITE)
+	drift_bar_bg.visible = p.drifting
+	if p.drifting:
+		var f := clampf(p.drift_charge / KartScript.MINI_TURBO_3, 0.0, 1.0)
+		drift_bar.size.x = drift_bar_bg.size.x * f
+		drift_bar.color = KartScript.drift_color(p.drift_charge)
+	if p.slip_flash > 1.1 and msg_time < 0.5:
+		_flash("VÁCUO!", 0.9)
 
 	if race.state == "countdown":
 		lbl_center.text = str(int(ceil(race.countdown)))
@@ -265,8 +371,14 @@ func update_hud(delta: float) -> void:
 	lbl_mute.visible = game != null and game.muted
 	if not p.finished:
 		if lap > last_lap:
-			_flash("VOLTA FINAL!" if lap == race.laps else "VOLTA %d" % lap)
+			var lt: float = race.race_time - lap_start
+			best_lap = minf(best_lap, lt)
+			lap_start = race.race_time
+			_flash(("VOLTA FINAL!" if lap == race.laps else "VOLTA %d" % lap) + "   " + fmt_time(lt), 2.0)
 		last_lap = lap
+	elif p.finished and not final_lap_counted:
+		final_lap_counted = true
+		best_lap = minf(best_lap, p.finish_time - lap_start)
 		if p.vel.dot(race.track.tangents[p.track_idx]) < -4.0:
 			_flash("CONTRAMÃO!", 0.2)
 	if msg_time > 0.0:

@@ -75,6 +75,77 @@ var bounds_max := Vector2.ZERO
 func _init(track_id := "queijo") -> void:
 	def = find(track_id)
 	_build_path()
+	_place_features()
+
+
+# ---------------------------------------------------------------- setas, rampa, queijos (v0.8)
+
+const RAMP_LEN := 3          # amostras (6 m)
+const RAMP_H := 1.0
+const PAD_LEN := 3
+const CHEESE_ROWS := [[0.28, -3.5], [0.55, 3.5], [0.9, 0.0]]
+const PAD_RANGES := [[0.07, 0.14], [0.6, 0.7]]
+const RAMP_RANGE := [0.3, 0.42]
+
+var pads: Array = []     # {idx, lat}
+var ramp_idx := -1
+
+
+## Curvatura em i: ângulo entre a tangente 10 amostras antes e 20 depois.
+func curvature_at(i: int) -> float:
+	var n := points.size()
+	return tangents[wrapi(i - 10, 0, n)].angle_to(tangents[wrapi(i + 20, 0, n)])
+
+
+func _straightest(f0: float, f1: float) -> int:
+	var n := points.size()
+	var best := int(n * f0)
+	var best_c := INF
+	for i in range(int(n * f0), int(n * f1)):
+		var c := curvature_at(i)
+		if c < best_c:
+			best_c = c
+			best = i
+	return best
+
+
+func _place_features() -> void:
+	var lats := [-4.0, 4.0]
+	for k in PAD_RANGES.size():
+		pads.append({"idx": _straightest(PAD_RANGES[k][0], PAD_RANGES[k][1]), "lat": lats[k]})
+	ramp_idx = _straightest(RAMP_RANGE[0], RAMP_RANGE[1])
+
+
+## Kart está em cima de uma seta? (RF-140)
+func on_pad(i: int, lat: float) -> bool:
+	var n := points.size()
+	for p in pads:
+		var d := wrapi(i - int(p["idx"]), 0, n)
+		if d <= PAD_LEN and absf(lat - float(p["lat"])) < 2.4:
+			return true
+	return false
+
+
+## Fração (0..1) do kart ao longo da rampa, ou -1 se não está nela (RF-141).
+func ramp_frac(i: int, along: float, lat: float) -> float:
+	if ramp_idx < 0 or absf(lat) > ROAD_HALF:
+		return -1.0
+	var d := wrapi(i - ramp_idx, 0, points.size())
+	if d > RAMP_LEN + 1:
+		return -1.0
+	var f := (d + along / SPACING) / RAMP_LEN
+	return f if f >= 0.0 and f <= 1.0 else -1.0
+
+
+func cheese_positions() -> Array:
+	var out := []
+	var n := points.size()
+	for row in CHEESE_ROWS:
+		var i0 := int(n * float(row[0]))
+		for k in 5:
+			var i := (i0 + k * 4) % n
+			out.append(points[i] + rights[i] * float(row[1]) + Vector3.UP * 0.7)
+	return out
 
 
 static func find(track_id: String) -> Dictionary:
@@ -209,6 +280,7 @@ func _build_visuals() -> void:
 		_strip(st, i, -WALL - WALL_T, -WALL, WALL_H, WALL_H, wall_c)
 		_strip(st, i, -WALL - WALL_T, -WALL - WALL_T, 0.0, WALL_H, wall_c)
 	_start_line(st)
+	_pads_and_ramp(st)
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
 	mat.vertex_color_is_srgb = true
@@ -415,3 +487,45 @@ func _multimesh(mesh: Mesh, xforms: Array[Transform3D], offset: Vector3) -> void
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	add_child(mmi)
+
+
+## Setas de turbo (chevrons laranja/amarelo) e a rampa listrada (RF-140/141).
+func _pads_and_ramp(st: SurfaceTool) -> void:
+	var n := points.size()
+	for p in pads:
+		var i0: int = p["idx"]
+		var lat: float = p["lat"]
+		for k in PAD_LEN + 1:
+			var i := (i0 + k) % n
+			var c := points[i] + rights[i] * lat + Vector3.UP * 0.06
+			var t := tangents[i]
+			var r := rights[i]
+			# base laranja
+			_quad(st, c - r * 2.2 - t * 1.0, c + r * 2.2 - t * 1.0, c + r * 2.2 + t * 1.0, c - r * 2.2 + t * 1.0, Color(0.95, 0.45, 0.05))
+			# chevron amarelo apontando pra frente (-tangente é "trás"; a pista anda em +t)
+			var up := Vector3.UP * 0.01
+			var tip := c + t * 0.8 + up
+			_quad(st, c - r * 1.8 - t * 0.6 + up, c - r * 1.2 - t * 0.6 + up, tip + t * 0.0, tip - t * 0.6, Color(1.0, 0.92, 0.2))
+			_quad(st, c + r * 1.2 - t * 0.6 + up, c + r * 1.8 - t * 0.6 + up, tip - t * 0.6, tip, Color(1.0, 0.92, 0.2))
+	if ramp_idx < 0:
+		return
+	for k in RAMP_LEN:
+		var i := (ramp_idx + k) % n
+		var j := (i + 1) % n
+		var y0 := RAMP_H * float(k) / RAMP_LEN
+		var y1 := RAMP_H * float(k + 1) / RAMP_LEN
+		var stripes := 6
+		for s in stripes:
+			var la := -ROAD_HALF + 2.0 * ROAD_HALF * s / stripes
+			var lb := -ROAD_HALF + 2.0 * ROAD_HALF * (s + 1) / stripes
+			var c := Color(1.0, 0.8, 0.1) if (s + k) % 2 == 0 else Color(0.1, 0.1, 0.12)
+			_quad(st, points[i] + rights[i] * la + Vector3.UP * y0, points[i] + rights[i] * lb + Vector3.UP * y0,
+				points[j] + rights[j] * lb + Vector3.UP * y1, points[j] + rights[j] * la + Vector3.UP * y1, c)
+		# laterais
+		for side in [-ROAD_HALF, ROAD_HALF]:
+			_quad(st, points[i] + rights[i] * side, points[i] + rights[i] * side + Vector3.UP * y0,
+				points[j] + rights[j] * side + Vector3.UP * y1, points[j] + rights[j] * side, Color(0.25, 0.25, 0.28))
+	# face de trás (queda)
+	var e := (ramp_idx + RAMP_LEN) % n
+	_quad(st, points[e] - rights[e] * ROAD_HALF, points[e] + rights[e] * ROAD_HALF,
+		points[e] + rights[e] * ROAD_HALF + Vector3.UP * RAMP_H, points[e] - rights[e] * ROAD_HALF + Vector3.UP * RAMP_H, Color(0.25, 0.25, 0.28))

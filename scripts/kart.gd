@@ -10,6 +10,12 @@ const LABEL_LAYER_BASE := 10  # camada do nome do jogador N = 10+N (escondida na
 const DRIFT_MIN_SPEED := 12.0
 const MINI_TURBO_1 := 0.7
 const MINI_TURBO_2 := 1.5
+const MINI_TURBO_3 := 2.4   # RF-143
+const GRAVITY := 28.0
+const PAD_BOOST := 0.8
+const TRICK_BOOST := 0.7
+const ITEM_ROLL := 1.0      # roleta (RF-130)
+const MAX_CHEESE := 10
 const ITEM_BOOST := 1.3
 const BOOST_MULT := 1.3
 const OFFROAD_MULT := 0.5
@@ -66,6 +72,24 @@ var start_hold := -1.0     # countdown no momento em que começou a segurar o ac
 var start_stall := 0.0
 var start_result := ""     # "" | "turbo" | "queimou"
 
+# v0.8: ar/rampa, manobra, queijinhos, vácuo, roleta
+var vy := 0.0
+var airborne := false
+var on_ramp := false
+var trick := false
+var trick_spin := 0.0
+var air_time := 0.0
+var max_height := 0.0
+var cheese := 0
+var slip_time := 0.0
+var slip_flash := 0.0
+var item_roll := 0.0
+var ai_trick_chance := 0.7
+var ai_pad_target := -1
+var prev_drift := false
+var on_pad := false
+var bump_cd := 0.0
+
 # input do frame
 var in_throttle := 0.0
 var in_steer := 0.0
@@ -77,6 +101,9 @@ var model: Node3D
 var sparks: Array = []
 var spark_mat: StandardMaterial3D
 var flame: MeshInstance3D
+var wheels: Array = []        # MeshInstance3D (giram)
+var front_pivots: Array = []  # Node3D (esterçam)
+var wheel_spin := 0.0
 
 
 func setup(data: Dictionary, p_index: int, track_ref: Node3D, race_ref: Node) -> void:
@@ -123,8 +150,27 @@ func hit() -> void:
 	drifting = false
 	boost_time = 0.0
 	speed *= 0.35
+	cheese = maxi(0, cheese - 3)  # RF-150
 	if is_player:
 		race.sfx("hit")
+
+
+## Velocidade máxima atual sem turbo/grama (stats + queijinhos + IA).
+func top_speed() -> float:
+	var top := max_speed * (1.0 + 0.01 * cheese)
+	if autopilot and not is_player:
+		top *= ai_skill * rubber
+	return top
+
+
+func give_item(it: String) -> void:
+	item = it
+	item_hold = 0.0
+	item_roll = ITEM_ROLL
+
+
+func can_use_item() -> bool:
+	return item != "" and item_roll <= 0.0 and spin_time <= 0.0
 
 
 ## Chamado pela corrida no VAI! (RF-85..87).
@@ -163,12 +209,17 @@ func step(delta: float, can_drive: bool) -> void:
 	if can_drive:
 		_move(delta)
 		_update_track(delta)
-		if in_item and item != "" and spin_time <= 0.0:
+		_update_air(delta)
+		bump_cd = maxf(0.0, bump_cd - delta)
+		if item_roll > 0.0:
+			item_roll -= delta
+		if in_item and can_use_item():
 			race.use_item(self, item)
 			item = ""
 			items_used += 1
-		if item != "":
+		if item != "" and item_roll <= 0.0:
 			item_hold += delta
+	prev_drift = in_drift
 	_update_visuals(delta)
 
 
@@ -186,11 +237,16 @@ func _move(delta: float) -> void:
 		start_stall -= delta
 		throttle = 0.0
 
-	var top := max_speed
-	if autopilot and not is_player:
-		top *= ai_skill * rubber
-	if absf(lateral) > TrackScript.ROAD_HALF + TrackScript.CURB and boost_time <= 0.0:
+	var top := top_speed()
+	if not airborne and absf(lateral) > TrackScript.ROAD_HALF + TrackScript.CURB and boost_time <= 0.0:
 		top *= OFFROAD_MULT
+	# seta de turbo (RF-140)
+	var pad_now: bool = not airborne and track.on_pad(track_idx, lateral)
+	if pad_now and not on_pad:
+		boost_time = maxf(boost_time, PAD_BOOST)
+		if is_player:
+			race.sfx("pad")
+	on_pad = pad_now
 	if boost_time > 0.0:
 		boost_time -= delta
 		top *= BOOST_MULT
@@ -210,7 +266,7 @@ func _move(delta: float) -> void:
 		speed = move_toward(speed, top, 25.0 * delta)
 
 	# drift (RF-13/14)
-	if not drifting and in_drift and absf(steer) > 0.3 and speed > DRIFT_MIN_SPEED and spin_time <= 0.0:
+	if not drifting and not airborne and in_drift and absf(steer) > 0.3 and speed > DRIFT_MIN_SPEED and spin_time <= 0.0:
 		drifting = true
 		drift_dir = signf(steer)
 		drift_charge = 0.0
@@ -220,7 +276,9 @@ func _move(delta: float) -> void:
 		if spin_time <= 0.0:
 			if drift_charge >= MINI_TURBO_1 and is_player:
 				race.sfx("mini_turbo")
-			if drift_charge >= MINI_TURBO_2:
+			if drift_charge >= MINI_TURBO_3:
+				boost_time = maxf(boost_time, 1.6)
+			elif drift_charge >= MINI_TURBO_2:
 				boost_time = maxf(boost_time, 1.1)
 			elif drift_charge >= MINI_TURBO_1:
 				boost_time = maxf(boost_time, 0.6)
@@ -234,11 +292,55 @@ func _move(delta: float) -> void:
 		drift_charge += delta * (0.6 + 0.8 * into)
 	else:
 		var high_speed_damp := lerpf(1.0, 0.8, clampf(speed / max_speed, 0.0, 1.0))
-		heading -= steer * turn_rate * speed_factor * high_speed_damp * delta
+		var air_damp := 0.35 if airborne else 1.0
+		heading -= steer * turn_rate * speed_factor * high_speed_damp * air_damp * delta
 
-	var grip := 2.5 if drifting else 9.0
+	var grip := 2.5 if drifting else (1.5 if airborne else 9.0)
 	vel = vel.lerp(forward() * speed, 1.0 - exp(-grip * delta))
 	position += vel * delta
+
+
+## RF-141: sobe a rampa, decola, gravidade, manobra no ar e pouso.
+func _update_air(delta: float) -> void:
+	if not airborne:
+		var f: float = track.ramp_frac(track_idx, track.along_of(position, track_idx), lateral)
+		if f >= 0.0:
+			on_ramp = true
+			position.y = f * TrackScript.RAMP_H
+		elif on_ramp:
+			on_ramp = false
+			if speed > 8.0:
+				airborne = true
+				vy = 5.0 + speed * 0.18
+				air_time = 0.0
+				trick = false
+				if autopilot and randf() < ai_trick_chance:
+					_start_trick()
+			else:
+				position.y = 0.0
+		return
+	air_time += delta
+	if not trick and not autopilot and in_drift and not prev_drift and air_time > 0.05:
+		_start_trick()
+	vy -= GRAVITY * delta
+	position.y += vy * delta
+	max_height = maxf(max_height, position.y)
+	if position.y <= 0.0:
+		position.y = 0.0
+		vy = 0.0
+		airborne = false
+		if trick:
+			boost_time = maxf(boost_time, TRICK_BOOST)
+			if is_player:
+				race.sfx("trick")
+		trick = false
+
+
+func _start_trick() -> void:
+	trick = true
+	trick_spin = TAU
+	if is_player:
+		race.sfx("drop")
 
 
 func _update_track(delta: float) -> void:
@@ -263,6 +365,9 @@ func _update_track(delta: float) -> void:
 		if vout > 0.0:
 			vel -= r * s * vout * 1.5
 			speed *= clampf(1.0 - vout * 0.04, 0.4, 1.0)
+			if vout > 6.0 and is_player and bump_cd <= 0.0:  # RF-144
+				bump_cd = 0.4
+				race.sfx("bump")
 		speed *= 0.995
 		lateral = s * lim
 	max_abs_lateral = maxf(max_abs_lateral, absf(lateral))
@@ -286,6 +391,9 @@ func respawn() -> void:
 	drifting = false
 	stuck_time = 0.0
 	lateral = 0.0
+	airborne = false
+	on_ramp = false
+	vy = 0.0
 	reset_physics_interpolation()
 
 
@@ -318,6 +426,14 @@ func _ai_input(delta: float) -> void:
 		var m := TrackScript.ROAD_HALF - 2.5
 		ai_lane = randf_range(-m, m)
 		ai_lane_timer = randf_range(2.0, 5.0)
+	# RF-140: às vezes mira na seta de turbo à frente
+	for p in track.pads:
+		var dp := wrapi(int(p["idx"]) - track_idx, 0, n)
+		if dp > 4 and dp < 25 and ai_pad_target != int(p["idx"]):
+			ai_pad_target = int(p["idx"])
+			if randf() < 0.5:
+				ai_lane = float(p["lat"])
+				ai_lane_timer = 3.0
 	var look := 5 + int(absf(speed) * 0.3)
 	var ti := (track_idx + look) % n
 	var target: Vector3 = track.points[ti] + track.rights[ti] * ai_lane
@@ -382,9 +498,27 @@ func _build_model() -> void:
 	wheel.top_radius = 0.38
 	wheel.bottom_radius = 0.38
 	wheel.height = 0.36
+	# RF-145: rodas em pivôs (dianteiras esterçam) com uma faixa clara pra ver o giro
+	var hub := _box(Vector3(0.38, 0.5, 0.12))
+	var hub_mat := _mat(Color(0.75, 0.75, 0.8))
 	for x in [-0.95, 0.95]:
 		for z in [-0.9, 0.9]:
-			_part(wheel, dark, Vector3(x, 0.38, z), Vector3(0, 0, PI / 2))
+			var pivot := Node3D.new()
+			pivot.position = Vector3(x, 0.38, z)
+			model.add_child(pivot)
+			var w := MeshInstance3D.new()
+			w.mesh = wheel
+			w.material_override = dark
+			w.rotation = Vector3(0, 0, PI / 2)
+			pivot.add_child(w)
+			var stripe := MeshInstance3D.new()
+			stripe.mesh = hub
+			stripe.material_override = hub_mat
+			stripe.position = Vector3(0, 0.0, 0)
+			w.add_child(stripe)
+			wheels.append(w)
+			if z < 0.0:
+				front_pivots.append(pivot)
 	# piloto
 	var torso := CapsuleMesh.new()
 	torso.radius = 0.33
@@ -464,17 +598,41 @@ func _update_visuals(delta: float) -> void:
 	else:
 		yaw = lerp_angle(model.rotation.y, 0.0, 1.0 - exp(-8.0 * delta))
 	model.rotation.y = yaw
-	model.rotation.z = -in_steer * 0.05
+	# RF-145: inclinação na curva, tremida na grama, rodas girando e esterçando
+	var spd01 := clampf(absf(speed) / 30.0, 0.0, 1.0)
+	model.rotation.z = lerpf(model.rotation.z, -in_steer * 0.09 * spd01 - (drift_dir * 0.06 if drifting else 0.0), 1.0 - exp(-8.0 * delta))
+	var shake := 0.0
+	if not airborne and absf(lateral) > TrackScript.ROAD_HALF + TrackScript.CURB and absf(speed) > 4.0:
+		shake = randf_range(-0.04, 0.04)
+	wheel_spin = fmod(wheel_spin + speed * delta / 0.38, TAU)
+	for w in wheels:
+		w.rotation.x = -wheel_spin
+	for p in front_pivots:
+		p.rotation.y = -in_steer * 0.45
+	# manobra no ar: um giro completo no eixo X
+	if trick_spin > 0.0:
+		trick_spin = maxf(0.0, trick_spin - delta * TAU * 2.2)
+	model.rotation.x = -trick_spin
 	if hop_time > 0.0:
 		hop_time -= delta
-		model.position.y = sin((1.0 - hop_time / 0.25) * PI) * 0.45
+		model.position.y = sin((1.0 - hop_time / 0.25) * PI) * 0.45 + shake
 	else:
-		model.position.y = 0.0
+		model.position.y = shake
 	var show_sparks := drifting and drift_charge >= MINI_TURBO_1
 	for s in sparks:
 		s.visible = show_sparks
 	if show_sparks:
-		spark_mat.albedo_color = Color(1.0, 0.5, 0.05) if drift_charge >= MINI_TURBO_2 else Color(0.3, 0.7, 1.0)
+		spark_mat.albedo_color = drift_color(drift_charge)
 	flame.visible = boost_time > 0.0
 	if flame.visible:
 		flame.scale = Vector3.ONE * randf_range(0.8, 1.25)
+
+
+static func drift_color(charge: float) -> Color:
+	if charge >= MINI_TURBO_3:
+		return Color(0.8, 0.3, 1.0)
+	if charge >= MINI_TURBO_2:
+		return Color(1.0, 0.5, 0.05)
+	if charge >= MINI_TURBO_1:
+		return Color(0.3, 0.7, 1.0)
+	return Color(0.7, 0.7, 0.7)

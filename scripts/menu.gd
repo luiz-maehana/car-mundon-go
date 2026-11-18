@@ -16,6 +16,9 @@ var card_styles: Array = []
 var card_tags: Array = []
 var laps_btn: Button
 var track_btn: Button
+var diff_btn: Button
+var diff_i := 1
+const DIFF_NAMES := ["FÁCIL", "NORMAL", "DIFÍCIL"]
 var track_i := 0
 var players_btn: Button
 var go_btn: Button
@@ -28,6 +31,7 @@ func _ready() -> void:
 		num_players = game.num_players
 		selected = Chars.index_of(game.selected_chars[0] if game.selected_chars.size() > 0 else "fejaum")
 		laps_i = maxi(0, LAP_OPTIONS.find(game.laps))
+		diff_i = game.difficulty
 		for ti in TrackScript.TRACKS.size():
 			if TrackScript.TRACKS[ti]["id"] == game.track_id:
 				track_i = ti
@@ -78,14 +82,19 @@ func _build() -> void:
 		laps_i = (laps_i + 1) % LAP_OPTIONS.size()
 		_refresh())
 	row.add_child(laps_btn)
+	diff_btn = _button("", 22)  # RF-151
+	diff_btn.pressed.connect(func():
+		diff_i = (diff_i + 1) % DIFF_NAMES.size()
+		_refresh())
+	row.add_child(diff_btn)
 	track_btn = _button("", 22)  # RF-122
-	track_btn.custom_minimum_size = Vector2(380, 64)
+	track_btn.custom_minimum_size = Vector2(340, 64)
 	track_btn.pressed.connect(func():
 		track_i = (track_i + 1) % TrackScript.TRACKS.size()
 		_refresh())
 	row.add_child(track_btn)
 	go_btn = _button("", 30)
-	go_btn.custom_minimum_size = Vector2(280, 64)
+	go_btn.custom_minimum_size = Vector2(220, 64)
 	go_btn.pressed.connect(_confirm)
 	row.add_child(go_btn)
 
@@ -110,7 +119,7 @@ func _button(text: String, size: int) -> Button:
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
 	b.add_theme_font_size_override("font_size", size)
-	b.custom_minimum_size = Vector2(210, 64)
+	b.custom_minimum_size = Vector2(180, 64)
 	return b
 
 
@@ -212,6 +221,7 @@ func _refresh() -> void:
 	players_btn.text = "JOGADORES: %d" % num_players
 	laps_btn.text = "VOLTAS: %d" % LAP_OPTIONS[laps_i]
 	track_btn.text = "PISTA: %s" % TrackScript.TRACKS[track_i]["name"]
+	diff_btn.text = "IA: %s" % DIFF_NAMES[diff_i]
 	go_btn.text = "CORRER!" if cur == num_players - 1 else "CONFIRMAR J%d" % (cur + 1)
 
 
@@ -262,4 +272,5 @@ func _confirm() -> void:
 		game.selected_chars = picks.map(func(i): return Chars.LIST[i]["id"])
 		game.laps = LAP_OPTIONS[laps_i]
 		game.track_id = TrackScript.TRACKS[track_i]["id"]
+		game.difficulty = diff_i
 	get_tree().change_scene_to_file("res://scenes/race.tscn")

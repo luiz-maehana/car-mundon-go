@@ -12,6 +12,14 @@ const ENGINE_RATE := 22050.0
 const COUNTDOWN := 3.0
 const BOX_RESPAWN := 3.0
 const RESULTS_DELAY := 3.0
+const SLIP_TIME := 1.2
+const CHEESE_RESPAWN := 8.0
+## RF-151: skill = faixa de habilidade da IA; rubber = limites do rubber band.
+const DIFFICULTY := [
+	{"name": "FÁCIL", "skill": [0.84, 0.9], "rubber": [0.92, 1.04]},
+	{"name": "NORMAL", "skill": [0.9, 0.97], "rubber": [0.94, 1.08]},
+	{"name": "DIFÍCIL", "skill": [0.97, 1.02], "rubber": [0.96, 1.12]},
+]
 
 var use_game_settings := true
 var audio_enabled := true
@@ -22,6 +30,7 @@ var autopilot_player := false
 var player_chars: Array = ["fejaum"]  # um por jogador humano (1..4)
 var laps := 3
 var track_id := "queijo"
+var difficulty := 1
 
 var track: Node3D
 var karts: Array = []
@@ -38,6 +47,7 @@ var results_shown := false
 var boxes: Array = []    # {node, pos, cd}
 var hazards: Array = []  # {node, type, pos, vel, life, owner, age, idx}
 var boxes_picked := 0
+var cheeses: Array = []  # {node, pos, cd}
 var rng := RandomNumberGenerator.new()
 var paused := false
 var pause_layer: CanvasLayer
@@ -57,6 +67,7 @@ func _ready() -> void:
 		player_chars = game.selected_chars.slice(0, game.num_players)
 		laps = game.laps
 		track_id = game.track_id
+		difficulty = game.difficulty
 	if player_chars.is_empty():
 		player_chars = ["fejaum"]
 	rng.randomize()
@@ -65,6 +76,7 @@ func _ready() -> void:
 	add_child(track)
 	_spawn_karts()
 	_spawn_boxes()
+	_spawn_cheese()
 	_build_views()
 	_update_cameras(1.0, true)
 	if audio_enabled:
@@ -299,6 +311,7 @@ func _leave() -> void:
 	var game := get_node_or_null("/root/Game")
 	if game and game.music:
 		game.music.stream_paused = false
+		game.music.pitch_scale = 1.0
 
 
 func restart() -> void:
@@ -375,7 +388,8 @@ func _spawn_karts() -> void:
 		var p_index: int = slot - ai_count  # < 0 = IA
 		add_child(k)
 		k.setup(order[slot], p_index, track, self)
-		k.ai_skill = rng.randf_range(0.9, 0.97)
+		var sk: Array = DIFFICULTY[difficulty]["skill"]
+		k.ai_skill = rng.randf_range(sk[0], sk[1])
 		k.place(idx, lat)
 		if p_index >= 0:
 			players[p_index] = k
@@ -434,6 +448,7 @@ func step(delta: float) -> void:
 	else:
 		race_time += delta
 		_human_lap_sounds()
+		_final_lap_music()
 	var can_drive := state != "countdown"
 	_update_rubber()
 	for k in karts:
@@ -442,6 +457,8 @@ func step(delta: float) -> void:
 		_kart_collisions()
 		_update_boxes(delta)
 		_update_hazards(delta)
+		_update_cheese(delta)
+		_update_slipstream(delta)
 	_update_ranks()
 	_check_finish(delta)
 	_update_cameras(delta, false)
@@ -456,6 +473,18 @@ func _human_lap_sounds() -> void:
 		if lap > human_laps[i] and not p.finished:
 			sfx("lap")
 		human_laps[i] = lap
+
+
+## RF-134: na volta final de algum humano a música acelera 8%.
+func _final_lap_music() -> void:
+	var game := get_node_or_null("/root/Game")
+	if game == null or game.music == null:
+		return
+	var fast := false
+	for p in players:
+		if not p.finished and lap_of(p) == laps and laps > 1:
+			fast = true
+	game.music.pitch_scale = 1.08 if fast else 1.0
 
 
 func humans_finished() -> bool:
@@ -476,7 +505,8 @@ func _update_rubber() -> void:
 			k.rubber = 1.0
 			continue
 		var gap: float = k.rank_value() - ref
-		k.rubber = clampf(1.0 - gap * 0.0006, 0.94, 1.08)
+		var rb: Array = DIFFICULTY[difficulty]["rubber"]
+		k.rubber = clampf(1.0 - gap * 0.0006, rb[0], rb[1])
 
 
 func _kart_collisions() -> void:
@@ -500,6 +530,87 @@ func _kart_collisions() -> void:
 			if rel > 0.0:
 				a.vel -= nrm * rel * wb / (wa + wb)
 				b.vel += nrm * rel * wa / (wa + wb)
+				# RF-144: impacto — o mais leve perde mais velocidade
+				if rel > 4.0:
+					a.speed *= 1.0 - clampf(rel * 0.025 * wb / (wa + wb), 0.0, 0.4)
+					b.speed *= 1.0 - clampf(rel * 0.025 * wa / (wa + wb), 0.0, 0.4)
+					if (a.is_player or b.is_player) and a.bump_cd <= 0.0 and b.bump_cd <= 0.0:
+						a.bump_cd = 0.4
+						b.bump_cd = 0.4
+						sfx("bump")
+
+
+## RF-142: vácuo — logo atrás de outro kart por 1.2 s dá turbo.
+func _update_slipstream(delta: float) -> void:
+	for k in karts:
+		var f: Vector3 = k.forward()
+		var behind := false
+		if k.speed > 15.0 and not k.airborne:
+			for o in karts:
+				if o == k or o.speed < 15.0:
+					continue
+				var to: Vector3 = o.position - k.position
+				to.y = 0.0
+				var d := to.length()
+				if d > 4.0 and d < 14.0 and f.angle_to(to / d) < deg_to_rad(15.0):
+					behind = true
+					break
+		if behind:
+			k.slip_time += delta
+			if k.slip_time >= SLIP_TIME:
+				k.slip_time = 0.0
+				k.boost_time = maxf(k.boost_time, 0.8)
+				if k.is_player:
+					sfx("slip")
+					k.slip_flash = 1.2
+		else:
+			k.slip_time = maxf(0.0, k.slip_time - delta * 2.0)
+		k.slip_flash = maxf(0.0, k.slip_flash - delta)
+
+
+## RF-150: queijinhos.
+func _spawn_cheese() -> void:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 0.6
+	mesh.bottom_radius = 0.6
+	mesh.height = 0.35
+	mesh.radial_segments = 3
+	mesh.rings = 1
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.82, 0.25)
+	mat.emission_enabled = true
+	mat.emission = Color(0.6, 0.45, 0.05)
+	mat.emission_energy_multiplier = 0.4
+	for p in track.cheese_positions():
+		var mi := MeshInstance3D.new()
+		mi.mesh = mesh
+		mi.material_override = mat
+		mi.position = p
+		mi.rotation.x = PI / 2.0
+		add_child(mi)
+		cheeses.append({"node": mi, "pos": p, "cd": 0.0})
+
+
+func _update_cheese(delta: float) -> void:
+	for c in cheeses:
+		var node: MeshInstance3D = c["node"]
+		node.rotate_y(delta * 2.0)
+		if c["cd"] > 0.0:
+			c["cd"] -= delta
+			if c["cd"] <= 0.0:
+				node.visible = true
+			continue
+		var cp: Vector3 = c["pos"]
+		for k in karts:
+			var kp: Vector3 = k.position
+			if Vector2(cp.x - kp.x, cp.z - kp.z).length() < 1.8 and k.position.y < 2.0:
+				if k.cheese < KartScript.MAX_CHEESE:
+					k.cheese += 1
+					if k.is_player:
+						sfx("cheese")
+				c["cd"] = CHEESE_RESPAWN
+				node.visible = false
+				break
 
 
 func _update_boxes(delta: float) -> void:
@@ -514,8 +625,7 @@ func _update_boxes(delta: float) -> void:
 		for k in karts:
 			if k.position.distance_squared_to(b["pos"] - Vector3.UP * 1.2) < 2.6 * 2.6:
 				if k.item == "" and k.spin_time <= 0.0:
-					k.item = _roll_item(k.rank)
-					k.item_hold = 0.0
+					k.give_item(_roll_item(k.rank))  # roleta de 1 s (RF-130)
 					k.ai_item_delay = rng.randf_range(1.5, 5.0)
 					boxes_picked += 1
 					if k.is_player:

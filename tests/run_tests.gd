@@ -30,6 +30,7 @@ func _run() -> void:
 	await _test_intro()
 	await _test_faces()
 	await _test_all_tracks()
+	await _test_v08()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -367,3 +368,137 @@ func _test_all_tracks() -> void:
 		check(max_lat <= Track.WALL + 0.5, "%s: ninguém atravessou o muro (%.2f)" % [td["name"], max_lat])
 		race.queue_free()
 		await process_frame
+
+
+## Coloca o kart k na amostra idx/lateral, andando reto a `spd`.
+func _put(k, idx: int, lat: float, spd: float) -> void:
+	k.place(idx, lat)
+	k.speed = spd
+	k.vel = k.forward() * spd
+	k.boost_time = 0.0
+
+
+func _test_v08() -> void:
+	var dt := 1.0 / 60.0
+	var race = await _new_race(["telles"], true)
+	race.state = "racing"
+	race.countdown = 0.0
+	var tr = race.track
+	var n: int = tr.sample_count()
+	var a = race.karts[0]
+	var b = race.karts[1]
+	# afasta todo mundo pra não interferir
+	for i in race.karts.size():
+		_put(race.karts[i], (i * 60) % n, 0.0, 0.0)
+
+	print("CA-16 seta de turbo")
+	var pad: Dictionary = tr.pads[0]
+	_put(a, wrapi(int(pad["idx"]) - 3, 0, n), float(pad["lat"]), 20.0)
+	a.ai_lane = float(pad["lat"])
+	var got_pad := false
+	for i in 30:
+		a.step(dt, true)
+		if a.boost_time > 0.0:
+			got_pad = true
+	check(got_pad, "passou na seta e ganhou turbo")
+
+	print("CA-17 rampa e manobra")
+	_put(a, wrapi(tr.ramp_idx - 4, 0, n), 0.0, 26.0)
+	a.ai_lane = 0.0
+	a.ai_trick_chance = 1.0
+	a.max_height = 0.0
+	var landed_with_boost := false
+	var was_air := false
+	for i in 180:
+		a.step(dt, true)
+		if a.airborne:
+			was_air = true
+		elif was_air and not landed_with_boost:
+			landed_with_boost = a.boost_time > 0.0
+			break
+	check(was_air and a.max_height > 1.0, "decolou (altura máx %.2f m)" % a.max_height)
+	check(not a.airborne and a.position.y == 0.0, "voltou ao chão")
+	check(landed_with_boost, "manobra no ar deu turbo no pouso")
+
+	print("CA-18 vácuo")
+	var si := int(n * 0.0) + 5
+	_put(a, si + 4, 0.0, 25.0)   # na frente
+	_put(b, si, 0.0, 25.0)       # 8 m atrás, alinhado
+	var slip := false
+	var t := 0.0
+	while t < 2.0:
+		race._update_slipstream(dt)
+		if b.boost_time > 0.0:
+			slip = true
+			break
+		t += dt
+	check(slip, "atrás e alinhado: turbo de vácuo em %.2f s" % t)
+	_put(b, si + 4, 6.0, 25.0)   # do lado
+	b.slip_time = 0.0
+	var side_slip := false
+	for i in 150:
+		race._update_slipstream(dt)
+		if b.boost_time > 0.0:
+			side_slip = true
+	check(not side_slip, "do lado: sem vácuo")
+
+	print("CA-19 queijinhos")
+	a.cheese = 0
+	var top0: float = a.top_speed()
+	var c0: Dictionary = race.cheeses[0]
+	c0["cd"] = 0.0
+	a.position = c0["pos"] - Vector3.UP * 0.7
+	race._update_cheese(dt)
+	check(a.cheese == 1 and a.top_speed() > top0, "pegou 1 queijo e ficou mais rápido")
+	a.cheese = 10
+	var c1: Dictionary = race.cheeses[1]
+	c1["cd"] = 0.0
+	a.position = c1["pos"] - Vector3.UP * 0.7
+	race._update_cheese(dt)
+	check(a.cheese == 10, "máximo de 10")
+	a.spin_time = 0.0
+	a.hit()
+	check(a.cheese == 7, "casca tira 3 (%d)" % a.cheese)
+
+	print("CA-21 roleta")
+	a.spin_time = 0.0
+	a.item = ""
+	a.give_item("turbo")
+	check(not a.can_use_item(), "item recém-pego bloqueado")
+	for i in 70:
+		a.item_roll -= dt
+	check(a.can_use_item(), "liberado depois de 1 s")
+
+	print("CA-22 drift nível 3")
+	_put(a, 20, 0.0, 22.0)
+	a.drifting = true
+	a.drift_dir = 1.0
+	a.drift_charge = 2.5
+	a.in_drift = false
+	a._move(dt)
+	check(not a.drifting and a.boost_time >= 1.5, "turbo roxo %.2f s" % a.boost_time)
+	race.queue_free()
+	await process_frame
+
+	print("CA-20 dificuldade")
+	var ranges := []
+	for d in 3:
+		var r = load("res://scripts/race.gd").new()
+		r.use_game_settings = false
+		r.autopilot_player = true
+		r.player_chars = ["telles"]
+		r.difficulty = d
+		root.add_child(r)
+		if r.karts.is_empty():
+			await process_frame
+		var lo := INF
+		var hi := -INF
+		for k in r.karts:
+			if not k.is_player:
+				lo = minf(lo, k.ai_skill)
+				hi = maxf(hi, k.ai_skill)
+		var sk: Array = r.DIFFICULTY[d]["skill"]
+		ranges.append(lo >= sk[0] - 0.0001 and hi <= sk[1] + 0.0001)
+		r.queue_free()
+		await process_frame
+	check(ranges == [true, true, true], "habilidade da IA dentro da faixa em fácil/normal/difícil")

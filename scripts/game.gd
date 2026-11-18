@@ -11,6 +11,7 @@ var num_players := 1
 var selected_chars: Array = ["fejaum"]
 var laps := 3
 var track_id := "queijo"
+var difficulty := 1
 var muted := false
 var music: AudioStreamPlayer
 

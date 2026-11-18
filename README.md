@@ -37,3 +37,9 @@ J1 = WASD + Espaço/E ou controle 1 · J2 = setas + Shift dir./Enter ou controle
 ## Som e pause
 Todo som é sintetizado em código (`scripts/sfx.gd`). `M` liga/desliga · `Esc`/Start pausa.
 Largada turbo: comece a acelerar quando aparecer o **2** (entre 1.6 s e 0.6 s do VAI). Antes disso, queima.
+
+## Dicas de pilotagem
+- **Drift** (segure Espaço virando): faísca azul → laranja → roxa = turbo cada vez maior.
+- **Rampa**: aperte drift no ar pra fazer a manobra e ganhar turbo no pouso.
+- **Setas no chão** dão turbo; andar **colado atrás** de alguém dá turbo de vácuo.
+- **Queijinhos**: cada um deixa o kart 1% mais rápido (até 10); levar casca/bomba tira 3.
