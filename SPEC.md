@@ -59,7 +59,7 @@ Conversão de stat para física (em `kart.gd`):
 - [x] **RF-13** **Drift:** segurar o botão de drift virando acima de 12 m/s faz o kart pular e derrapar na direção escolhida. Virar pra dentro fecha a curva, pra fora abre.
 - [x] **RF-14** **Mini-turbo:** ao soltar o drift, ≥0.7 s de drift = turbo azul curto (0.6 s); ≥1.5 s = turbo laranja (1.1 s). Faíscas mostram a carga.
 - [x] **RF-15** Batida entre karts empurra conforme o peso.
-- [x] **RF-16** Kart da IA preso (parado > 2.5 s) ou qualquer kart fora dos limites é reposicionado no centro da pista.
+- [x] **RF-16** Kart da IA preso (parado > 2.5 s) ou qualquer kart fora dos limites é reposicionado no centro da pista. (v0.25: virou o resgate com balões, RF-310.)
 
 ### Itens
 - [x] **RF-20** 3 fileiras de 4 caixas "?" na pista. Passar por uma dá um item (se o slot estiver vazio); a caixa volta em 3 s.
@@ -268,6 +268,12 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-304** Cenário de praça: árvores, balanços e bolas gigantes; zebra azul/amarela, muro rosa/verde, pista de borracha laranja, fim de tarde. Música própria (CC0).
 - [x] **RF-305** **Copas no Grand Prix**: Copa Queijo (queijo, deserto, cozinha) e **Copa Farofa** (churrasco, parquinho, deserto, fábrica). Na etapa PISTA do GP a lista vira a lista de copas.
 
+### Voltar o kart preso (v0.25)
+- [x] **RF-310** **Resgate com balões**: um cacho de 3 balões pega o kart e devolve na pista (sobe 6 m, some, desce no ponto seguro; 1,3 s sem controle). Chama quando o kart **quer andar e não sai do lugar** (jogador: 3 s acelerando; IA: 2,5 s) ou quando **cai** abaixo do chão (vãos das pistas futuras; cair custa 3 queijinhos, ficar preso não custa nada). Substitui o teletransporte seco do RF-16.
+- [x] **RF-311** **Ponto seguro**: o kart lembra a última amostra em que andou pra frente, no chão, dentro da pista. A pista marca o que não serve (perigos, zonas, rampa e pouso, cruzamento) e o resgate sempre volta pra trás até um ponto bom, nunca adianta. O progresso da volta acompanha.
+- [x] **RF-312** Depois de pousar o kart **pisca 1,2 s** e nada acerta (itens, perigos, ratoeira). Pendurado nos balões não bate em ninguém.
+- [x] **RF-313** **CONTRAMÃO!** pisca no HUD depois de 1 s andando contra o sentido da pista (antes só aparecia depois da chegada, por engano).
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -391,6 +397,11 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-66** Gangorra: no chão lança o kart, levantada derruba, do outro lado da pista não pega, IA enxerga.
 - [x] **CA-67** Escorregador mais alto que a rampa comum e pulo > 3 m; rampa e setas longe do cruzamento.
 - [x] **CA-68** Copa Farofa com 4 pistas; no menu ↓ escolhe a copa, o GP começa na Churrascada e a 2ª corrida é o Parquinho.
+- [x] **CA-69** Jogador acelerando contra o muro: balões em ~3 s, sobe, pousa no centro da pista no mesmo lugar ou atrás, de frente, progresso certo; pisca e nada acerta; depois normal. Parado sem acelerar não chama.
+- [x] **CA-70** Abaixo do chão: resgate, -3 queijinhos, volta no último ponto seguro.
+- [x] **CA-71** Pontos seguros: nunca em fogo, farofa, grelha, rampa ou no meio do cruzamento; da grelha volta pra antes dela; a maior parte da pista é segura.
+- [x] **CA-72** Andando ao contrário aparece CONTRAMÃO!; virando, some.
+- [x] **CA-73** IA parada também é resgatada pelos balões.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
@@ -436,7 +447,7 @@ Ideia geral: o mundo é **visto do tamanho de um camundongo** — cada pista é 
 ### Ordem sugerida
 1. **T1 + T4 → P1 Churrascada e P3 Fábrica** (tecnologia barata, muda bastante o jogo).
 2. **T5 → P2 Parquinho em Oito** (fecha a Copa Farofa com 3 pistas novas + uma das atuais).
-3. **"Voltar o kart preso" + T3 + T6 → P4 Geladeira e P5 Telhados** (o salto técnico grande).
+3. ~~"Voltar o kart preso"~~ (v0.25) **+ T3 + T6 → P4 Geladeira e P5 Telhados** (o salto técnico grande).
 4. **T2 + atalho → P6 Feira Livre.**
 
 Cada pista nova ganha: música CC0 própria, critério de aceite com a IA completando 3 voltas sem ficar presa, tempo de volta entre 35 e 55 s, e prints de revisão.

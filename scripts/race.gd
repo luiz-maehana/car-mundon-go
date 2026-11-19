@@ -617,6 +617,8 @@ func _kart_collisions() -> void:
 		for j in range(i + 1, karts.size()):
 			var a: Node3D = karts[i]
 			var b: Node3D = karts[j]
+			if a.rescue_time > 0.0 or b.rescue_time > 0.0:  # RF-310: pendurado nos balões
+				continue
 			var dv := b.position - a.position
 			dv.y = 0.0
 			var d := dv.length()

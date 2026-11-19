@@ -52,6 +52,7 @@ func _run() -> void:
 	await _test_new_tracks()
 	await _test_drift_feel()
 	await _test_parquinho()
+	await _test_rescue()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -1814,4 +1815,139 @@ func _test_parquinho() -> void:
 	menu.queue_free()
 	game.mode = "race"
 	game.gp_cup = 0
+	await process_frame
+
+
+## Gira o kart pra encarar o muro da direita (lateral +).
+func _face_wall(k, idx: int) -> void:
+	var t = k.track
+	_put(k, idx, 13.5, 0.0)
+	for h in [t.heading_at(idx) - PI / 2.0, t.heading_at(idx) + PI / 2.0]:
+		k.heading = h
+		if k.forward().dot(t.rights[idx]) > 0.9:
+			break
+	k.rotation.y = k.heading
+	k.last_pos = k.position
+
+
+func _test_rescue() -> void:
+	var dt := 1.0 / 60.0
+	print("CA-69 kart preso volta pra pista")
+	var race = await _race_on("queijo")
+	var k = race.player
+	var t = race.track
+	var n: int = t.sample_count()
+	var idx := 120
+	_face_wall(k, idx)
+	k.safe_idx = idx
+	var prog0: float = k.progress
+	Input.action_press("p1_accelerate")
+	var secs := 0.0
+	while k.rescues == 0 and secs < 6.0:
+		k.step(dt, true)
+		secs += dt
+	check(k.rescues == 1 and secs > k.STUCK_PLAYER_TIME - 0.1 and secs < k.STUCK_PLAYER_TIME + 0.6, "acelerando contra o muro, os balões pegam em %.1f s" % secs)
+	check(k.balloons != null and k.balloons.visible, "balões aparecem")
+	var top := 0.0
+	while k.rescue_time > 0.0:
+		k.step(dt, true)
+		top = maxf(top, k.position.y)
+	Input.action_release("p1_accelerate")
+	var back := wrapi(idx - k.track_idx, -n / 2, n / 2)
+	check(back >= 0 and back < 40 and absf(k.lateral) < 0.5 and k.position.y == 0.0, "pousa no centro da pista, no mesmo lugar ou pra trás (%d amostras)" % back)
+	check(top > 4.0, "sobe pendurado (%.1f m)" % top)
+	check(k.forward().dot(t.tangents[k.track_idx]) > 0.99, "de frente pro sentido da pista")
+	check(absf((k.progress - prog0) + back) < 1.5, "progresso da volta acompanha o lugar (%.1f)" % (k.progress - prog0))
+	check(not k.balloons.visible and k.rescue_ghost > 0.0, "balões somem e o kart fica piscando")
+	k.hit(1.0)
+	k.trap()
+	check(k.spin_time == 0.0 and k.trap_time == 0.0, "piscando nada acerta")
+	for i in 90:
+		k.step(dt, true)
+	check(k.rescue_ghost == 0.0 and k.model.visible, "depois volta ao normal")
+	# parado sem acelerar não é "preso"
+	_face_wall(k, idx)
+	for i in 300:
+		k.step(dt, true)
+	check(k.rescues == 1, "parado sem acelerar não chama os balões")
+	race.queue_free()
+	await process_frame
+
+	print("CA-70 caiu = volta e perde queijinhos")
+	race = await _race_on("queijo")
+	k = race.player
+	_put(k, 200, 3.0, 20.0)
+	k.safe_idx = 196
+	k.cheese = 5
+	k.position.y = -5.0
+	k.step(dt, true)
+	check(k.rescue_time > 0.0 and k.cheese == 2, "abaixo do chão: resgate e -3 queijinhos (%d)" % k.cheese)
+	while k.rescue_time > 0.0:
+		k.step(dt, true)
+	check(k.track_idx == 196 and k.position.y == 0.0, "volta no último ponto seguro (%d)" % k.track_idx)
+	race.queue_free()
+	await process_frame
+
+	print("CA-71 pontos seguros")
+	race = await _race_on("churrasco")
+	t = race.track
+	n = t.sample_count()
+	var bad := 0
+	for h in t.hazard_specs:
+		bad += t.safe[int(h["idx"])]
+	for z in t.zones:
+		bad += t.safe[int(z["i0"]) + 2]
+	bad += t.safe[t.ramp_idx + 1]
+	check(bad == 0, "nunca devolve em cima de fogo, farofa, grelha ou rampa")
+	var gi: int = t.zones[1]["i0"] + 5  # meio da grelha
+	var si: int = t.safe_before(gi)
+	check(t.safe[si] == 1 and wrapi(gi - si, 0, n) > 0 and wrapi(gi - si, 0, n) < 40, "da grelha volta pra antes dela (%d amostras)" % wrapi(gi - si, 0, n))
+	var cnt := 0
+	for v in t.safe:
+		cnt += v
+	check(cnt > n * 0.6, "a maior parte da pista é segura (%d de %d)" % [cnt, n])
+	race.queue_free()
+	await process_frame
+	race = await _race_on("parquinho")
+	t = race.track
+	var c0: int = t.crossings[0][0]
+	check(t.safe[c0] == 0 and t.safe[t.crossings[0][1]] == 0, "nem no meio do cruzamento")
+	race.queue_free()
+	await process_frame
+
+	print("CA-72 contramão")
+	race = await _race_on("queijo")
+	k = race.player
+	_put(k, 150, 0.0, 0.0)
+	k.heading += PI
+	k.rotation.y = k.heading
+	Input.action_press("p1_accelerate")
+	for i in 90:
+		race.step(dt)
+	Input.action_release("p1_accelerate")
+	var hud = race.huds[0]
+	hud.update_hud(dt)
+	check(k.wrong_way_time > k.WRONG_WAY_SHOW and hud.lbl_msg.text == "CONTRAMÃO!", "andando ao contrário aparece CONTRAMÃO! (%.1f s)" % k.wrong_way_time)
+	k.heading -= PI
+	k.vel = k.forward() * 10.0
+	k.speed = 10.0
+	for i in 40:
+		race.step(dt)
+	check(k.wrong_way_time == 0.0, "virou pro lado certo, some")
+	race.queue_free()
+	await process_frame
+
+	print("CA-73 IA presa também usa os balões")
+	race = await _race_on("queijo")
+	var ai = race.karts[1]
+	_face_wall(ai, 300)
+	ai.ai_lane_timer = 99.0
+	var s2 := 0.0
+	while ai.rescues == 0 and s2 < 8.0:
+		ai.speed = 0.0  # segura parada (simula enroscada)
+		ai.vel = Vector3.ZERO
+		ai.step(dt, true)
+		s2 += dt
+	check(ai.rescues == 1 and s2 < ai.STUCK_AI_TIME + 0.5, "IA parada: balões em %.1f s" % s2)
+	race.queue_free()
 	await process_frame

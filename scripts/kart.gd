@@ -84,6 +84,27 @@ var start_stall := 0.0
 var start_result := ""     # "" | "turbo" | "queimou"
 var zone_kind := ""         # RF-270: farofa | sand | belt | belt_side | grill | ""
 
+# RF-310..313: resgate — um cacho de balões leva o kart preso (ou que caiu) de volta pra pista
+const RESCUE_TIME := 1.3       # total, sem controle
+const RESCUE_LIFT := 0.5       # subindo no lugar; depois desce no ponto seguro
+const RESCUE_HEIGHT := 6.0
+const RESCUE_GHOST := 1.2      # depois de pousar: pisca e nada acerta
+const STUCK_AI_TIME := 2.5
+const STUCK_PLAYER_TIME := 3.0
+const STUCK_MOVE := 1.5        # m/s: andando menos que isso querendo andar = preso
+const FALL_Y := -3.0           # abaixo disso caiu (vãos das pistas futuras)
+const WRONG_WAY_SHOW := 1.0
+var rescue_time := 0.0
+var rescue_ghost := 0.0
+var rescue_from := Vector3.ZERO
+var rescue_idx := 0
+var rescue_moved := false
+var rescues := 0
+var safe_idx := 0
+var wrong_way_time := 0.0
+var last_pos := Vector3.ZERO
+var balloons: Node3D
+
 # v0.8: ar/rampa, manobra, queijinhos, vácuo, roleta
 var vy := 0.0
 var airborne := false
@@ -175,6 +196,10 @@ func place(idx: int, lat: float) -> void:
 	heading = track.heading_at(idx)
 	rotation.y = heading
 	progress = float(idx - n) if idx > n / 2 else float(idx)
+	safe_idx = idx
+	last_pos = position
+	wrong_way_time = 0.0
+	stuck_time = 0.0
 	speed = 0.0
 	vel = Vector3.ZERO
 	lateral = lat
@@ -193,7 +218,7 @@ func _shield_absorbs() -> bool:
 
 ## RF-202: preso na ratoeira — para na hora e fica TRAP_TIME sem andar.
 func trap() -> void:
-	if trap_time > 0.0 or _shield_absorbs():
+	if trap_time > 0.0 or is_rescued() or _shield_absorbs():
 		return
 	trap_time = TRAP_TIME
 	drifting = false
@@ -207,7 +232,7 @@ func trap() -> void:
 
 
 func hit(strength := 1.0) -> void:
-	if spin_time > 0.0 or _shield_absorbs():
+	if spin_time > 0.0 or is_rescued() or _shield_absorbs():
 		return
 	spin_time = 1.1 * strength
 	drifting = false
@@ -268,6 +293,12 @@ func _track_start_hold() -> void:
 
 func step(delta: float, can_drive: bool) -> void:
 	in_item = false
+	if can_drive and rescue_time > 0.0:
+		_update_rescue(delta)
+		_update_visuals(delta)
+		return
+	if can_drive and rescue_ghost > 0.0:
+		rescue_ghost = maxf(0.0, rescue_ghost - delta)
 	if autopilot:
 		_ai_input(delta)
 	else:
@@ -473,29 +504,139 @@ func _update_track(delta: float) -> void:
 		lateral = s * lim
 	max_abs_lateral = maxf(max_abs_lateral, absf(lateral))
 
-	# preso / fora dos limites (RF-16)
-	if autopilot and absf(speed) < 3.0 and spin_time <= 0.0:
+	# RF-311: último ponto seguro (no chão, na pista, andando pra frente num trecho sem perigo)
+	var tan: Vector3 = track.tangents[ni]
+	if not airborne and not on_ramp and absf(position.y) < 0.3 and absf(lateral) < TrackScript.ROAD_HALF - 1.0 and vel.dot(tan) > 2.0 and (track.safe.is_empty() or track.safe[ni] == 1):
+		safe_idx = ni
+	# RF-313: contramão (andando contra o sentido da pista)
+	if not airborne and vel.dot(tan) < -3.0:
+		wrong_way_time += delta
+	else:
+		wrong_way_time = maxf(0.0, wrong_way_time - delta * 3.0)
+	# RF-310 (antes RF-16): preso = quer andar e não sai do lugar; caiu = abaixo do chão
+	var moved := Vector2(position.x - last_pos.x, position.z - last_pos.z).length() / maxf(delta, 0.0001)
+	last_pos = position
+	var wants := autopilot or absf(in_throttle) > 0.5
+	if wants and moved < STUCK_MOVE and spin_time <= 0.0 and trap_time <= 0.0 and start_stall <= 0.0 and not airborne:
 		stuck_time += delta
 	else:
 		stuck_time = 0.0
-	if stuck_time > 2.5:
-		respawn()
+	if position.y < FALL_Y:
+		start_rescue(true)
+	elif stuck_time > (STUCK_AI_TIME if autopilot else STUCK_PLAYER_TIME):
+		start_rescue(false)
 
 
-func respawn() -> void:
-	position = track.points[track_idx]
-	heading = track.heading_at(track_idx)
-	rotation.y = heading
+## Durante o resgate e logo depois (piscando) nada acerta o kart.
+func is_rescued() -> bool:
+	return rescue_time > 0.0 or rescue_ghost > 0.0
+
+
+## RF-310: os balões pegam o kart. Caiu = perde 3 queijinhos; preso = sem castigo.
+func start_rescue(fell := false) -> void:
+	if rescue_time > 0.0:
+		return
+	rescue_time = RESCUE_TIME
+	rescue_from = position
+	rescue_idx = track.safe_before(safe_idx)
+	rescue_moved = false
+	rescues += 1
 	speed = 0.0
 	vel = Vector3.ZERO
-	spin_time = 0.0
 	drifting = false
-	stuck_time = 0.0
-	lateral = 0.0
+	drift_charge = 0.0
+	boost_time = 0.0
+	spin_time = 0.0
+	trap_time = 0.0
 	airborne = false
 	on_ramp = false
 	vy = 0.0
+	trick = false
+	trick_spin = 0.0
+	stuck_time = 0.0
+	wrong_way_time = 0.0
+	if fell:
+		cheese = maxi(0, cheese - 3)
+	_show_balloons(true)
+	if is_player:
+		race.sfx("drop")
+
+
+func _update_rescue(delta: float) -> void:
+	rescue_time -= delta
+	var t := RESCUE_TIME - rescue_time
+	if t < RESCUE_LIFT:
+		var f := t / RESCUE_LIFT
+		position = rescue_from + Vector3.UP * RESCUE_HEIGHT * f * f
+	else:
+		if not rescue_moved:
+			rescue_moved = true
+			_jump_to(rescue_idx)
+		var f := clampf((t - RESCUE_LIFT) / (RESCUE_TIME - RESCUE_LIFT), 0.0, 1.0)
+		position.y = RESCUE_HEIGHT * (1.0 - f) * (1.0 - f)
+	if rescue_time <= 0.0:
+		rescue_time = 0.0
+		position.y = 0.0
+		rescue_ghost = RESCUE_GHOST
+		last_pos = position
+		_show_balloons(false)
+
+
+## Põe o kart no centro da amostra idx, de frente pra pista, sem estragar o progresso da volta.
+func _jump_to(idx: int) -> void:
+	var n: int = track.sample_count()
+	var d := wrapi(idx - track_idx, -n / 2, n / 2)
+	progress += d
+	track_idx = idx
+	position = track.points[idx] + Vector3.UP * RESCUE_HEIGHT
+	heading = track.heading_at(idx)
+	rotation.y = heading
+	lateral = 0.0
+	if model:
+		model.rotation = Vector3.ZERO
 	reset_physics_interpolation()
+
+
+func _show_balloons(on: bool) -> void:
+	if balloons == null:
+		if not on:
+			return
+		balloons = Node3D.new()
+		balloons.name = "RescueBalloons"
+		var cols := [Color(0.95, 0.25, 0.3), Color(1.0, 0.85, 0.2), Color(0.3, 0.6, 1.0)]
+		var spots := [Vector3(-0.9, 5.2, 0.2), Vector3(0.0, 5.9, -0.3), Vector3(0.9, 5.3, 0.25)]
+		for b in 3:
+			var ball := MeshInstance3D.new()
+			var sm := SphereMesh.new()
+			sm.radius = 0.75
+			sm.height = 1.8
+			ball.mesh = sm
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = cols[b]
+			mat.roughness = 0.25
+			ball.material_override = mat
+			ball.position = spots[b]
+			balloons.add_child(ball)
+			var str_mesh := CylinderMesh.new()
+			str_mesh.top_radius = 0.03
+			str_mesh.bottom_radius = 0.03
+			var from := Vector3(0, 1.4, 0)
+			var to: Vector3 = spots[b] - Vector3(0, 0.85, 0)
+			str_mesh.height = from.distance_to(to)
+			var string := MeshInstance3D.new()
+			string.mesh = str_mesh
+			var smat := StandardMaterial3D.new()
+			smat.albedo_color = Color(0.95, 0.95, 0.95)
+			string.material_override = smat
+			string.position = (from + to) * 0.5
+			var dir := (to - from).normalized()
+			var axis := Vector3.UP.cross(dir)
+			if axis.length() > 0.001:
+				string.basis = Basis(axis.normalized(), Vector3.UP.angle_to(dir))
+			balloons.add_child(string)
+		add_child(balloons)
+	balloons.visible = on
+
 
 
 # ---------------------------------------------------------------- input
@@ -735,6 +876,8 @@ func _update_visuals(delta: float) -> void:
 	rotation.y = heading
 	if model == null:
 		return
+	# RF-312: depois do resgate o kart pisca enquanto nada acerta
+	model.visible = rescue_ghost <= 0.0 or fmod(rescue_ghost, 0.16) > 0.08
 	var yaw := 0.0
 	if spin_time > 0.0:
 		yaw = model.rotation.y + 14.0 * delta

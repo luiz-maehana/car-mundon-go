@@ -441,8 +441,10 @@ func update_hud(delta: float) -> void:
 	elif p.finished and not final_lap_counted:
 		final_lap_counted = true
 		best_lap = minf(best_lap, p.finish_time - lap_start)
-		if p.vel.dot(race.track.tangents[p.track_idx]) < -4.0:
-			_flash("CONTRAMÃO!", 0.2)
+	# RF-313: contramão (antes só aparecia depois da chegada)
+	if not p.finished and p.wrong_way_time > p.WRONG_WAY_SHOW:
+		_flash("CONTRAMÃO!", 0.25)
+		lbl_msg.add_theme_color_override("font_color", Color(1.0, 0.3, 0.25) if fmod(race.race_time, 0.5) < 0.3 else Color(1.0, 0.85, 0.2))
 	if msg_time > 0.0:
 		msg_time -= delta
 		if msg_time <= 0.0:

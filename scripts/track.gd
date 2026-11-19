@@ -212,6 +212,42 @@ func _place_features() -> void:
 	ramp_h = float(def.get("ramp_h", RAMP_H))
 	_find_crossings()
 	_parse_zones()
+	_build_safe()
+
+
+
+
+# ---------------------------------------------------------------- pontos seguros do resgate (RF-311)
+
+var safe := PackedByteArray()   # 1 = dá pra devolver um kart aqui (longe de perigo, rampa e cruzamento)
+
+
+func _build_safe() -> void:
+	var n := points.size()
+	safe.resize(n)
+	safe.fill(1)
+	var block := func(i0: int, i1: int) -> void:
+		for i in range(i0, i1 + 1):
+			safe[wrapi(i, 0, n)] = 0
+	for h in hazard_specs:
+		block.call(int(h["idx"]) - 8, int(h["idx"]) + 6)
+	for z in zones:
+		block.call(int(z["i0"]) - 3, int(z["i0"]) + int(z["len"]) + 2)
+	if ramp_idx >= 0:
+		block.call(ramp_idx - 2, ramp_idx + RAMP_LEN + 18)  # rampa e pouso
+	for c in crossings:
+		for ci in c:
+			block.call(int(ci) - 14, int(ci) + 14)
+
+
+## Ponto seguro mais próximo andando pra trás a partir de i (nunca pra frente: o resgate não adianta ninguém).
+func safe_before(i: int) -> int:
+	var n := points.size()
+	for k in n:
+		var j := wrapi(i - k, 0, n)
+		if safe.is_empty() or safe[j] == 1:
+			return j
+	return i
 
 
 ## Kart está em cima de uma seta? (RF-140)
