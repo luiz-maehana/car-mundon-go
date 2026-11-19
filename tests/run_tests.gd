@@ -247,18 +247,24 @@ func _new_race(chars: Array, auto: bool) -> Node:
 
 
 func _test_sounds() -> void:
-	print("CA-10 sons sintetizados")
+	print("CA-10 sons")
 	var Sfx = load("res://scripts/sfx.gd")
 	var ok := true
+	var files := 0
 	for n in Sfx.NAMES:
-		var w: AudioStreamWAV = Sfx.get_sound(n)
-		if w == null or w.data.size() < 200:
+		var s: AudioStream = Sfx.get_sound(n)
+		if s == null or s.get_length() < 0.05:
 			ok = false
 			printerr("     som vazio: ", n)
+		if s and s.resource_name.begins_with("res://assets/audio"):
+			files += 1
 	check(ok, "%d efeitos com conteúdo" % Sfx.NAMES.size())
-	var m: AudioStreamWAV = Sfx.get_sound("music")
+	check(files == Sfx.NAMES.size(), "todos vêm de arquivo CC0 (%d/%d)" % [files, Sfx.NAMES.size()])
+	var eng: AudioStream = Sfx.get_sound("engine")
+	check(eng is AudioStreamWAV and eng.loop_mode == AudioStreamWAV.LOOP_FORWARD, "motor em loop")
+	var m: AudioStreamWAV = Sfx.synth("music_menu")
 	var secs: float = m.data.size() / 2.0 / m.mix_rate
-	check(m.loop_mode == AudioStreamWAV.LOOP_FORWARD and secs > 8.0, "música em loop (%.1f s)" % secs)
+	check(m.loop_mode == AudioStreamWAV.LOOP_FORWARD and secs > 8.0, "reserva sintetizada em loop (%.1f s)" % secs)
 
 
 ## Roda a contagem; press_at = countdown em que começa a segurar o acelerador (-1 = nunca).
@@ -948,12 +954,13 @@ func _test_music() -> void:
 	var ok := true
 	for style in ["menu", "queijo", "deserto", "cozinha", "victory"]:
 		var t0 := Time.get_ticks_msec()
-		var w: AudioStreamWAV = Sfx.music(style)
-		var secs: float = w.data.size() / 2.0 / w.mix_rate
-		print("     %-8s %.1f s de música, gerada em %d ms" % [style, secs, Time.get_ticks_msec() - t0])
-		if w.loop_mode != AudioStreamWAV.LOOP_FORWARD or secs < 8.0:
+		var w: AudioStream = Sfx.music(style)
+		var secs: float = w.get_length()
+		print("     %-8s %.1f s de música (%s), %d ms" % [style, secs, w.resource_name.get_file(), Time.get_ticks_msec() - t0])
+		var looped: bool = w.loop if "loop" in w else (w is AudioStreamWAV and w.loop_mode == AudioStreamWAV.LOOP_FORWARD)
+		if not looped or secs < 8.0:
 			ok = false
-		sigs[w.data.slice(20000, 20400).hex_encode()] = true
+		sigs[w.resource_name] = true
 	check(ok and sigs.size() == 5, "5 trilhas em loop, > 8 s e diferentes entre si")
 	var tracks_ok := true
 	for td in Track.TRACKS:
@@ -969,8 +976,8 @@ func _test_music() -> void:
 		check(game.music.stream == s1 and game.current_music == "deserto", "mesmo estilo não reinicia")
 		game.play_music("menu")
 		check(game.music.stream != s1 and game.current_music == "menu", "estilo novo troca a trilha")
-	var crowd: AudioStreamWAV = Sfx.get_sound("crowd")
-	check(crowd != null and crowd.data.size() > 20000, "torcida existe")
+	var crowd: AudioStream = Sfx.get_sound("crowd")
+	check(crowd != null and crowd.get_length() > 1.0, "torcida existe (%.1f s)" % crowd.get_length())
 
 
 func _tt_race(laps: int) -> Node:

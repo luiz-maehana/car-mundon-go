@@ -154,10 +154,11 @@ func _process(delta: float) -> void:
 	for e in engines:
 		var ap: AudioStreamPlayer = e["player"]
 		var k: Node3D = e["kart"]
-		var pitch := 0.7 + absf(k.speed) * 0.05
+		# motor gravado (CC0): 0.75 parado → ~1.45 no máximo; turbo +12%
+		var pitch := 0.75 + absf(k.speed) * 0.022
 		if k.boost_time > 0.0:
-			pitch *= 1.25
-		ap.pitch_scale = lerpf(ap.pitch_scale, clampf(pitch, 0.5, 3.5), 1.0 - exp(-10.0 * delta))
+			pitch *= 1.12
+		ap.pitch_scale = lerpf(ap.pitch_scale, clampf(pitch, 0.6, 2.0), 1.0 - exp(-10.0 * delta))
 		var target_db: float = -60.0 if paused else float(e["base_db"]) + 3.0 * clampf(k.in_throttle, 0.0, 1.0)
 		ap.volume_db = lerpf(ap.volume_db, target_db, 1.0 - exp(-8.0 * delta))
 
@@ -570,7 +571,7 @@ func _human_lap_sounds() -> void:
 		var p: Node3D = players[i]
 		var lap := lap_of(p)
 		if lap > human_laps[i] and not p.finished:
-			sfx("lap")
+			sfx("final_lap" if lap == laps and laps > 1 else "lap")  # RF-207: vinheta da volta final
 		human_laps[i] = lap
 
 

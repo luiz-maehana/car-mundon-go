@@ -233,6 +233,7 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 
 ### Ícones e sons (v0.19)
 - [x] **RF-206** Ícones dos itens são fotos dos próprios modelos 3D do jogo (foguete, banana, bomba, ratoeira, gato, queijo, queijo triplo, escudo), geradas por `tools/render_icons.gd` em `assets/icons/` (128 px, fundo transparente). Sem a foto, o HUD volta pro desenho em código.
+- [x] **RF-207** Efeitos e músicas vêm de arquivos CC0 em `assets/audio/` (créditos em CREDITS.md); `Sfx` cai na versão sintetizada se faltar arquivo. Vinheta própria na volta final; motor gravado em loop com pitch 0,75–1,45.
 
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.

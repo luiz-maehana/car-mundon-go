@@ -1,21 +1,57 @@
 extends RefCounted
-## Sons 100% sintetizados em código, sem arquivos de áudio (RF-80/82).
-## get_sound(nome) gera uma vez e guarda em cache (vale entre cenas).
+## RF-80/82/207: sons e músicas. Se existe arquivo em assets/audio/sfx/<nome> ou
+## assets/audio/music/<estilo> (CC0, ver CREDITS.md), usa ele; senão sintetiza em código.
+## get_sound(nome) carrega/gera uma vez e guarda em cache (vale entre cenas).
 
 const RATE := 22050
 const MUSIC_RATE := 16000
-const NAMES := ["beep", "go", "item", "boost", "mini_turbo", "drop", "shoot", "hit", "lap", "finish", "start_turbo", "stall", "bump", "cheese", "pad", "trick", "slip", "engine", "meow", "shield", "shield_break", "snap", "crowd"]
+const NAMES := ["beep", "go", "item", "boost", "mini_turbo", "drop", "shoot", "hit", "lap", "finish", "start_turbo", "stall", "bump", "cheese", "pad", "trick", "slip", "engine", "meow", "shield", "shield_break", "snap", "crowd", "final_lap"]
+const LOOPED := ["engine"]
+const EXTS := ["ogg", "wav", "mp3"]
 
 static var _cache := {}
 
 
-static func get_sound(sound_name: String) -> AudioStreamWAV:
+static func get_sound(sound_name: String) -> AudioStream:
 	if not _cache.has(sound_name):
-		_cache[sound_name] = _make(sound_name)
+		var f: AudioStream = null
+		if sound_name.begins_with("music_"):
+			f = from_file("music", sound_name.substr(6), true)
+		else:
+			f = from_file("sfx", sound_name, LOOPED.has(sound_name))
+		_cache[sound_name] = f if f else _make(sound_name)
 	return _cache[sound_name]
 
 
+## Arquivo de áudio do projeto (ogg/wav/mp3), com loop ligado se pedido. null se não existe.
+static func from_file(folder: String, base: String, loop: bool) -> AudioStream:
+	for ext in EXTS:
+		var p := "res://assets/audio/%s/%s.%s" % [folder, base, ext]
+		if not ResourceLoader.exists(p):
+			continue
+		var s: AudioStream = load(p)
+		if loop:
+			s = s.duplicate()
+			if s is AudioStreamWAV:
+				var w := s as AudioStreamWAV
+				w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+				w.loop_begin = 0
+				w.loop_end = int(w.get_length() * w.mix_rate)
+			elif "loop" in s:
+				s.loop = true
+		s.resource_name = p  # a cópia perde o resource_path
+		return s
+	return null
+
+
+## Versão sintetizada (sem arquivo), usada se faltar o arquivo.
+static func synth(sound_name: String) -> AudioStreamWAV:
+	return _make(sound_name)
+
+
 static func _make(sound_name: String) -> AudioStreamWAV:
+	if sound_name == "final_lap":
+		return _make("lap")
 	if sound_name.begins_with("music_"):
 		return _compose(sound_name.substr(6))
 	var b := PackedFloat32Array()
@@ -166,7 +202,7 @@ static func midi(n: float) -> float:
 
 
 ## Trilha do estilo (gerada uma vez e guardada em cache).
-static func music(style: String) -> AudioStreamWAV:
+static func music(style: String) -> AudioStream:
 	return get_sound("music_" + (style if MUSIC_STYLES.has(style) else "queijo"))
 
 
