@@ -113,6 +113,8 @@ var ground := 0.0              # altura do chão da pista embaixo do kart
 var on_loop := false
 var loop_s := 0.0              # posição no looping em amostras (com fração)
 var loops_done := 0
+var loop_fwd := Vector3.FORWARD   # frente e "pra cima" contínuos no looping (sem degraus entre amostras)
+var loop_up := Vector3.UP
 var pitch := 0.0
 
 # v0.8: ar/rampa, manobra, queijinhos, vácuo, roleta
@@ -476,14 +478,15 @@ func _move_loop(delta: float) -> void:
 		return
 	var k := (i + 1) % n
 	position = track.points[i].lerp(track.points[k], f) + track.rights[i].lerp(track.rights[k], f) * lateral
-	vel = track.tangents[i] * speed
+	loop_fwd = track.tangents[i].slerp(track.tangents[k], f).normalized()
+	loop_up = track.ups[i].slerp(track.ups[k], f).normalized()
+	vel = loop_fwd * speed
 
 
 ## Frente e "pra cima" do kart (no looping seguem a pista; fora, o plano). A câmera usa.
 func cam_frame() -> Array:
 	if on_loop:
-		var i: int = track_idx
-		return [track.tangents[i], track.ups[i]]
+		return [loop_fwd, loop_up]
 	return [forward(), Vector3.UP]
 
 
@@ -562,6 +565,8 @@ func _update_track(delta: float) -> void:
 	if not on_loop and not airborne and track.in_loop(ni) and vel.dot(track.tangents[ni]) > 0.0:
 		on_loop = true
 		loop_s = float(ni) + clampf(track.along_of(position, ni) / TrackScript.SPACING, 0.0, 0.99)
+		loop_fwd = track.tangents[ni]
+		loop_up = track.ups[ni]
 		drifting = false
 
 	# muro (RF-12)
@@ -958,9 +963,8 @@ func celebrate() -> void:
 func _update_visuals(delta: float) -> void:
 	# RF-320/321: no looping o kart segue a normal da pista; no chão inclina o bico na subida/descida
 	if on_loop:
-		var lt: Vector3 = track.tangents[track_idx]
-		var lu: Vector3 = track.ups[track_idx]
-		basis = Basis(lt.cross(lu).normalized(), lu, -lt)
+		var lu: Vector3 = (loop_up - loop_fwd * loop_up.dot(loop_fwd)).normalized()
+		basis = Basis(loop_fwd.cross(lu).normalized(), lu, -loop_fwd)
 	else:
 		var tt: Vector3 = track.tangents[track_idx]
 		var target := 0.0 if airborne else asin(clampf(tt.y, -1.0, 1.0)) * forward().dot(Vector3(tt.x, 0.0, tt.z).normalized())

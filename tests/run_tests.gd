@@ -2048,8 +2048,26 @@ func _test_geladeira() -> void:
 	var lat_in: float = k.lateral
 	Input.action_release("p1_steer_right")
 	check(k.on_loop and lat_in > 2.0, "direcional troca de faixa no looping (%.1f m)" % lat_in)
+	# RF-321: giro contínuo (sem degraus de 10° entre amostras)
+	_put(k, i0 - 6, 0.0, 26.0)
+	var prev_z: Vector3 = k.basis.z
+	var max_step := 0.0
+	var in_frames := 0
+	for s in 120:
+		k.step(dt, true)
+		if k.on_loop:
+			in_frames += 1
+			if in_frames > 1:
+				max_step = maxf(max_step, rad_to_deg(prev_z.angle_to(k.basis.z)))
+		prev_z = k.basis.z
+	check(in_frames > 20 and max_step < 4.0, "kart gira liso no looping (máx %.1f° por quadro)" % max_step)
+	_put(k, i0 - 2, 0.0, 22.0)
+	Input.action_press("p1_steer_right")
+	for s in 40:
+		k.step(dt, true)
+	Input.action_release("p1_steer_right")
 	var fr: Array = k.cam_frame()
-	check((fr[1] as Vector3).distance_to(t.ups[k.track_idx]) < 0.01, "câmera gira com a pista no looping")
+	check((fr[1] as Vector3).distance_to(t.ups[k.track_idx]) < 0.25, "câmera gira com a pista no looping")
 	race.queue_free()
 	await process_frame
 

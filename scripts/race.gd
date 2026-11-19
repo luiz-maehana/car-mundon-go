@@ -973,6 +973,9 @@ func _check_finish(delta: float) -> void:
 				results_hud.show_results()
 
 
+var cam_ups: Array = []  # por câmera
+
+
 func _update_cameras(delta: float, snap: bool) -> void:
 	for i in cameras.size():
 		var cam: Camera3D = cameras[i]
@@ -980,6 +983,11 @@ func _update_cameras(delta: float, snap: bool) -> void:
 		var fr: Array = p.cam_frame()  # RF-321: no looping a câmera gira junto
 		var f: Vector3 = fr[0]
 		var up: Vector3 = fr[1]
+		# "pra cima" suavizado: no looping a câmera gira macio, sem tranco na entrada e na saída
+		while cam_ups.size() <= i:
+			cam_ups.append(Vector3.UP)
+		cam_ups[i] = up if snap else (cam_ups[i] as Vector3).slerp(up, 1.0 - exp(-9.0 * delta)).normalized()
+		up = cam_ups[i]
 		var desired: Vector3 = p.position - f * 8.0 + up * 4.1
 		# outro kart colado na câmera: sobe um pouco pra ele não tapar a visão
 		var near := 99.0
@@ -991,7 +999,7 @@ func _update_cameras(delta: float, snap: bool) -> void:
 		if snap:
 			cam.position = desired
 		else:
-			cam.position = cam.position.lerp(desired, 1.0 - exp(-8.0 * delta))
+			cam.position = cam.position.lerp(desired, 1.0 - exp(-(12.0 if p.on_loop else 8.0) * delta))
 		cam.look_at(p.position + f * 9.0 + up * 1.0, up)
 		var target_fov := base_fov + 10.0 if p.boost_time > 0.0 else base_fov
 		cam.fov = lerpf(cam.fov, target_fov, 1.0 - exp(-5.0 * delta))
