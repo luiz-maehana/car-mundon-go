@@ -308,6 +308,15 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 ### Cores dos pilotos (v0.32)
 - [x] **RF-380** Cor e número de cada piloto = o carro dele na arte da abertura: 1 FeJauM azul, 2 Burcca vermelho, 3 Nanni amarelo, 4 Mugurin verde, 5 Digão laranja, 6 Shinando azul-claro, 7 Telles vermelho (carmim, pra diferenciar do Burcca), 8 Ortiz roxo. Vale pro kart, cartão, HUD e minimapa.
 
+### Pistas antigas refeitas (v0.33)
+- [x] **RF-390** **Buracos** na pista (`pits: [{at, lat, r}]`): disco preto com borda colorida; quem passa por cima é puxado pra baixo e os balões trazem de volta (−3 queijinhos). Resgate nunca devolve em cima de buraco. Toda IA desvia (obrigatório, com folga do tamanho do buraco, antes de qualquer outro perigo).
+- [x] **RF-391** **Obstáculos que andam**: `crosser` atravessa a pista de um lado pro outro com modelo de gato, **vaca** ou **bola de feno** (que rola); `rover` (**robô aspirador**) vai e volta ao longo da pista. Quem encosta roda; a IA enxerga.
+- [x] **RF-392** **Ponte** (`bridges`): tábuas (ou o metal da colher), corrimão de madeira colado na zebra e um **rio** atravessando embaixo (`river_w`, `river_len`; 0 = sem rio). Terreno maciço (`fill_below`): duna/bancada com a lateral descendo até o chão, sem pilar. Fundo de cânion embaixo de vão (`gap_floor`).
+- [x] **RF-393** Recorde por versão do traçado (`rev`): a pista refeita começa sem recorde e o do traçado antigo continua guardado (seção `id@rev` no records.cfg).
+- [x] **RF-395** **Circuito Queijo Suíço** (rev 2): S, grampo, ponte de madeira sobre o rio, chicane, 4 buracos de queijo suíço e 2 vacas atravessando.
+- [x] **RF-396** **Deserto do Parmesão** (rev 2): dunas que sobem e descem (terreno maciço), salto por cima do cânion do alto da duna, 3 bolas de feno rolando, areia fofa.
+- [x] **RF-397** **Cozinha à Meia-Noite** (rev 2): sobe do chão pra bancada (armário maciço), atravessa uma colher gigante entre as bancadas, desce; robô aspirador no chão, 2 ralos e poça d'água escorregadia.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -454,6 +463,11 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-89** Ninguém atravessa a ilha de barracas; o atalho é pelo menos 15% mais curto que a faixa larga.
 - [x] **CA-90** IA na Feira: volta entre 30 e 60 s e usa as duas faixas.
 - [x] **CA-91** Números de 1 a 8 sem repetir e a cor de cada piloto na mesma família da do carro na arte.
+- [x] **CA-92** Queijo refeito com buracos: passar por cima cai (balões, −3 queijinhos); resgate nunca em cima de buraco; IA enxerga com o tamanho.
+- [x] **CA-93** Queijo tem ponte alta com corrimão colado e rio; vaca atravessando derruba.
+- [x] **CA-94** Deserto: rápido passa o cânion voando; 3 bolas de feno.
+- [x] **CA-95** Cozinha: robô anda ao longo da pista e derruba; colher no alto entre as bancadas, sem rio.
+- [x] **CA-96** Pista refeita guarda recorde em seção própria (`queijo@2`).
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

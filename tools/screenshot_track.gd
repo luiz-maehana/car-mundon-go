@@ -48,6 +48,13 @@ func _run() -> void:
 		if t.road_half(q) < 5.5:
 			spots["narrow"] = wrapi(q + 6, 0, n)
 			break
+	for p in t.pits:
+		spots["pit"] = wrapi(int(p["idx"]) - 9, 0, n)
+	for b in t.bridges:
+		spots["bridge"] = wrapi(int(b["i0"]) - 4, 0, n)
+	for h in t.hazard_specs:
+		if h.has("model"):
+			spots[String(h["model"])] = wrapi(int(h["idx"]) - 7, 0, n)
 	for gi in t.gaps.size():
 		spots["gap%d" % gi] = wrapi(int(t.gaps[gi]["i0"]) - 12, 0, n)
 	for tn in t.def.get("tunnels", []):

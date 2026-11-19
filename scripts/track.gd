@@ -19,11 +19,28 @@ const ITEM_ROWS := [0.18, 0.47, 0.76]
 const TRACKS := [
 	{
 		"id": "queijo", "name": "Circuito Queijo Suíço",
+		"rev": 2,
+		# RF-395: traçado novo — S, grampo, ponte de madeira sobre o rio, chicane; buracos de
+		# queijo suíço no asfalto e vacas atravessando
 		"points": [
-			Vector2(-120, 80), Vector2(0, 92), Vector2(110, 80), Vector2(165, 30),
-			Vector2(140, -30), Vector2(70, -45), Vector2(35, -95), Vector2(65, -150),
-			Vector2(140, -160), Vector2(175, -215), Vector2(110, -265), Vector2(-20, -255),
-			Vector2(-100, -205), Vector2(-70, -130), Vector2(-140, -75), Vector2(-170, 10),
+			Vector2(-113, 75), Vector2(0, 86), Vector2(94, 80), Vector2(150, 47),
+			Vector2(141, -5), Vector2(89, -19), Vector2(56, -61), Vector2(89, -108),
+			Vector2(160, -122), Vector2(183, -179), Vector2(141, -226), Vector2(56, -212),
+			Vector2(-9, -226), Vector2(-75, -212), Vector2(-122, -169), Vector2(-89, -122),
+			Vector2(-132, -75), Vector2(-164, -9),
+		],
+		"heights": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 4, 2, 0, 0, 0, 0],
+		"bridges": [[0.6, 0.72]], "river_w": 70.0, "river_len": 260.0,
+		"pillar_colors": [Color(0.45, 0.28, 0.14), Color(0.5, 0.32, 0.16)],
+		"pits": [
+			{"at": 0.06, "lat": 3.5, "r": 2.4}, {"at": 0.1, "lat": -3.5, "r": 2.4},
+			{"at": 0.33, "lat": 0.0, "r": 2.6}, {"at": 0.86, "lat": 3.0, "r": 2.4},
+		],
+		"pit_rim": Color(0.95, 0.78, 0.25),
+		"pad_ranges": [[0.13, 0.2], [0.78, 0.84]],
+		"hazards": [
+			{"kind": "crosser", "model": "cow", "at": 0.5, "amp": 6.5, "period": 7.0, "phase": 0.0},
+			{"kind": "crosser", "model": "cow", "at": 0.93, "amp": 6.0, "period": 6.0, "phase": 2.5},
 		],
 		"ground": Color(0.15, 0.32, 0.11), "offroad": Color(0.33, 0.45, 0.17),
 		"road": [Color(0.2, 0.2, 0.22), Color(0.23, 0.23, 0.25)],
@@ -36,11 +53,24 @@ const TRACKS := [
 	},
 	{
 		"id": "deserto", "name": "Deserto do Parmesão",
+		"rev": 2,
+		# RF-396: traçado novo — dunas que sobem e descem, mesa alta com salto por cima do
+		# cânion, bolas de feno rolando pela pista e areia fofa
 		"points": [
-			Vector2(-180, 0), Vector2(-150, -90), Vector2(-60, -130), Vector2(40, -110),
-			Vector2(90, -150), Vector2(170, -120), Vector2(190, -30), Vector2(140, 40),
-			Vector2(170, 110), Vector2(100, 160), Vector2(0, 130), Vector2(-80, 170),
-			Vector2(-160, 120),
+			Vector2(-194, 43), Vector2(-184, -65), Vector2(-119, -140), Vector2(-32, -119),
+			Vector2(32, -162), Vector2(119, -151), Vector2(184, -97), Vector2(205, -11),
+			Vector2(162, 65), Vector2(194, 140), Vector2(119, 184), Vector2(43, 130),
+			Vector2(-32, 178), Vector2(-119, 162), Vector2(-173, 119),
+		],
+		"heights": [0, 0, 3, 6, 1, 0, 5, 5, 2, 0, 0, 0, 3, 0, 0],
+		"gaps": [{"range": [0.22, 0.27], "len": 5, "lip": 1.4}], "gap_floor": Color(0.25, 0.15, 0.08),
+		"fill_below": true, "slab": Color(0.78, 0.58, 0.35),
+		"zones": [{"kind": "sand", "from": 0.7, "to": 0.77, "lat": [-8.0, -1.0]}],
+		"ramp_range": [0.85, 0.95],
+		"hazards": [
+			{"kind": "crosser", "model": "tumbleweed", "at": 0.36, "amp": 7.0, "period": 3.4, "phase": 0.0},
+			{"kind": "crosser", "model": "tumbleweed", "at": 0.62, "amp": 7.0, "period": 4.2, "phase": 1.1},
+			{"kind": "crosser", "model": "tumbleweed", "at": 0.66, "amp": 6.0, "period": 3.0, "phase": 2.0},
 		],
 		"ground": Color(0.62, 0.45, 0.27), "offroad": Color(0.55, 0.4, 0.25),
 		"road": [Color(0.32, 0.27, 0.24), Color(0.35, 0.3, 0.26)],
@@ -53,11 +83,24 @@ const TRACKS := [
 	},
 	{
 		"id": "cozinha", "name": "Cozinha à Meia-Noite",
+		"rev": 2,
+		# RF-397: traçado novo — sobe do chão pra bancada, atravessa uma colher gigante entre as
+		# bancadas, desce; robô aspirador no chão, ralos e poça de água escorregadia
 		"points": [
-			Vector2(-150, 60), Vector2(-40, 70), Vector2(30, 20), Vector2(110, 60),
-			Vector2(170, 10), Vector2(150, -70), Vector2(60, -90), Vector2(0, -50),
-			Vector2(-60, -100), Vector2(-150, -90), Vector2(-190, -20),
+			Vector2(-195, 78), Vector2(-52, 91), Vector2(39, 26), Vector2(143, 78),
+			Vector2(221, 13), Vector2(195, -91), Vector2(78, -117), Vector2(0, -65),
+			Vector2(-78, -130), Vector2(-195, -117), Vector2(-247, -26),
 		],
+		"heights": [0, 0, 0, 2, 6, 6, 6, 6, 3, 0, 0],
+		"bridges": [[0.5, 0.58]], "fill_below": true, "slab": Color(0.32, 0.22, 0.3),
+		"pits": [{"at": 0.84, "lat": -3.5, "r": 2.3}, {"at": 0.9, "lat": 3.5, "r": 2.3}],
+		"pit_rim": Color(0.75, 0.78, 0.82),
+		"zones": [{"kind": "ice", "from": 0.17, "to": 0.23, "lat": [-8.0, 8.0]}],
+		"hazards": [
+			{"kind": "rover", "at": 0.1, "span": 14.0, "lat": 2.0, "period": 7.0, "phase": 0.0},
+			{"kind": "rover", "at": 0.93, "span": 10.0, "lat": -3.0, "period": 6.0, "phase": 3.0},
+		],
+		"river_w": 0.0, "bridge_road": [Color(0.78, 0.8, 0.85), Color(0.7, 0.72, 0.78)],
 		"ground": Color(0.12, 0.1, 0.16), "offroad": Color(0.22, 0.18, 0.28),
 		"road": [Color(0.16, 0.16, 0.2), Color(0.19, 0.19, 0.24)],
 		"curb": [Color(0.1, 0.85, 0.9), Color(0.9, 0.2, 0.8)],
@@ -304,6 +347,7 @@ func _place_features() -> void:
 	ramp_h = float(def.get("ramp_h", RAMP_H))
 	_find_crossings()
 	_parse_zones()
+	_parse_pits_bridges()
 	_build_safe()
 
 
@@ -329,6 +373,8 @@ func _build_safe() -> void:
 		block.call(ramp_idx - 2, ramp_idx + RAMP_LEN + 18)  # rampa e pouso
 	for l in loops:
 		block.call(int(l["i0"]) - 6, int(l["i1"]) + 4)  # RF-321: nunca dentro do looping
+	for p in pits:
+		block.call(int(p["idx"]) - 6, int(p["idx"]) + 4)  # RF-390: nunca em cima de um buraco
 	for g in gaps:
 		block.call(int(g["i0"]) - RAMP_LEN - 4, int(g["i0"]) + int(g["len"]) + 12)  # RF-330: rampinha, vão e pouso
 	for c in crossings:
@@ -593,6 +639,11 @@ func _build_path() -> void:
 		for i in n:
 			if Vector2(points[i].x - c.x, points[i].z - c.z).length() < float(l["r"]) + float(l["w"]) + 6.0 and absf(points[i].y - (c.y - float(l["r"]))) < float(l["r"]) * 2.0 + 1.0:
 				walls[i] = halfs[i] + CURB + 0.3
+	for z in def.get("bridges", []):  # RF-392: ponte tem corrimão colado na zebra
+		var bi0 := int(n * float(z[0]))
+		var bi1 := int(n * float(z[1]))
+		for k in wrapi(bi1 - bi0, 0, n) + 1:
+			walls[(bi0 + k) % n] = halfs[(bi0 + k) % n] + CURB + 0.3
 	for z in def.get("narrow", []):
 		var i0 := int(n * float(z[0]))
 		var i1 := int(n * float(z[1]))
@@ -697,6 +748,9 @@ func _build_visuals() -> void:
 		# grama e muro que cairiam dentro da outra pista não são desenhados
 		var top: bool = crossing_top[i] if not crossing_top.is_empty() else false
 		var road_c: Color = def["road"][(i / 4) % 2]
+		if not bridges.is_empty() and bridge_at(i):
+			var bc: Array = def.get("bridge_road", [Color(0.55, 0.36, 0.2), Color(0.48, 0.31, 0.17)])
+			road_c = bc[i % 2]  # RF-392: tábuas (ou o metal da colher na cozinha)
 		var ry := 0.036 if top else 0.03
 		var h0 := road_half(i)
 		var h1 := road_half((i + 1) % n)
@@ -727,12 +781,18 @@ func _build_visuals() -> void:
 		if points[i].y > 0.5 or in_loop(i) or points[(i + 1) % n].y > 0.5:
 			var slab_c: Color = def.get("slab", Color(0.85, 0.88, 0.92))
 			var th := -0.6 if in_loop(i) else -0.9
+			# RF-395: terreno maciço (duna, bancada): a lateral desce até o chão, sem fundo nem pilar
+			var solid: bool = def.get("fill_below", false) and not in_loop(i) and not bridge_at(i)
+			if solid:
+				th = -maxf(points[i].y, points[(i + 1) % n].y) - 0.2
 			for s in [1.0, -1.0]:
 				_strip_e(st, i, s * (w0 + WALL_T), s * (w0 + WALL_T), s * (w1 + WALL_T), s * (w1 + WALL_T), 0.0, th, slab_c)
-			_strip_e(st, i, -(w0 + WALL_T), w0 + WALL_T, -(w1 + WALL_T), w1 + WALL_T, th, th, slab_c.darkened(0.25))
+			if not solid:
+				_strip_e(st, i, -(w0 + WALL_T), w0 + WALL_T, -(w1 + WALL_T), w1 + WALL_T, th, th, slab_c.darkened(0.25))
 	_start_line(st)
 	_pads_and_ramp(st)
 	_zones_visual(st)
+	_pits_visual(st)
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
 	mi.material_override = Gfx.track_material()  # RF-162
@@ -740,6 +800,7 @@ func _build_visuals() -> void:
 	add_child(mi)
 	_build_belts()
 	_build_supports()
+	_build_bridges()
 	_build_tunnels_and_enclosure()
 	_build_rooftops()
 	_build_market()
@@ -1126,6 +1187,122 @@ func _market_signs() -> void:
 		scenery_count += 1
 
 
+# ---------------------------------------------------------------- buracos e pontes (RF-390..392)
+
+var pits: Array = []      # RF-390: {idx, lat, r, pos} buracos redondos na pista (cair = balões)
+var bridges: Array = []   # RF-392: {i0, len} trechos de ponte (tábuas, corrimão e rio embaixo)
+
+
+func _parse_pits_bridges() -> void:
+	var n := points.size()
+	for p in def.get("pits", []):
+		var i := _frac_idx(float(p["at"]))
+		var lat := float(p.get("lat", 0.0))
+		pits.append({"idx": i, "lat": lat, "r": float(p.get("r", 2.4)), "pos": points[i] + rights[i] * lat})
+	for b in def.get("bridges", []):
+		var i0 := _frac_idx(float(b[0]))
+		var i1 := _frac_idx(float(b[1]))
+		bridges.append({"i0": i0, "len": wrapi(i1 - i0, 0, n)})
+
+
+## RF-390: o ponto cai dentro de um buraco? (perto da amostra i)
+func pit_at(pos: Vector3, i: int) -> bool:
+	var n := points.size()
+	for p in pits:
+		if absi(wrapi(i - int(p["idx"]), -n / 2, n / 2)) > 6:
+			continue
+		var c: Vector3 = p["pos"]
+		if Vector2(pos.x - c.x, pos.z - c.z).length() < float(p["r"]) - 0.5 and absf(pos.y - c.y) < 2.0:
+			return true
+	return false
+
+
+func bridge_at(i: int) -> bool:
+	for b in bridges:
+		if wrapi(i - int(b["i0"]), 0, points.size()) <= int(b["len"]):
+			return true
+	return false
+
+
+## Buraco: borda colorida e fundo preto (desenhado por cima do asfalto).
+func _pits_visual(st: SurfaceTool) -> void:
+	var rim: Color = def.get("pit_rim", Color(0.35, 0.3, 0.25))
+	for p in pits:
+		var i: int = p["idx"]
+		var c: Vector3 = p["pos"] + Vector3.UP * 0.075
+		var r: float = p["r"]
+		var t := tangents[i]
+		var rr := rights[i]
+		var seg := 20
+		for k in seg:
+			var a0 := TAU * k / seg
+			var a1 := TAU * (k + 1) / seg
+			var d0 := rr * cos(a0) + t * sin(a0)
+			var d1 := rr * cos(a1) + t * sin(a1)
+			_quad(st, c, c + d0 * (r - 0.35), c + d1 * (r - 0.35), c, Color(0.02, 0.02, 0.03))
+			_quad(st, c + d0 * (r - 0.35), c + d0 * (r + 0.25) + Vector3.UP * 0.01, c + d1 * (r + 0.25) + Vector3.UP * 0.01, c + d1 * (r - 0.35), rim)
+
+
+## RF-392: ponte — corrimão de madeira dos dois lados e o rio largo passando embaixo.
+func _build_bridges() -> void:
+	if bridges.is_empty() and not def.has("gap_floor"):
+		return
+	var n := points.size()
+	var posts: Array[Transform3D] = []
+	var rails: Array[Transform3D] = []
+	# RF-394: fundo do cânion embaixo de cada vão (quando a pista pede)
+	if def.has("gap_floor"):
+		for g in gaps:
+			var gm := (int(g["i0"]) + int(g["len"]) / 2) % n
+			var fl := MeshInstance3D.new()
+			var fm := PlaneMesh.new()
+			fm.size = Vector2(70.0, 26.0)
+			fl.mesh = fm
+			fl.material_override = _deco_mat(def["gap_floor"])
+			fl.basis = Basis(Vector3.UP, heading_at(gm))
+			fl.position = Vector3(points[gm].x, 0.03, points[gm].z)
+			fl.name = "GapFloor"
+			add_child(fl)
+	for b in bridges:
+		var i0: int = b["i0"]
+		var ln: int = b["len"]
+		for k in ln + 1:
+			var i := (i0 + k) % n
+			var yaw := Basis(Vector3.UP, heading_at(i))
+			for s in [1.0, -1.0]:
+				var p: Vector3 = points[i] + rights[i] * s * (wall_at(i) + WALL_T * 0.5)
+				if k % 2 == 0:
+					posts.append(Transform3D(yaw, p + Vector3.UP * 1.1))
+				rails.append(Transform3D(yaw.scaled(Vector3(1, 1, SPACING * 1.05)), p + Vector3.UP * 2.1 + tangents[i] * SPACING * 0.5))
+		# rio: faixa larga de água atravessando embaixo do meio da ponte
+		var mid := (i0 + ln / 2) % n
+		if float(def.get("river_w", 34.0)) <= 0.0:
+			continue
+		var water := MeshInstance3D.new()
+		var pm := PlaneMesh.new()
+		pm.size = Vector2(float(def.get("river_len", 200.0)), float(def.get("river_w", 34.0)))  # atravessa a pista
+		water.mesh = pm
+		var wm := StandardMaterial3D.new()
+		wm.albedo_color = def.get("river_color", Color(0.2, 0.45, 0.75))
+		wm.roughness = 0.08
+		wm.metallic_specular = 0.9
+		water.material_override = wm
+		water.basis = Basis(Vector3.UP, heading_at(mid))
+		water.position = Vector3(points[mid].x, 0.02, points[mid].z)
+		water.name = "River"
+		add_child(water)
+	if posts.is_empty():
+		return
+	var post := BoxMesh.new()
+	post.size = Vector3(0.3, 2.2, 0.3)
+	post.material = _deco_mat(Color(0.45, 0.28, 0.14))
+	_multimesh(post, posts, Vector3.ZERO)
+	var rail := BoxMesh.new()
+	rail.size = Vector3(0.22, 0.22, 1.0)
+	rail.material = _deco_mat(Color(0.55, 0.36, 0.18))
+	_multimesh(rail, rails, Vector3.ZERO)
+
+
 ## RF-320: pilares embaixo dos trechos altos (caixas de leite/potes na geladeira), fora de outras pistas.
 func _build_supports() -> void:
 	if def.get("buildings", false):
@@ -1139,6 +1316,10 @@ func _build_supports() -> void:
 		var top := points[i].y - 0.9
 		if top < 1.5 or in_loop(i):
 			continue
+		if def.get("fill_below", false) and not bridge_at(i):
+			continue  # terreno maciço não precisa de pilar
+		if def.get("river_w", 34.0) <= 0.0 and bridge_at(i):
+			continue  # a colher da cozinha fica apoiada nas bancadas
 		var base := Vector3(points[i].x, 0.0, points[i].z)
 		if _over_other_road(i, base, 1.5):
 			continue

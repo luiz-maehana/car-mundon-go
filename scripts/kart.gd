@@ -508,10 +508,10 @@ func _update_air(delta: float) -> void:
 					_start_trick()
 			else:
 				position.y = ground
-		elif not on_loop and track.gap_at(track_idx):
+		elif not on_loop and (track.gap_at(track_idx) or track.pit_at(position, track_idx)):
 			# RF-330: acabou o telhado: começa a cair (rápido o bastante, a rampinha já te lançou)
 			airborne = true
-			vy = 0.0
+			vy = -7.0 if track.pit_at(position, track_idx) else 0.0  # RF-390: buraco puxa pra baixo
 			air_time = 0.0
 		elif not on_loop:
 			position.y = ground  # RF-320: acompanha a subida e a descida da pista
@@ -523,8 +523,8 @@ func _update_air(delta: float) -> void:
 	position.y += vy * delta
 	max_height = maxf(max_height, position.y - ground)
 	if position.y <= ground:
-		if track.gap_at(track_idx):
-			return  # RF-330: em cima do vão não tem onde pousar
+		if track.gap_at(track_idx) or track.pit_at(position, track_idx):
+			return  # RF-330/390: em cima do vão (ou do buraco) não tem onde pousar
 		if position.y < ground - 0.9:
 			start_rescue(true)  # bateu na parede do prédio: caiu
 			return
@@ -826,15 +826,19 @@ func _ai_input(delta: float) -> void:
 ## RF-210..212: desviar > caixa > ultrapassar > setas de turbo.
 func _ai_tactics(n: int, m: float) -> void:
 	# desvio de casca/ratoeira
-	var reach := int(10 + 14 * ai_avoid)
-	for hz in race.ground_hazards_ahead(self, reach):
+	var reach := int(16 + 10 * ai_avoid)
+	var ahead: Array = race.ground_hazards_ahead(self, reach)
+	ahead.sort_custom(func(a, b): return a.get("pit", false) and not b.get("pit", false))  # buraco primeiro
+	for hz in ahead:
 		var id: int = hz["id"]
+		var must: bool = hz.get("pit", false)  # RF-390: buraco — todo mundo desvia, com folga do tamanho dele
 		if not ai_seen.has(id):
-			ai_seen[id] = randf() < 0.25 + 0.75 * ai_avoid
-		if ai_seen[id] and absf(float(hz["lat"]) - ai_lane) < 2.8:
+			ai_seen[id] = must or randf() < 0.25 + 0.75 * ai_avoid
+		var clear: float = float(hz.get("r", 0.0)) + 2.4 if must else 2.8
+		if ai_seen[id] and (absf(float(hz["lat"]) - ai_lane) < clear or (must and absf(float(hz["lat"]) - lateral) < clear)):
 			var lat: float = hz["lat"]
 			var side := -1.0 if lat > 0.0 else 1.0
-			ai_lane = clampf(lat + side * 4.5, -m, m)
+			ai_lane = clampf(lat + side * (clear + 1.2 if must else 4.5), -m, m)
 			ai_evading = 1.0
 			ai_lane_timer = maxf(ai_lane_timer, 1.2)
 			return

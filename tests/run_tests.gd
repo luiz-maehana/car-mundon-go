@@ -60,6 +60,7 @@ func _run() -> void:
 	await _test_results_live()
 	await _test_feira()
 	_test_char_colors()
+	await _test_redone_tracks()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -900,6 +901,13 @@ func _run_at_banana(race, k, avoid: float) -> bool:
 	race.hazards.clear()
 	var tr = race.track
 	var i0 := 30
+	# o trecho mais reto da pista (o teste não pode depender do traçado)
+	var best_c := INF
+	for cand in range(10, tr.sample_count() - 40, 3):
+		var c: float = tr.curvature_at(cand) + tr.curvature_at(cand + 18)
+		if c < best_c:
+			best_c = c
+			i0 = cand
 	_put(k, i0, 0.0, 24.0)
 	k.ai_lane = 0.0
 	k.ai_lane_timer = 99.0
@@ -919,10 +927,11 @@ func _run_at_banana(race, k, avoid: float) -> bool:
 func _test_smart_ai() -> void:
 	print("CA-39 IA desvia de casca")
 	var race = await _new_race(["telles"], true)
+	race.track.pits.clear()  # só casca aqui (os buracos do Queijo têm teste próprio, CA-92)
 	race.state = "racing"
 	var n: int = race.track.sample_count()
 	for i in race.karts.size():
-		_put(race.karts[i], (i * 70 + 200) % n, 0.0, 0.0)
+		_put(race.karts[i], (i * 45 + 200) % n, 0.0, 0.0)  # longe do trecho do teste (amostras 200..515)
 	var k = race.karts[0]
 	seed(20261118)  # determinístico: com cuidado 0 a IA ainda reage 25% das vezes
 	var dodged := 0
@@ -2233,6 +2242,7 @@ func _test_telhados() -> void:
 	var ci: int = cat["spec"]["idx"]
 	k.place(ci, t.lateral_of(cp, ci))
 	k.spin_time = 0.0
+	k.rescue_ghost = 0.0  # acabou de sair do buraco (CA-92): tira a imunidade
 	race._update_track_hazards(0.0, true)
 	check(k.spin_time > 0.0, "gato derruba quem encosta")
 	var out: Array = []
@@ -2490,3 +2500,99 @@ func _test_char_colors() -> void:
 		if name != want[c["id"]]:
 			bad.append("%s=%s" % [c["id"], name])
 	check(bad.is_empty(), "cores batem com a arte %s" % str(bad))
+
+
+func _test_redone_tracks() -> void:
+	var dt := 1.0 / 60.0
+	print("CA-92 buracos de queijo suíço")
+	var race = await _race_on("queijo")
+	var t = race.track
+	var n: int = t.sample_count()
+	check(t.pits.size() >= 3 and t.def.get("rev", 1) == 2, "Queijo refeito com %d buracos" % t.pits.size())
+	var pit: Dictionary = t.pits[0]
+	var k = race.player
+	_put(k, wrapi(int(pit["idx"]) - 4, 0, n), float(pit["lat"]), 22.0)
+	k.cheese = 6
+	Input.action_press("p1_accelerate")
+	var s := 0.0
+	while k.rescues == 0 and s < 3.0:
+		k.step(dt, true)
+		s += dt
+	Input.action_release("p1_accelerate")
+	check(k.rescues == 1 and k.cheese == 3, "passou por cima do buraco: cai, balões e -3 queijinhos")
+	while k.rescue_time > 0.0:
+		k.step(dt, true)
+	k.rescue_ghost = 0.0
+	check(t.safe[int(pit["idx"])] == 0, "resgate nunca devolve em cima do buraco")
+	var out: Array = []
+	k.track_idx = wrapi(int(pit["idx"]) - 10, 0, n)
+	race._track_hazards_ahead(k, 30, out)
+	check(out.any(func(o): return o.get("pit", false) and o.has("r")), "IA enxerga o buraco (com o tamanho)")
+
+	print("CA-93 ponte sobre o rio e vacas")
+	check(not t.bridges.is_empty() and t.get_node_or_null("River") != null, "Queijo tem ponte e rio")
+	var bi: int = (int(t.bridges[0]["i0"]) + int(t.bridges[0]["len"]) / 2) % n
+	check(t.points[bi].y > 3.0 and t.wall_at(bi) < t.road_half(bi) + 2.0, "ponte alta (%.1f m) com corrimão colado" % t.points[bi].y)
+	var cow: Dictionary = {}
+	for h in race.track_hazards:
+		if h["spec"].get("model", "") == "cow":
+			cow = h
+			break
+	race._update_track_hazards(0.0, false)
+	var cp: Vector3 = cow["node"].position
+	var ci: int = cow["spec"]["idx"]
+	k.place(ci, t.lateral_of(cp, ci))
+	k.spin_time = 0.0
+	race._update_track_hazards(0.0, true)
+	check(k.spin_time > 0.0, "vaca atravessando derruba quem encosta")
+	race.queue_free()
+	await process_frame
+
+	print("CA-94 salto no cânion e bolas de feno")
+	race = await _race_on("deserto")
+	t = race.track
+	n = t.sample_count()
+	check(t.gaps.size() == 1 and t.get_node_or_null("GapFloor") != null, "Deserto tem um cânion pra pular")
+	k = race.player
+	var g: Dictionary = t.gaps[0]
+	_put(k, wrapi(int(g["i0"]) - 14, 0, n), 0.0, 26.0)
+	Input.action_press("p1_accelerate")
+	for q in 150:
+		k.step(dt, true)
+	Input.action_release("p1_accelerate")
+	check(k.rescues == 0 and wrapi(k.track_idx - int(g["i0"]), 0, n) > int(g["len"]), "rápido: passa o cânion voando")
+	var tw: int = 0
+	for h in race.track_hazards:
+		if h["spec"].get("model", "") == "tumbleweed":
+			tw += 1
+	check(tw >= 2, "%d bolas de feno rolando" % tw)
+	race.queue_free()
+	await process_frame
+
+	print("CA-95 robô aspirador e colher na cozinha")
+	race = await _race_on("cozinha")
+	t = race.track
+	n = t.sample_count()
+	var rover: Dictionary = {}
+	for h in race.track_hazards:
+		if h["spec"]["kind"] == "rover":
+			rover = h
+			break
+	race._update_track_hazards(0.0, false)
+	var a0: int = rover["at"]
+	race._update_track_hazards(1.5, false)
+	check(a0 != int(rover["at"]), "robô anda ao longo da pista (%d → %d)" % [a0, int(rover["at"])])
+	k = race.player
+	var rp: Vector3 = rover["node"].position
+	k.place(int(rover["at"]), t.lateral_of(rp, int(rover["at"])))
+	k.spin_time = 0.0
+	race._update_track_hazards(0.0, true)
+	check(k.spin_time > 0.0, "robô derruba quem encosta")
+	var bm: int = (int(t.bridges[0]["i0"]) + int(t.bridges[0]["len"]) / 2) % n
+	check(t.points[bm].y > 5.0 and t.get_node_or_null("River") == null, "colher no alto, entre as bancadas (sem rio)")
+	race.queue_free()
+	await process_frame
+
+	print("CA-96 recorde por versão do traçado")
+	var Records = load("res://scripts/records.gd")
+	check(Records.section("queijo") == "queijo@2" and Records.section("churrasco") == "churrasco", "pista refeita guarda recorde à parte (%s)" % Records.section("queijo"))

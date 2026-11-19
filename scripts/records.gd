@@ -15,7 +15,16 @@ static func _cfg() -> ConfigFile:
 	return cfg
 
 
+## RF-393: seção do arquivo = id da pista + versão do traçado ("queijo@2"). Pista refeita começa
+## sem recorde e os recordes do traçado antigo continuam guardados.
+static func section(track_id: String) -> String:
+	var d: Dictionary = load("res://scripts/track.gd").find(track_id)
+	var rev := int(d.get("rev", 1))
+	return track_id if rev <= 1 else "%s@%d" % [track_id, rev]
+
+
 static func get_record(track_id: String) -> Dictionary:
+	track_id = section(track_id)
 	var cfg := _cfg()
 	if not cfg.has_section(track_id):
 		return {}
@@ -27,6 +36,7 @@ static func get_record(track_id: String) -> Dictionary:
 
 ## Registra um resultado. Devolve {"race": bool, "lap": bool} dizendo o que virou recorde.
 static func submit(track_id: String, char_id: String, race_time: float, best_lap: float, ghost: PackedFloat32Array) -> Dictionary:
+	track_id = section(track_id)
 	var cfg := _cfg()
 	var got := {"race": false, "lap": false}
 	var old_race: float = cfg.get_value(track_id, "race_time", INF)
