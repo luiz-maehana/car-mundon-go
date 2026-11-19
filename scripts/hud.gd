@@ -39,6 +39,9 @@ var best_lap := INF
 var final_lap_counted := false
 var item_style: StyleBoxFlat
 var results: PanelContainer
+var results_rows: VBoxContainer   # RF-360: linhas do placar (refeitas quando mais alguém termina)
+var results_done := -1
+var results_seen := {}
 var last_lap := 1
 var msg_time := 0.0
 var start_shown := false
@@ -489,36 +492,10 @@ func show_results() -> void:
 	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vb.alignment = BoxContainer.ALIGNMENT_CENTER
 	body.add_child(vb)
-	var multi: bool = race.players.size() > 1
-	for k in ranking:
-		var hb := HBoxContainer.new()
-		hb.add_theme_constant_override("separation", 10)
-		vb.add_child(hb)
-		var pos := _label(26, hb)
-		pos.text = "%dº" % k.rank
-		pos.custom_minimum_size.x = 48 if gp else 60
-		var face := Chars.art_rect(k.char_id, 34)
-		if face:
-			hb.add_child(face)
-		var nm := _label(22 if gp else 26, hb)
-		var tag := ""
-		if k.is_player:
-			tag = "  (J%d)" % (k.player_index + 1) if multi else "  (você)"
-		nm.text = k.display_name + tag
-		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		nm.add_theme_color_override("font_color", k.color.lightened(0.2))
-		var tm := _label(24 if gp else 26, hb)
-		tm.text = fmt_time(k.finish_time) if k.finished else "--:--"
-		if gp:  # RF-194: +pontos e total
-			var plus := _label(24, hb)
-			plus.text = "+%d" % int(race.gp_gained.get(k.char_id, 0))
-			plus.custom_minimum_size.x = 48
-			plus.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			plus.add_theme_color_override("font_color", Color(0.45, 1.0, 0.5))
-			var total := _label(24, hb)
-			total.text = "%d pts" % int(game.gp_points.get(k.char_id, 0))
-			total.custom_minimum_size.x = 84
-			total.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	results_rows = vb
+	results_done = -1
+	results_seen.clear()
+	refresh_results()
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 16)
@@ -540,6 +517,71 @@ func show_results() -> void:
 	menu.pressed.connect(race.to_menu)
 	buttons.add_child(menu)
 	_focus_later(again)
+
+
+## RF-360: refaz as linhas do placar quando mais algum kart cruza a chegada (as IAs
+## continuam correndo depois que você termina). Quem ainda está na pista aparece "correndo".
+func refresh_results() -> void:
+	if results_rows == null or not is_instance_valid(results_rows):
+		return
+	var done := 0
+	for k in race.karts:
+		if k.finished:
+			done += 1
+	if done == results_done:
+		return
+	var first := results_done < 0
+	results_done = done
+	for c in results_rows.get_children():
+		results_rows.remove_child(c)
+		c.queue_free()
+	var game := get_node_or_null("/root/Game")
+	var gp: bool = game != null and game.is_gp()
+	var multi: bool = race.players.size() > 1
+	for k in race.ranking():
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 10)
+		results_rows.add_child(hb)
+		var pos := _label(26, hb)
+		pos.text = "%dº" % k.rank
+		pos.custom_minimum_size.x = 48 if gp else 60
+		var face := Chars.art_rect(k.char_id, 34)
+		if face:
+			hb.add_child(face)
+		var nm := _label(22 if gp else 26, hb)
+		var tag := ""
+		if k.is_player:
+			tag = "  (J%d)" % (k.player_index + 1) if multi else "  (você)"
+		nm.text = k.display_name + tag
+		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		nm.add_theme_color_override("font_color", k.color.lightened(0.2))
+		var tm := _label(24 if gp else 26, hb)
+		tm.custom_minimum_size.x = 130
+		tm.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		if k.finished:
+			tm.text = fmt_time(k.finish_time)
+			if not results_seen.has(k.char_id):
+				results_seen[k.char_id] = true
+				if not first:  # acabou de cruzar: o tempo entra com destaque
+					tm.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+					tm.pivot_offset = Vector2(130, 16)
+					tm.scale = Vector2(1.5, 1.5)
+					var tw := tm.create_tween()
+					tw.tween_property(tm, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+					tw.tween_callback(func(): tm.remove_theme_color_override("font_color")).set_delay(0.8)
+		else:
+			tm.text = "correndo"
+			tm.add_theme_color_override("font_color", Color(1, 1, 1, 0.4))
+		if gp:  # RF-194: +pontos e total
+			var plus := _label(24, hb)
+			plus.text = "+%d" % int(race.gp_gained.get(k.char_id, 0))
+			plus.custom_minimum_size.x = 48
+			plus.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			plus.add_theme_color_override("font_color", Color(0.45, 1.0, 0.5))
+			var total := _label(24, hb)
+			total.text = "%d pts" % int(game.gp_points.get(k.char_id, 0))
+			total.custom_minimum_size.x = 84
+			total.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 
 ## RF-73: pódio com o top 3 de corpo inteiro (2º, 1º, 3º).

@@ -57,6 +57,7 @@ func _run() -> void:
 	await _test_telhados()
 	await _test_menu_look()
 	await _test_loading()
+	await _test_results_live()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -2319,5 +2320,50 @@ func _test_loading() -> void:
 	await process_frame
 	await create_timer(0.5).timeout
 	check(not game.is_loading(), "a corrida tira o CARREGANDO sozinha")
+	race.queue_free()
+	await process_frame
+
+
+## Textos das linhas do placar (pra achar "correndo" e os tempos).
+func _result_texts(hud) -> Array:
+	var out := []
+	for row in hud.results_rows.get_children():
+		for c in row.get_children():
+			if c is Label:
+				out.append(c.text)
+	return out
+
+
+func _test_results_live() -> void:
+	print("CA-87 placar atualiza quando as IAs terminam")
+	var game = root.get_node_or_null("Game")
+	game.mode = "race"
+	var race = load("res://scripts/race.gd").new()
+	race.use_game_settings = false
+	race.autopilot_player = true
+	race.player_chars = ["shinando"]
+	race.track_id = "cozinha"
+	race.laps = 1
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	# o jogador é rapidíssimo: termina bem antes da maioria
+	race.player.max_speed = 60.0
+	race.player.accel = 60.0
+	var t := 0.0
+	while t < 200.0 and not race.results_shown:
+		race.step(1.0 / 60.0)
+		t += 1.0 / 60.0
+	var hud = race.results_hud
+	var before := _result_texts(hud)
+	var running := before.count("correndo")
+	check(race.results_shown and running > 0, "placar abre com quem ainda está correndo (%d)" % running)
+	while t < 260.0 and not race.all_finished():
+		race.step(1.0 / 60.0)
+		t += 1.0 / 60.0
+	race.step(1.0 / 60.0)
+	var after := _result_texts(hud)
+	var times := after.filter(func(s): return ":" in s and "." in s).size()
+	check(race.all_finished() and after.count("correndo") == 0 and times == race.karts.size(), "quando todos terminam, todos têm tempo no placar (%d tempos)" % times)
 	race.queue_free()
 	await process_frame

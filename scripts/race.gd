@@ -572,6 +572,8 @@ func step(delta: float) -> void:
 	_update_cameras(delta, false)
 	for h in huds:
 		h.update_hud(delta)
+	if results_shown and results_hud:
+		results_hud.refresh_results()  # RF-360: quem termina depois entra no placar
 
 
 func _human_lap_sounds() -> void:

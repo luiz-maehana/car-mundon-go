@@ -297,6 +297,9 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-351** **Imagem de inicialização** do Godot (`assets/ui/splash.png`, gerada por `tools/make_splash.gd`): a arte da abertura com "CARREGANDO...", aparece assim que o motor gráfico liga (antes disso, ~2 s de janela preta da placa de vídeo iniciando, que não dá pra evitar no Forward+). O jogo registra no log em quanto tempo ficou pronto (`[boot]`).
 - [x] **RF-352** **Exe que o Windows deixa abrir**: com o Controle Inteligente de Aplicativos ligado, exe sem assinatura e "desconhecido" é bloqueado. A exportação agora usa o executável oficial do Godot sem modificação (`embed_pck=false`, `modify_resources=false`) e o jogo vai no `CarMundonGO.pck` ao lado — os dois arquivos precisam ficar juntos na mesma pasta.
 
+### Placar ao vivo (v0.30)
+- [x] **RF-360** O placar do fim da corrida se refaz quando mais algum kart cruza a chegada (as IAs continuam correndo depois que você termina): quem ainda está na pista aparece "correndo" (apagado) e o tempo entra com destaque amarelo quando ele termina. Vale também no placar do multijogador.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -438,6 +441,7 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-84** IA nos Telhados: volta entre 30 e 60 s e quase nunca cai.
 - [x] **CA-85** Menu: fundo com a arte, botões do tema novo, 4 chips de etapa com a atual destacada; AJUSTES mostra os retratos dos pilotos e o trajeto. (CA-76 cobre o looping liso: no máximo 4° de giro por quadro.)
 - [x] **CA-86** Imagem de inicialização configurada; CARREGANDO com o nome da pista por cima de tudo (no GP, copa e corrida); a corrida tira a tela sozinha.
+- [x] **CA-87** Jogador termina antes: o placar abre com quem ainda está "correndo"; quando todos terminam, todos têm tempo.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
