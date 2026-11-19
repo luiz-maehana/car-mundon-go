@@ -235,6 +235,12 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-206** Ícones dos itens são fotos dos próprios modelos 3D do jogo (foguete, banana, bomba, ratoeira, gato, queijo, queijo triplo, escudo), geradas por `tools/render_icons.gd` em `assets/icons/` (128 px, fundo transparente). Sem a foto, o HUD volta pro desenho em código.
 - [x] **RF-207** Efeitos e músicas vêm de arquivos CC0 em `assets/audio/` (créditos em CREDITS.md); `Sfx` cai na versão sintetizada se faltar arquivo. Vinheta própria na volta final; motor gravado em loop com pitch 0,75–1,45.
 
+### Tela de escolha de piloto (v0.20)
+- [x] **RF-260** Layout em duas colunas: à esquerda a grade 4×2 de cartas (retrato), à direita o painel do piloto em destaque (corpo inteiro, nome, 4 barras de atributo, quem está escolhendo). Topo: `MODO`, título e `CONFIGURAÇÕES`; embaixo a linha de opções e as dicas. Espaçamento uniforme (margem 24, espaço 12–16).
+- [x] **RF-261** A arte nunca sai da carta: cabeça encaixada (proporção mantida) dentro da área da carta, com recorte; nome numa faixa embaixo.
+- [x] **RF-262** Animações: carta selecionada cresce e a borda pulsa; trocar de piloto desliza/esmaece a arte grande e anima as barras até o valor novo, com som; o corpo do piloto "respira". Passar o mouse numa carta seleciona.
+- [x] **RF-263** Confirmar: a carta dá um pulo com brilho, ganha o selo J1..J4 com a cor do jogador e toca o som de confirmação. No último jogador a tela escurece rápido antes da corrida.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -344,6 +350,8 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-52** Tecla já usada por outra ação (inclusive do outro jogador) troca as duas; tecla reservada é recusada e nada muda.
 - [x] **CA-53** Trocar o botão de drift do controle vale pros 4 controles e mantém os gatilhos; RESTAURAR volta tudo ao padrão.
 - [x] **CA-54** Na tela de configurações, apertar o botão de uma ação e depois uma tecla faz a troca; Esc cancela sem mudar; a dica da corrida mostra a tecla nova.
+- [x] **CA-55** Em 1280×720, 1024×768 e 2560×1080 a arte de cada carta fica dentro da carta e o painel do piloto cabe na tela.
+- [x] **CA-56** Trocar a seleção atualiza o painel (nome e barras chegam ao valor do piloto após a animação); confirmar marca a carta com o selo do jogador.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

@@ -48,6 +48,7 @@ func _run() -> void:
 	await _test_ui_nav()
 	await _test_layout()
 	await _test_remap()
+	await _test_char_select()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -1241,6 +1242,12 @@ func _test_layout() -> void:
 			var bad := []
 			_all_inside(menu, Rect2(Vector2.ZERO, sz), bad)
 			check(bad.is_empty(), "menu (%s) em %s %s" % [mode, label, str(bad.slice(0, 3))])
+			var heads_ok := true
+			for card in menu.cards:
+				var hr: Rect2 = card.get_child(0).get_global_rect()
+				if not card.get_global_rect().grow(0.5).encloses(hr):
+					heads_ok = false
+			check(heads_ok, "CA-55 arte dentro de cada carta (%s, %s)" % [mode, label])
 			if mode == "race":
 				menu.open_settings()
 				await process_frame
@@ -1379,4 +1386,33 @@ func _test_remap() -> void:
 	check(" Q: item" in race.huds[0].lbl_hint.text, "dica da corrida mostra a tecla nova (%s)" % race.huds[0].lbl_hint.text)
 	race.queue_free()
 	game.reset_settings()
+	await process_frame
+
+
+func _test_char_select() -> void:
+	var game = root.get_node_or_null("Game")
+	if game == null:
+		return
+	print("CA-56 painel do piloto e confirmação")
+	game.mode = "race"
+	game.num_players = 2
+	var menu = await _new_menu()
+	var Chars = load("res://scripts/characters.gd")
+	menu._select(3)
+	await create_timer(0.6).timeout
+	var c: Dictionary = Chars.LIST[3]
+	check(menu.preview_name.text == c["name"], "painel mostra %s" % c["name"])
+	var bars_ok := true
+	for k in menu.STATS.size():
+		var want: float = menu.BAR_W * int(c[menu.STATS[k][0]]) / 5.0
+		if absf(menu.preview_bars[k].size.x - want) > 1.0:
+			bars_ok = false
+	check(bars_ok, "barras chegam no valor do piloto")
+	menu._input(_pad(JOY_BUTTON_A))
+	await process_frame
+	check(menu.card_tags[3].text == "J1" and menu.picks == [3], "confirmar marca a carta com J1")
+	await create_timer(0.6).timeout
+	check(menu.card_flash[3].color.a < 0.05 and menu.card_tags[3].scale.is_equal_approx(Vector2.ONE), "brilho e selo terminam a animação")
+	menu.queue_free()
+	game.num_players = 1
 	await process_frame
