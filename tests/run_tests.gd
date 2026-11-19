@@ -58,6 +58,7 @@ func _run() -> void:
 	await _test_drift_vs_turn()
 	await _test_start_lights()
 	await _test_headlights()
+	await _test_mesh_budget()
 	await _test_touch()
 	_test_safe_files()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])

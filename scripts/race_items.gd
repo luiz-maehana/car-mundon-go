@@ -251,6 +251,7 @@ func _spawn_hazard(type: String, pos: Vector3, v: Vector3, life: float, owner_ka
 			pos.y = track.points[owner_kart.track_idx].y
 		_:
 			mi = HazardModels.bomb()
+	Gfx.simplify_meshes(mi)  # RF-478
 	mi.position = pos
 	add_child(mi)
 	mi.reset_physics_interpolation()

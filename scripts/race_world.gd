@@ -114,7 +114,7 @@ func _build_environment() -> void:
 	sun.rotation = Vector3(deg_to_rad(d["sun"][1]), deg_to_rad(-35), 0)
 	sun.light_color = d["sun"][2]
 	sun.light_energy = d["sun"][0]
-	sun.shadow_enabled = true
+	sun.shadow_enabled = q >= 1  # RF-478: no BAIXO (padrão do navegador) sem sombra do sol: metade dos desenhos
 	sun.shadow_blur = [0.5, 1.0, 1.5][q]
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	sun.directional_shadow_max_distance = [60.0, 100.0, 140.0][q]
@@ -200,6 +200,7 @@ func apply_settings() -> void:
 		return
 	var q := Gfx.quality()
 	Gfx.apply_quality(world_env.environment, q)
+	sun_light.shadow_enabled = q >= 1  # RF-478
 	sun_light.shadow_blur = [0.5, 1.0, 1.5][q]
 	sun_light.directional_shadow_max_distance = [60.0, 100.0, 140.0][q]
 	get_viewport().msaa_3d = Gfx.msaa_for(q)

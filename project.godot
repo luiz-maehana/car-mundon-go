@@ -34,3 +34,6 @@ renderer/rendering_method="forward_plus"
 renderer/rendering_method.mobile="mobile"
 renderer/rendering_method.web="gl_compatibility"
 anti_aliasing/quality/msaa_3d=2
+shading/overrides/force_vertex_shading.web=true
+shading/overrides/force_lambert_over_burley.web=true
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality.web=0

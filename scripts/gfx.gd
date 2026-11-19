@@ -39,6 +39,67 @@ static func msaa_for(q: int) -> Viewport.MSAA:
 	return [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][clampi(q, 0, 2)]
 
 
+
+# ---------------------------------------------------------------- detalhe das malhas (RF-478)
+
+## As primitivas do Godot nascem com 64 segmentos (esfera 4224 triângulos, toro 4096): com centenas
+## na pista eram milhões de triângulos por quadro e o celular travava. Esta função passa por tudo que
+## foi montado e baixa o detalhe pelo tamanho (pequeno = 12 lados, grande = até 32). Malha
+## compartilhada é ajustada uma vez só; quem já pediu menos segmentos fica como está.
+static func simplify_meshes(root: Node) -> int:
+	var seen := {}
+	var saved := 0
+	for n in root.find_children("*", "", true, false):
+		var m: Mesh = null
+		if n is MeshInstance3D:
+			m = n.mesh
+		elif n is MultiMeshInstance3D and n.multimesh:
+			m = n.multimesh.mesh
+		elif n is CPUParticles3D:
+			m = n.mesh
+		if m is PrimitiveMesh and not seen.has(m):
+			seen[m] = true
+			saved += _simplify(m)
+	return saved
+
+
+static func sides_for(size: float) -> int:
+	if size < 0.5:
+		return 12
+	if size < 2.0:
+		return 16
+	if size < 6.0:
+		return 24
+	return 32
+
+
+static func _simplify(m: PrimitiveMesh) -> int:
+	var before := 0
+	if m is SphereMesh:
+		var s := sides_for(m.radius)
+		before = m.radial_segments * m.rings
+		m.radial_segments = mini(m.radial_segments, s)
+		m.rings = mini(m.rings, s / 2)
+		return before - m.radial_segments * m.rings
+	if m is CapsuleMesh:
+		var s := sides_for(m.radius)
+		before = m.radial_segments * m.rings
+		m.radial_segments = mini(m.radial_segments, s)
+		m.rings = mini(m.rings, 4)
+		return before - m.radial_segments * m.rings
+	if m is CylinderMesh:
+		var s := sides_for(maxf(m.top_radius, m.bottom_radius))
+		before = m.radial_segments * m.rings
+		m.radial_segments = mini(m.radial_segments, s)
+		m.rings = mini(m.rings, 1)
+		return before - m.radial_segments * m.rings
+	if m is TorusMesh:
+		before = m.rings * m.ring_segments
+		m.rings = mini(m.rings, sides_for(m.outer_radius) + 4)
+		m.ring_segments = mini(m.ring_segments, 8)
+		return before - m.rings * m.ring_segments
+	return 0
+
 ## Liga/desliga bloom e SSAO de um Environment conforme a qualidade.
 static func apply_quality(env: Environment, q: int) -> void:
 	env.glow_enabled = q >= 1

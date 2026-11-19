@@ -362,6 +362,7 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-475** O kart tem a mesma cor no navegador (renderizador Compatibility) e no PC: quais partes da paleta pintar vem de uma máscara pronta (`colormap_mask.png`, gerada por `tools/make_kart_mask.gd`). A conta de saturação no shader só achava a carroceria lilás-clara no espaço linear do Forward+ e o kart saía branco na web.
 - [x] **RF-476** Só aparecem símbolos que a fonte do jogo tem (no navegador não há fonte reserva): setas viram "Seta cima/esq./baixo/dir." (e "setas" nas dicas), ★ e → saíram dos textos.
 - [x] **RF-477** Versão web publicada pelo GitHub Actions no GitHub Pages: testes → `tools/check_publish.sh` → export "Web" (sem threads, Compatibility, texturas ETC2/ASTC pro celular) → teste no navegador (`tests/web_smoke.js`, PC e celular deitado com toque) → publica. Ações fixadas por SHA, binários do Godot conferidos por SHA-512, permissões mínimas.
+- [x] **RF-478** Leve no navegador e no celular. (a) As primitivas criadas em código (esfera, cápsula, cilindro, toro) têm o detalhe baixado pelo tamanho (`Gfx.simplify_meshes`: 12 a 32 lados): a pista mais pesada caiu de 2,1 milhões pra ~280 mil triângulos. (b) No gráfico BAIXO (padrão do navegador) o sol não faz sombra (metade dos desenhos). (c) Na web a luz é calculada por vértice e a sombra é simples (`force_vertex_shading.web`, `force_lambert_over_burley.web`, `soft_shadow_filter_quality.web=0`): o navegador montava ~100 shaders de 1,2 a 2 s cada e a 1ª corrida travava ~35 s; agora ~8 s na 1ª vez e ~2 s nas próximas (o navegador guarda). (d) A tela de carregamento avisa que a 1ª corrida no navegador demora uns segundos. Diagnóstico: `[carga]` no console (tempos de montagem e do 1º quadro) e `tools/count_shaders.gd`.
 
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
@@ -426,6 +427,7 @@ tests/web_smoke.js                             versão web no navegador (Playwri
 .github/workflows/build.yml                   CI: testes → check_publish → export web → web_smoke → GitHub Pages
 tools/check_publish.sh                         varredura antes de publicar (arquivos proibidos, segredos, e-mails, licenças)
 tools/make_kart_mask.gd                        gera a máscara de cor do kart (RF-475)
+tools/count_shaders.gd                         quantos shaders diferentes uma corrida usa (cada um compila no 1º desenho)
 tools/split_gd.pl                              refatoração mecânica: move funções inteiras pra camadas
 tools/probe_track.gd, probe_all.gd, ai_report.gd   medir pista e IA (extensão, alturas, quedas por trecho)
 tools/screenshot*.gd                           prints pra revisão visual
@@ -548,6 +550,7 @@ tools/screenshot*.gd                           prints pra revisão visual
 - [x] **CA-112** Toque: controles só com 1 jogador e toque ligado; direcional proporcional junto com drift (vários dedos); soltar para tudo; acelerador automático no fim da contagem e solto no freio; pausa esconde e solta tudo; HUD rearrumado; abertura começa no toque (não no TELA CHEIA); "setas" no lugar dos símbolos.
 - [x] **CA-113** A carroceria usa a máscara pronta (que pinta a paleta) e a cor do piloto.
 - [x] **CA-114** Versão web (CI, `tests/web_smoke.js`): abre, menu, corrida no PC e abertura → menu no celular deitado com toque, sem erro do motor no console.
+- [x] **CA-115** Esfera padrão baixa pra 16 lados (grande, 32; quem pediu menos fica); gráfico BAIXO sem sombra do sol; a pista mais pesada abaixo de 700 mil triângulos.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

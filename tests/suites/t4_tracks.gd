@@ -1015,3 +1015,66 @@ func _test_headlights() -> void:
 			check(lit == 0, "%s: de dia sem farol" % pair[0])
 		race.queue_free()
 		await process_frame
+
+
+## Triângulos que a cena manda desenhar (multimesh e partículas contam cada cópia).
+func _scene_tris(node: Node) -> int:
+	var total := 0
+	for n in node.find_children("*", "", true, false):
+		var m: Mesh = null
+		var copies := 1
+		if n is MeshInstance3D:
+			m = n.mesh
+		elif n is MultiMeshInstance3D and n.multimesh:
+			m = n.multimesh.mesh
+			copies = n.multimesh.instance_count
+		if m == null:
+			continue
+		for s in m.get_surface_count():
+			var a := m.surface_get_arrays(s)
+			var idx = a[Mesh.ARRAY_INDEX]
+			total += copies * ((idx as PackedInt32Array).size() if idx != null else (a[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()) / 3
+	return total
+
+
+func _test_mesh_budget() -> void:
+	print("CA-115 pista leve pro celular e pro navegador")
+	var Gfx = load("res://scripts/gfx.gd")
+	var sp := SphereMesh.new()
+	var big := SphereMesh.new()
+	big.radius = 8.0
+	var mine := CylinderMesh.new()
+	mine.radial_segments = 6
+	var holder := Node3D.new()
+	for m in [sp, big, mine]:
+		var mi := MeshInstance3D.new()
+		mi.mesh = m
+		holder.add_child(mi)
+	Gfx.simplify_meshes(holder)
+	holder.free()
+	check(sp.radial_segments == 16 and sp.rings == 8 and big.radial_segments == 32, "esfera padrão (64 lados) baixa pelo tamanho: %d/%d e grande %d" % [sp.radial_segments, sp.rings, big.radial_segments])
+	check(mine.radial_segments == 6, "quem já pediu poucos lados fica como está")
+	var game = root.get_node("Game")
+	var q_was = game.settings["quality"]
+	var worst := 0
+	var worst_id := ""
+	for tid in ["queijo", "deserto", "geladeira", "feira", "cozinha"]:
+		game.settings["quality"] = 0 if tid == "queijo" else 2
+		var race = load("res://scripts/race.gd").new()
+		race.use_game_settings = false
+		race.player_chars = ["nanni"]
+		race.track_id = tid
+		race.laps = 1
+		root.add_child(race)
+		if race.karts.is_empty():
+			await process_frame
+		var tris := _scene_tris(race)
+		if tris > worst:
+			worst = tris
+			worst_id = tid
+		if tid == "queijo":
+			check(not race.sun_light.shadow_enabled, "gráfico BAIXO (padrão do navegador): sem sombra do sol")
+		race.queue_free()
+		await process_frame
+	game.settings["quality"] = q_was
+	check(worst < 700000, "a pista mais pesada tem %d triângulos (%s; antes passava de 2 milhões)" % [worst, worst_id])

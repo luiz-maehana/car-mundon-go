@@ -851,12 +851,17 @@ func is_loading() -> bool:
 	return loading != null and loading.visible
 
 
+var web_warm := false   # RF-478: no navegador a 1ª corrida prepara os gráficos (depois o navegador guarda)
+
+
 ## Texto da tela de carregamento: nome da pista (e a corrida do GP).
 func loading_text() -> String:
-	var name: String = TrackData.find(track_id)["name"]
+	var txt: String = TrackData.find(track_id)["name"]
 	if is_gp():
-		return "%s · corrida %d/%d\n%s" % [gp_cup_name(), gp_index + 1, gp_tracks().size(), name]
-	return name
+		txt = "%s · corrida %d/%d\n%s" % [gp_cup_name(), gp_index + 1, gp_tracks().size(), txt]
+	if OS.has_feature("web") and not web_warm:
+		txt += "\n\nNa primeira corrida o navegador prepara os gráficos:\npode levar alguns segundos (depois fica rápido)."
+	return txt
 
 
 ## RF-350: mostra "Carregando" e só depois troca pra corrida (a pista monta com a tela de pé).
@@ -865,6 +870,7 @@ func go_race(reload := false) -> void:
 	show_loading(loading_text())
 	await get_tree().process_frame
 	await get_tree().process_frame
+	web_warm = true
 	if reload:
 		get_tree().reload_current_scene()
 	else:

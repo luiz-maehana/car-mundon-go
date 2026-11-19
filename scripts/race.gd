@@ -23,10 +23,14 @@ func _ready() -> void:
 	if time_trial:
 		player_chars = player_chars.slice(0, 1)  # RF-230: sempre 1 jogador
 	rng.randomize()
+	var t0 := Time.get_ticks_msec()
 	track = TrackScript.new(track_id)
+	var t_path := Time.get_ticks_msec()
 	_build_environment()
 	add_child(track)
+	var t_track := Time.get_ticks_msec()
 	_spawn_karts()
+	var t_karts := Time.get_ticks_msec()
 	if not time_trial:
 		_spawn_boxes()  # RF-231: sem caixas no contra o relógio
 	_spawn_cheese()
@@ -34,6 +38,8 @@ func _ready() -> void:
 	if time_trial:
 		_tt_setup()
 	_build_views()
+	if DisplayServer.get_name() != "headless":  # [carga]: diagnóstico no console do navegador
+		print("[carga] %s (gráfico %d, sombra %s): traçado %d ms · malhas %d ms · karts %d ms · resto %d ms" % [track_id, Gfx.quality(), sun_light.shadow_enabled, t_path - t0, t_track - t_path, t_karts - t_track, Time.get_ticks_msec() - t_karts])
 	_update_cameras(1.0, true)
 	if audio_enabled:
 		_build_audio()
@@ -44,6 +50,16 @@ func _ready() -> void:
 	apply_settings()
 	for p in players:
 		human_laps.append(1)
+	Gfx.simplify_meshes(self)  # RF-478
+	if DisplayServer.get_name() != "headless":
+		_log_first_frames(Time.get_ticks_msec())
+
+
+## [carga]: o 1º desenho compila os shaders (no navegador isso é o que mais demora).
+func _log_first_frames(t_ready: int) -> void:
+	for i in 3:
+		await RenderingServer.frame_post_draw
+		print("[carga] quadro %d desenhado %d ms depois de montar" % [i + 1, Time.get_ticks_msec() - t_ready])
 
 
 func _exit_tree() -> void:
