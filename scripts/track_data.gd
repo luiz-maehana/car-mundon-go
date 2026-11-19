@@ -95,7 +95,7 @@ const TRACKS := [
 		"sky_top": Color(0.02, 0.02, 0.08), "sky_horizon": Color(0.18, 0.1, 0.3),
 		"ambient": Color(0.45, 0.45, 0.65), "sun": [0.45, -60.0, Color(0.6, 0.7, 1.0)],
 		"deco": "lamp", "deco_color": Color(1.0, 0.85, 0.4),
-		"ground_tex": "tiles", "clouds": 0.15, "fog": 0.003, "exposure": 1.2, "stars": true, "cloud_color": Color(0.25, 0.22, 0.35), "scenery": "cheese",
+		"ground_tex": "tiles", "clouds": 0.15, "fog": 0.003, "exposure": 1.2, "stars": true, "night": true, "cloud_color": Color(0.25, 0.22, 0.35), "scenery": "cheese",
 	},
 	{
 		"id": "churrasco", "name": "Churrascada de Domingo", "music": "churrasco",
@@ -139,7 +139,7 @@ const TRACKS := [
 		"sky_top": Color(0.08, 0.08, 0.11), "sky_horizon": Color(0.45, 0.25, 0.12),
 		"ambient": Color(0.6, 0.58, 0.6), "sun": [0.75, -60.0, Color(1.0, 0.75, 0.5)],
 		"deco": "machine", "deco_color": Color(0.35, 0.36, 0.4),
-		"ground_tex": "metal", "clouds": 0.1, "fog": 0.0025, "exposure": 1.15, "cloud_color": Color(0.3, 0.25, 0.22), "scenery": "cheese",
+		"ground_tex": "metal", "clouds": 0.1, "fog": 0.0025, "exposure": 1.15, "night": true, "cloud_color": Color(0.3, 0.25, 0.22), "scenery": "cheese",
 		# RF-274: esteira pra frente na reta, esteira lateral numa curva, 2 rodas e 2 prensas
 		"zones": [
 			{"kind": "belt", "from": 0.2, "to": 0.27, "lat": [-7.5, 7.5], "dir": 1.0},
@@ -240,7 +240,7 @@ const TRACKS := [
 		"sky_top": Color(0.02, 0.03, 0.1), "sky_horizon": Color(0.12, 0.14, 0.3),
 		"ambient": Color(0.42, 0.46, 0.68), "sun": [0.55, -50.0, Color(0.7, 0.78, 1.0)],
 		"deco": "city", "deco_color": Color(1.0, 0.85, 0.45),
-		"ground_tex": "tiles", "clouds": 0.15, "fog": 0.0018, "exposure": 1.25, "stars": true, "cloud_color": Color(0.2, 0.22, 0.35), "scenery": "none",
+		"ground_tex": "tiles", "clouds": 0.15, "fog": 0.0018, "exposure": 1.25, "stars": true, "night": true, "cloud_color": Color(0.2, 0.22, 0.35), "scenery": "none",
 	},
 	{
 		"id": "feira", "name": "Feira Livre", "music": "feira",

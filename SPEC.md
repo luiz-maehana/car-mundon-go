@@ -349,6 +349,10 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-452** Dados das pistas em `track_data.gd`; nomes de tipos em `ids.gd`.
 - [x] **RF-453** `track`, `kart`, `race` e `menu` divididos em camadas por responsabilidade (ver §7); testes divididos em grupos. Nenhuma mudança pra quem joga (os mesmos testes passam).
 
+### Semáforo e faróis (v0.40)
+- [x] **RF-460** O pórtico da largada tem um semáforo de 3 lâmpadas que acompanha a contagem: no 3 acende a 1ª vermelha, no 2 a 2ª, no 1 a 3ª; no VAI! as três ficam verdes por 2 s e apagam. (As lâmpadas do modelo, que eram uma peça só, ficam apagadas por baixo.)
+- [x] **RF-461** Nas pistas noturnas (`night`: Cozinha, Telhados, Fábrica) cada kart tem farol de verdade (luz que ilumina a pista à frente), os dois faróis acesos no bico e a lanterna vermelha atrás. No gráfico BAIXO só os karts dos jogadores ganham a luz (os faróis e lanternas continuam acesos em todos).
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -523,6 +527,8 @@ tools/screenshot*.gd                           prints pra revisão visual
 - [x] **CA-107** A IA usa os poderes (8 de 8 em 40 s com queijinho cheio) e o HUD mostra o poder.
 - [x] **CA-108** Na mesma velocidade, drift fechado gira no máximo 92% da curva normal e o drift solto até 65% (arco aberto).
 - [x] **CA-109** settings.cfg e records.cfg com script embutido não rodam código (o arquivo vira .bloqueado e o jogo usa o padrão); números fora da faixa são corrigidos; teclas e campos de recorde inválidos são ignorados.
+- [x] **CA-110** Semáforo com 3 lâmpadas: acende 1, 2, 3 vermelhas na contagem, verde no VAI! e apaga depois de 2 s.
+- [x] **CA-111** Farol aceso nas pistas noturnas (Cozinha, Telhados, Fábrica) e nenhum nas de dia.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

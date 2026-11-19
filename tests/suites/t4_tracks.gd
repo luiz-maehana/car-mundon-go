@@ -958,3 +958,60 @@ func _test_drift_vs_turn() -> void:
 	check(drift_mid <= normal * 0.65 and drift_mid > 0.1, "drift solto (sem direcional) é um arco aberto: %.2f rad/s" % drift_mid)
 	race.queue_free()
 	await process_frame
+
+
+func _test_start_lights() -> void:
+	print("CA-110 semáforo da largada acompanha a contagem")
+	var race = load("res://scripts/race.gd").new()
+	race.use_game_settings = false
+	race.autopilot_player = true
+	race.player_chars = ["nanni"]
+	race.track_id = "queijo"
+	race.laps = 1
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	var t = race.track
+	check(t.start_lamps.size() == 3 and t.get_node_or_null("StartGantry/StartLights") != null, "pórtico com 3 lâmpadas")
+	var seen := []
+	var dt := 1.0 / 60.0
+	for i in 240:
+		race.step(dt)
+		var lit := 0
+		var green := true
+		for m in t.start_lamps:
+			if m.emission_energy_multiplier > 0.0:
+				lit += 1
+			if not m.albedo_color.is_equal_approx(t.LAMP_GREEN):
+				green = false
+		var tag := "verde" if green and lit == 3 else "%d" % lit
+		if seen.is_empty() or seen[-1] != tag:
+			seen.append(tag)
+	check(seen.slice(0, 4) == ["1", "2", "3", "verde"], "acende 1, 2, 3 vermelhas e fica verde no VAI! %s" % str(seen))
+	for i in 150:
+		race.step(dt)
+	var off: bool = t.start_lamps.all(func(m): return m.emission_energy_multiplier == 0.0)
+	check(off, "depois de 2 s de corrida apaga")
+	race.queue_free()
+	await process_frame
+
+
+func _test_headlights() -> void:
+	print("CA-111 farol nas pistas noturnas")
+	for pair in [["cozinha", true], ["telhados", true], ["fabrica", true], ["queijo", false], ["geladeira", false]]:
+		var race = load("res://scripts/race.gd").new()
+		race.use_game_settings = false
+		race.autopilot_player = true
+		race.player_chars = ["nanni"]
+		race.track_id = pair[0]
+		race.laps = 1
+		root.add_child(race)
+		if race.karts.is_empty():
+			await process_frame
+		var lit: int = race.karts.filter(func(k): return k.get_node_or_null("Headlight") is SpotLight3D).size()
+		if pair[1]:
+			check(lit >= 1 and race.player.get_node_or_null("Headlight") != null, "%s: farol aceso (%d karts)" % [pair[0], lit])
+		else:
+			check(lit == 0, "%s: de dia sem farol" % pair[0])
+		race.queue_free()
+		await process_frame

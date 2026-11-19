@@ -318,6 +318,66 @@ func _build_arch() -> void:
 		if side < 0:
 			lbl.rotation.y = PI
 		gantry.add_child(lbl)
+	_start_lights(gantry, box)
+
+
+## RF-460: semáforo da largada — 3 lâmpadas que acendem vermelhas no 3, 2, 1 e ficam verdes
+## no VAI! (as lâmpadas do modelo, que eram uma peça só, ficam apagadas por baixo).
+const LAMP_COUNT := 3
+const LAMP_OFF := Color(0.12, 0.1, 0.1)
+const LAMP_RED := Color(1.0, 0.12, 0.08)
+const LAMP_GREEN := Color(0.15, 1.0, 0.3)
+var start_lamps: Array = []   # StandardMaterial3D de cada lâmpada (as duas faces usam o mesmo)
+var start_lamp_state := -2
+
+
+func _start_lights(gantry: Node3D, box: AABB) -> void:
+	for mi in gantry.find_children("*", "MeshInstance3D", true, false):
+		var m: Mesh = (mi as MeshInstance3D).mesh
+		if m and m.get_surface_count() > 2:
+			(mi as MeshInstance3D).set_surface_override_material(2, _deco_mat(LAMP_OFF))
+	var depth: float = box.size.z + 0.5
+	var board := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(5.4, 2.0, depth)
+	board.mesh = bm
+	board.material_override = _deco_mat(Color(0.08, 0.08, 0.1))
+	board.position = Vector3(0, box.size.y - 1.4, 0)
+	board.name = "StartLights"
+	gantry.add_child(board)
+	for k in LAMP_COUNT:
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = LAMP_OFF
+		mat.emission_enabled = true
+		mat.emission = LAMP_OFF
+		mat.emission_energy_multiplier = 0.0
+		start_lamps.append(mat)
+		for side in [1.0, -1.0]:
+			var lamp := MeshInstance3D.new()
+			var cm := CylinderMesh.new()
+			cm.top_radius = 0.62
+			cm.bottom_radius = 0.62
+			cm.height = 0.12
+			lamp.mesh = cm
+			lamp.material_override = mat
+			lamp.rotation.x = PI / 2.0
+			lamp.position = Vector3((k - (LAMP_COUNT - 1) * 0.5) * 1.6, 0.0, side * (depth * 0.5 + 0.03))
+			board.add_child(lamp)
+
+
+## Acende as lâmpadas: lit = quantas vermelhas (0..3); green = todas verdes (VAI!).
+func set_start_lights(lit: int, green: bool) -> void:
+	var st := -1 if green else lit
+	if st == start_lamp_state:
+		return
+	start_lamp_state = st
+	for k in start_lamps.size():
+		var mat: StandardMaterial3D = start_lamps[k]
+		var on := green or k < lit
+		var c: Color = LAMP_GREEN if green else (LAMP_RED if on else LAMP_OFF)
+		mat.albedo_color = c
+		mat.emission = c
+		mat.emission_energy_multiplier = 3.5 if on else 0.0
 
 
 ## RF-173: boxes, tendas, torres de faixa e outdoors do Racing Kit perto da largada.

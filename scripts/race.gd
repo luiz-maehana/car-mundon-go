@@ -277,6 +277,12 @@ func step(delta: float) -> void:
 		race_time += delta
 		_human_lap_sounds()
 		_final_lap_music()
+	# RF-460: semáforo do pórtico acompanha a contagem (3, 2, 1 vermelhas → VAI! verde por 2 s)
+	if track and track.has_method("set_start_lights"):
+		if state == "countdown":
+			track.set_start_lights(clampi(4 - int(ceil(countdown)), 0, 3), false)
+		else:
+			track.set_start_lights(0, race_time < 2.0)
 	var can_drive := state != "countdown"
 	_update_rubber()
 	for k in karts:

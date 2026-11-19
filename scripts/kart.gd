@@ -190,6 +190,8 @@ func _build_model() -> void:
 		f.visible = false
 		flames.append(f)
 	_build_particles()
+	if track and track.def.get("night", false):
+		_build_headlights()  # RF-461
 
 
 func _build_particles() -> void:
@@ -310,3 +312,49 @@ func _update_shield_fx() -> void:
 		if on and shield_time < 1.5:
 			on = int(shield_time * 8.0) % 2 == 0
 		shield_bubble.visible = on
+
+
+## RF-461: pista noturna — farol de verdade (ilumina a pista à frente), os dois faróis acesos
+## no bico e a lanterna vermelha atrás. No gráfico BAIXO só os karts dos jogadores ganham a luz.
+func _build_headlights() -> void:
+	var warm := Color(1.0, 0.93, 0.78)
+	var lamp_on := StandardMaterial3D.new()
+	lamp_on.albedo_color = warm
+	lamp_on.emission_enabled = true
+	lamp_on.emission = warm
+	lamp_on.emission_energy_multiplier = 4.0
+	var tail := StandardMaterial3D.new()
+	tail.albedo_color = Color(1.0, 0.1, 0.08)
+	tail.emission_enabled = true
+	tail.emission = Color(1.0, 0.1, 0.08)
+	tail.emission_energy_multiplier = 3.0
+	for x in [-0.5, 0.5]:
+		var head := MeshInstance3D.new()
+		var hm := SphereMesh.new()
+		hm.radius = 0.16
+		hm.height = 0.24
+		head.mesh = hm
+		head.material_override = lamp_on
+		head.position = Vector3(x, 0.62, -1.38)
+		head.name = "Headlamp"
+		model.add_child(head)
+		var back := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.28, 0.12, 0.06)
+		back.mesh = bm
+		back.material_override = tail
+		back.position = Vector3(x, 0.66, 1.22)
+		model.add_child(back)
+	if not is_player and int(Gfx.setting("quality", 2)) == 0:
+		return
+	var spot := SpotLight3D.new()
+	spot.name = "Headlight"
+	spot.light_color = warm
+	spot.light_energy = 5.0
+	spot.spot_range = 32.0
+	spot.spot_angle = 34.0
+	spot.spot_attenuation = 0.8
+	spot.shadow_enabled = false
+	spot.position = Vector3(0.0, 1.1, -1.5)
+	spot.rotation.x = -0.14  # um pouco pra baixo: ilumina o asfalto
+	add_child(spot)
