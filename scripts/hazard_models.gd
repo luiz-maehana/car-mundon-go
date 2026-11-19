@@ -116,3 +116,49 @@ static func cat() -> Node3D:
 	for z in [-0.2, 0.2, 0.6]:
 		_mi(root, stripe, stripe_mat, Vector3(0, 1.035, z))
 	return root
+
+
+## Ícone do TURBO: foguetinho vermelho com chama (só usado no ícone do HUD).
+static func rocket() -> Node3D:
+	var root := Node3D.new()
+	root.name = "turbo"
+	var body := CylinderMesh.new()
+	body.top_radius = 0.28
+	body.bottom_radius = 0.28
+	body.height = 1.1
+	_mi(root, body, _mat(Color(0.9, 0.15, 0.12), 0.35, 0.2), Vector3.ZERO)
+	var nose := CylinderMesh.new()
+	nose.top_radius = 0.0
+	nose.bottom_radius = 0.28
+	nose.height = 0.45
+	_mi(root, nose, _mat(Color(0.95, 0.95, 0.95), 0.4), Vector3(0, 0.78, 0))
+	var band := CylinderMesh.new()
+	band.top_radius = 0.29
+	band.bottom_radius = 0.29
+	band.height = 0.12
+	_mi(root, band, _mat(Color(1.0, 0.8, 0.15), 0.4, 0.3), Vector3(0, 0.3, 0))
+	var fin := BoxMesh.new()
+	fin.size = Vector3(0.06, 0.4, 0.3)
+	for k in 3:
+		var a := TAU * k / 3.0
+		var f := _mi(root, fin, _mat(Color(0.95, 0.95, 0.95), 0.4), Vector3(sin(a) * 0.3, -0.4, cos(a) * 0.3), Vector3(0, a, 0))
+		f.rotation.y = a + PI / 2.0
+	var flame := CylinderMesh.new()
+	flame.top_radius = 0.22
+	flame.bottom_radius = 0.0
+	flame.height = 0.6
+	var fm := _mat(Color(1.0, 0.6, 0.1))
+	fm.emission_enabled = true
+	fm.emission = Color(1.0, 0.55, 0.1)
+	fm.emission_energy_multiplier = 2.0
+	_mi(root, flame, fm, Vector3(0, -0.85, 0))
+	var core := CylinderMesh.new()
+	core.top_radius = 0.12
+	core.bottom_radius = 0.0
+	core.height = 0.4
+	var cm := _mat(Color(1.0, 0.95, 0.5))
+	cm.emission_enabled = true
+	cm.emission = Color(1.0, 0.95, 0.5)
+	cm.emission_energy_multiplier = 3.0
+	_mi(root, core, cm, Vector3(0, -0.75, 0))
+	return root

@@ -10,9 +10,26 @@ func set_kind(k: String) -> void:
 		queue_redraw()
 
 
+## RF-206: ícone = foto do modelo 3D do item (assets/icons, gerado por tools/render_icons.gd).
+## Sem a foto, cai no desenho em código abaixo.
+static var _tex := {}
+
+
+static func texture(k: String) -> Texture2D:
+	if not _tex.has(k):
+		var p := "res://assets/icons/%s.png" % k
+		_tex[k] = load(p) if k != "" and ResourceLoader.exists(p) else null
+	return _tex[k]
+
+
 func _draw() -> void:
 	var c := size * 0.5
 	var r := minf(size.x, size.y) * 0.42
+	var t := texture(kind)
+	if t:
+		var s := minf(size.x, size.y) * 1.3  # a foto tem margem transparente
+		draw_texture_rect(t, Rect2(c - Vector2(s, s) * 0.5, Vector2(s, s)), false)
+		return
 	match kind:
 		"turbo":
 			for k in 2:

@@ -231,6 +231,9 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-243** No Grand Prix, `Menu` no pause pede confirmação ("Abandonar o Grand Prix?" SIM / NÃO, foco no NÃO).
 - [x] **RF-244** Nada de interface sai da tela: menu, resultado (corrida e contra o relógio), pause e configurações cabem em 16:9, 4:3 e 21:9.
 
+### Ícones e sons (v0.19)
+- [x] **RF-206** Ícones dos itens são fotos dos próprios modelos 3D do jogo (foguete, banana, bomba, ratoeira, gato, queijo, queijo triplo, escudo), geradas por `tools/render_icons.gd` em `assets/icons/` (128 px, fundo transparente). Sem a foto, o HUD volta pro desenho em código.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
