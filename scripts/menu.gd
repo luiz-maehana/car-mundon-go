@@ -82,6 +82,9 @@ var preview_art: TextureRect
 var preview_name: Label
 var preview_bars: Array = []
 var preview_vals: Array = []
+var preview_power: Label
+var preview_power_desc: Label
+var power_howto: Label
 var shown := -1
 var track_btns: Array = []
 var track_minis: Array = []    # RF-400: trajeto em miniatura de cada cartão
@@ -361,7 +364,15 @@ func _build_pilot() -> Control:
 	for i in Chars.LIST.size():
 		grid.add_child(_make_card(i))
 	hb.add_child(_build_preview())
-	return hb
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 12)
+	vb.add_child(hb)
+	power_howto = _label("PODERES: " + Chars.POWER_HOWTO, 15, Color(1.0, 0.9, 0.55))
+	power_howto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	power_howto.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	power_howto.custom_minimum_size = Vector2(1100, 0)
+	vb.add_child(power_howto)
+	return vb
 
 
 ## RF-292: etapa 3 — lista de pistas + trajeto desenhado + informações.
@@ -781,6 +792,14 @@ func _build_preview() -> Control:
 		var v := _label("", 16, Color.WHITE)
 		line.add_child(v)
 		preview_vals.append(v)
+	# RF-428: o poder do piloto, explicado
+	preview_power = _label("", 18, Color(1.0, 0.85, 0.3))
+	stats.add_child(_gap(4))
+	stats.add_child(preview_power)
+	preview_power_desc = _label("", 14, Color(0.9, 0.92, 1.0))
+	preview_power_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	preview_power_desc.custom_minimum_size = Vector2(250, 0)
+	stats.add_child(preview_power_desc)
 	return panel
 
 
@@ -1021,6 +1040,9 @@ func _show_preview(i: int) -> void:
 	preview_art.texture = Chars.art(c["id"], "full")
 	preview_name.text = c["name"]
 	preview_name.add_theme_color_override("font_color", col.lightened(0.35))
+	var pw: Dictionary = c.get("power", {})
+	preview_power.text = "PODER: " + String(pw.get("name", "")).to_upper()
+	preview_power_desc.text = String(pw.get("desc", ""))
 	for k in STATS.size():
 		preview_vals[k].text = "%d/5" % int(c[STATS[k][0]])
 		preview_bars[k].color = col.lightened(0.15)

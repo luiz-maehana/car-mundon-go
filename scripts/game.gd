@@ -4,7 +4,7 @@ extends Node
 
 const GAME_TITLE := "Car Mundon'GO"
 const MAX_PLAYERS := 4
-const ACTIONS := ["accelerate", "brake", "steer_left", "steer_right", "drift", "use_item"]
+const ACTIONS := ["accelerate", "brake", "steer_left", "steer_right", "drift", "use_item", "power"]
 
 const Sfx = preload("res://scripts/sfx.gd")
 
@@ -139,11 +139,13 @@ static func setup_inputs() -> void:
 			"accelerate": [[KEY_W]], "brake": [[KEY_S]], "steer_left": [[KEY_A]], "steer_right": [[KEY_D]],
 			"drift": [[KEY_SPACE], [KEY_SHIFT, KEY_LOCATION_LEFT]],
 			"use_item": [[KEY_E], [KEY_CTRL, KEY_LOCATION_LEFT]],
+			"power": [[KEY_Q]],  # RF-420
 		},
 		1: {
 			"accelerate": [[KEY_UP]], "brake": [[KEY_DOWN]], "steer_left": [[KEY_LEFT]], "steer_right": [[KEY_RIGHT]],
 			"drift": [[KEY_SHIFT, KEY_LOCATION_RIGHT], [KEY_KP_0]],
 			"use_item": [[KEY_ENTER], [KEY_KP_ENTER], [KEY_CTRL, KEY_LOCATION_RIGHT]],
+			"power": [[KEY_KP_1], [KEY_PERIOD]],
 		},
 	}
 	var pad := {
@@ -153,6 +155,7 @@ static func setup_inputs() -> void:
 		"steer_right": [[JOY_AXIS_LEFT_X, 1.0], [JOY_BUTTON_DPAD_RIGHT]],
 		"drift": [[JOY_BUTTON_RIGHT_SHOULDER]],
 		"use_item": [[JOY_BUTTON_LEFT_SHOULDER], [JOY_BUTTON_X]],
+		"power": [[JOY_BUTTON_Y]],
 	}
 	for p in MAX_PLAYERS:
 		for a in ACTIONS:
@@ -524,7 +527,7 @@ const PAD_REMAP := ["accelerate", "brake", "drift", "use_item"]
 const RESERVED_KEYS := [KEY_ESCAPE, KEY_M, KEY_R]
 const ACTION_NAMES := {
 	"accelerate": "Acelerar", "brake": "Frear / ré", "steer_left": "Virar à esquerda",
-	"steer_right": "Virar à direita", "drift": "Drift (no ar: manobra)", "use_item": "Usar item",
+	"steer_right": "Virar à direita", "drift": "Drift (no ar: manobra)", "use_item": "Usar item", "power": "Poder (10 queijinhos)",
 }
 const KEY_NAMES := {
 	KEY_SPACE: "Espaço", KEY_UP: "↑", KEY_DOWN: "↓", KEY_LEFT: "←", KEY_RIGHT: "→",
@@ -697,11 +700,11 @@ func pad_label(a: String) -> String:
 ## RF-254: dicas da corrida com as teclas atuais.
 func race_hint_kbd() -> String:
 	var steer := "%s %s" % [key_label(0, "steer_left"), key_label(0, "steer_right")]
-	return "%s %s %s: pilotar · %s: drift · %s: item · Esc: pausar · M: som" % [key_label(0, "accelerate"), key_label(0, "brake"), steer, key_label(0, "drift").split(" / ")[0], key_label(0, "use_item").split(" / ")[0]]
+	return "%s %s %s: pilotar · %s: drift · %s: item · %s: poder · Esc: pausar · M: som" % [key_label(0, "accelerate"), key_label(0, "brake"), steer, key_label(0, "drift").split(" / ")[0], key_label(0, "use_item").split(" / ")[0], key_label(0, "power").split(" / ")[0]]
 
 
 func race_hint_pad() -> String:
-	return "Analógico: pilotar · %s: acelerar · %s: frear · %s: drift · %s: item · Start: pausar" % [pad_label("accelerate"), pad_label("brake"), pad_label("drift"), pad_label("use_item")]
+	return "Analógico: pilotar · %s: acelerar · %s: frear · %s: drift · %s: item · %s: poder · Start: pausar" % [pad_label("accelerate"), pad_label("brake"), pad_label("drift"), pad_label("use_item"), pad_label("power")]
 
 
 func move_keys(player: int) -> String:

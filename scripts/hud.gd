@@ -27,6 +27,7 @@ var lbl_msg: Label
 var lbl_item: Label
 var item_icon: Control
 var lbl_cheese: Label
+var lbl_power: Label
 var lbl_laptime: Label
 var lbl_speed: Label
 var drift_bar_bg: ColorRect
@@ -145,6 +146,26 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 	lbl_cheese.anchor_right = 0.5
 	lbl_cheese.offset_left = 138
 	lbl_cheese.offset_top = 24
+	# RF-427: poder do piloto (nome + estado) embaixo dos queijinhos
+	lbl_power = _label(17)
+	lbl_power.anchor_left = 0.5
+	lbl_power.anchor_right = 0.5
+	lbl_power.offset_left = -320
+	lbl_power.offset_right = 320
+	lbl_power.offset_top = 98
+	lbl_power.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var pill := StyleBoxFlat.new()  # fundo escuro: lê bem sobre o céu, placas etc.
+	pill.bg_color = Color(0.02, 0.03, 0.08, 0.85)
+	pill.set_corner_radius_all(12)
+	pill.content_margin_left = 14
+	pill.content_margin_right = 14
+	pill.content_margin_top = 2
+	pill.content_margin_bottom = 2
+	lbl_power.add_theme_stylebox_override("normal", pill)
+	lbl_power.offset_left = -200
+	lbl_power.offset_right = 200
+	if race.has_signal("power_used"):
+		race.power_used.connect(_on_power_used)
 	# RF-133: tempo da volta
 	lbl_laptime = _label(20)
 	lbl_laptime.position = Vector2(26, 98 if race.players.size() == 1 else 138)
@@ -395,6 +416,7 @@ func update_hud(delta: float) -> void:
 	# RF-135: queijinhos
 	lbl_cheese.text = "%d/10" % p.cheese
 	lbl_cheese.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3) if p.cheese >= 10 else Color.WHITE)
+	_update_power_label(p)
 	# RF-131: velocímetro + carga do drift
 	var mph: bool = Gfx.setting("speed_unit", "kmh") == "mph"
 	lbl_speed.text = "%d" % int(absf(p.speed) * (2.237 if mph else 3.6))
@@ -736,3 +758,35 @@ func refresh_hint() -> void:
 func _focus_later(b: Button) -> void:
 	b.focus_mode = Control.FOCUS_ALL
 	get_tree().create_timer(0.8).timeout.connect(b.grab_focus)  # morre junto com o botão
+
+
+## RF-427: nome do poder + estado (juntando queijinho, pronto, ativo, recarga).
+func _update_power_label(p: Node3D) -> void:
+	if lbl_power == null or not p.has_method("power_state"):
+		return
+	var game := get_node_or_null("/root/Game")
+	var key: String = game.hint(game.key_label(0, "power").split(" / ")[0], game.pad_label("power")) if game else "Q"
+	var nm: String = p.power_name().to_upper()
+	match p.power_state():
+		"charge":
+			lbl_power.text = "%s · %d/10 queijinhos" % [nm, p.cheese]
+			lbl_power.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
+		"ready":
+			lbl_power.text = "%s PRONTO! (%s)" % [nm, key]
+			var blink := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.012)
+			lbl_power.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2).lerp(Color.WHITE, blink * 0.5))
+		"active":
+			lbl_power.text = ("%s · %d turbos (%s)" % [nm, p.power_charges, key]) if p.power_charges > 0 else "%s ATIVO" % nm
+			lbl_power.add_theme_color_override("font_color", Color(0.45, 1.0, 0.55))
+		"cooldown":
+			lbl_power.text = "%s · recarga %ds" % [nm, int(ceil(p.power_cd))]
+			lbl_power.add_theme_color_override("font_color", Color(0.6, 0.75, 1.0, 0.8))
+	if p.slow_time > 0.0 and msg_time <= 0.05:
+		_flash("CÂMERA LENTA!", 0.4)
+		lbl_msg.add_theme_color_override("font_color", Color(0.45, 0.75, 1.0))
+
+
+func _on_power_used(k: Node3D, _power: String, msg: String) -> void:
+	if k == kart:
+		_flash(msg, 1.4)
+		lbl_msg.add_theme_color_override("font_color", Color(0.45, 1.0, 0.55))

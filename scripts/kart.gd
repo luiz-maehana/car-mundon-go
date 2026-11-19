@@ -232,7 +232,7 @@ func _shield_absorbs() -> bool:
 
 ## RF-202: preso na ratoeira — para na hora e fica TRAP_TIME sem andar.
 func trap() -> void:
-	if trap_time > 0.0 or is_rescued() or _shield_absorbs():
+	if trap_time > 0.0 or is_rescued() or ghost_time > 0.0 or _shield_absorbs():
 		return
 	trap_time = TRAP_TIME
 	drifting = false
@@ -246,7 +246,7 @@ func trap() -> void:
 
 
 func hit(strength := 1.0) -> void:
-	if spin_time > 0.0 or is_rescued() or _shield_absorbs():
+	if spin_time > 0.0 or is_rescued() or ghost_time > 0.0 or _shield_absorbs():
 		return
 	spin_time = 1.1 * strength
 	drifting = false
@@ -335,6 +335,7 @@ func step(delta: float, can_drive: bool) -> void:
 				ai_box_skip = randf() > 0.4 + 0.6 * ai_aggro  # RF-212
 			else:
 				item_hold = 0.0
+		_update_power(delta)  # RF-420
 		if shield_time > 0.0:
 			shield_time = maxf(0.0, shield_time - delta)
 		if item != "" and item_roll <= 0.0:
@@ -366,6 +367,9 @@ func _move(delta: float) -> void:
 		throttle = 0.0
 
 	var top := top_speed()
+	if slow_time > 0.0:  # RF-421: câmera lenta
+		top *= SLOW_MULT
+		speed = minf(speed, top)
 	if not airborne and absf(lateral) > track.road_half(track_idx) + TrackScript.CURB and boost_time <= 0.0:
 		top *= OFFROAD_MULT
 	# seta de turbo (RF-140)
@@ -431,6 +435,8 @@ func _move(delta: float) -> void:
 		var amount := lerpf(DRIFT_TURN_MIN, DRIFT_TURN_MAX, into)  # RF-280: mais suave
 		heading -= drift_dir * amount * turn_rate * delta
 		drift_charge += delta * (0.6 + 0.8 * into)
+		if drift_master_time > 0.0:  # RF-425: drift mestre do Telles
+			drift_charge = maxf(drift_charge, MINI_TURBO_3)
 	else:
 		var high_speed_damp := lerpf(1.0, 0.8, clampf(speed / max_speed, 0.0, 1.0))
 		var air_damp := 0.35 if airborne else 1.0
@@ -756,7 +762,10 @@ func _player_input() -> void:
 	in_steer = 0.0
 	in_drift = false
 	in_item = false
+	in_power = false
 	for p in sources:
+		if InputMap.has_action(GameScript.action(p, "power")):
+			in_power = in_power or Input.is_action_just_pressed(GameScript.action(p, "power"))
 		in_throttle += Input.get_action_strength(GameScript.action(p, "accelerate")) - Input.get_action_strength(GameScript.action(p, "brake"))
 		in_steer += Input.get_action_strength(GameScript.action(p, "steer_right")) - Input.get_action_strength(GameScript.action(p, "steer_left"))
 		in_drift = in_drift or Input.is_action_pressed(GameScript.action(p, "drift"))
@@ -766,6 +775,7 @@ func _player_input() -> void:
 
 
 func _ai_input(delta: float) -> void:
+	_ai_power(delta)
 	var n: int = track.sample_count()
 	var m: float = maxf(1.5, minf(track.road_half(track_idx), track.road_half((track_idx + 8) % n)) - 2.5)  # RF-370: largura local
 	ai_lane_timer -= delta
@@ -1011,6 +1021,7 @@ func _update_visuals(delta: float) -> void:
 		return
 	# RF-312: depois do resgate o kart pisca enquanto nada acerta
 	model.visible = rescue_ghost <= 0.0 or fmod(rescue_ghost, 0.16) > 0.08
+	_power_visuals(delta)
 	var yaw := 0.0
 	if spin_time > 0.0:
 		yaw = model.rotation.y + 14.0 * delta
@@ -1082,3 +1093,201 @@ func _update_shield_fx() -> void:
 		if on and shield_time < 1.5:
 			on = int(shield_time * 8.0) % 2 == 0
 		shield_bubble.visible = on
+
+
+# ---------------------------------------------------------------- poderes (RF-420..428)
+
+const SLOW_MULT := 0.5
+const PLANT_BOOST := 0.7
+const PLANT_WINDOW := 10.0
+var power_cd := 0.0          # recarga (20 s depois de usar)
+var power_time := 0.0        # efeito ativo / janela da planta
+var power_charges := 0       # planta: mini-turbos que sobraram
+var slow_time := 0.0         # câmera lenta do FeJauM em mim
+var ghost_time := 0.0        # fantasma do Mugurin
+var ram_time := 0.0          # trombada do Ortiz
+var drift_master_time := 0.0 # drift mestre do Telles
+var in_power := false
+var powers_used := 0
+var ai_power_wait := 0.0
+var fx_slow: MeshInstance3D
+var fx_plant: Node3D
+var ghost_meshes: Array = []
+
+
+func power_id() -> String:
+	return String(Chars.find(char_id).get("power", {}).get("id", ""))
+
+
+func power_name() -> String:
+	return String(Chars.find(char_id).get("power", {}).get("name", ""))
+
+
+## Pronto pra usar: 10 queijinhos, sem recarga e sem efeito rolando.
+func power_ready() -> bool:
+	return cheese >= MAX_CHEESE and power_cd <= 0.0 and power_time <= 0.0 and power_charges <= 0 and spin_time <= 0.0 and rescue_time <= 0.0 and not finished
+
+
+## Estado pro HUD: "charge" (juntando queijinho), "ready", "active", "cooldown".
+func power_state() -> String:
+	if power_charges > 0 or power_time > 0.0:
+		return "active"
+	if power_cd > 0.0:
+		return "cooldown"
+	return "ready" if cheese >= MAX_CHEESE else "charge"
+
+
+func _update_power(delta: float) -> void:
+	power_cd = maxf(0.0, power_cd - delta)
+	slow_time = maxf(0.0, slow_time - delta)
+	ghost_time = maxf(0.0, ghost_time - delta)
+	ram_time = maxf(0.0, ram_time - delta)
+	drift_master_time = maxf(0.0, drift_master_time - delta)
+	if power_time > 0.0:
+		power_time -= delta
+		if power_time <= 0.0:
+			power_time = 0.0
+			if power_charges > 0:  # planta: janela acabou com turbo sobrando
+				power_charges = 0
+				power_cd = Chars.POWER_CD
+	if not in_power:
+		return
+	if power_charges > 0:  # RF-422: planta da Nanni — cada aperto um mini-turbo
+		power_charges -= 1
+		boost_time = maxf(boost_time, PLANT_BOOST)
+		if is_player:
+			race.sfx("mini_turbo")
+		if power_charges <= 0:
+			power_time = 0.0
+			power_cd = Chars.POWER_CD
+	elif power_ready():
+		race.use_power(self)
+		powers_used += 1
+
+
+## RF-421: câmera lenta do FeJauM (o escudo e o fantasma protegem).
+func apply_slow(t: float) -> void:
+	if ghost_time > 0.0 or is_rescued():
+		return
+	if _shield_absorbs():
+		return
+	slow_time = maxf(slow_time, t)
+	if is_player:
+		race.sfx("snap")
+
+
+## IA decide quando usar o poder (cada um do seu jeito).
+func _ai_power(delta: float) -> void:
+	in_power = false
+	ai_power_wait -= delta
+	if power_charges > 0:
+		# planta: um mini-turbo de tempos em tempos, de preferência na reta
+		if ai_power_wait <= 0.0 and track.curvature_at(track_idx) < 0.35:
+			in_power = true
+			ai_power_wait = 1.1
+		return
+	if not power_ready() or ai_power_wait > 0.0:
+		return
+	var near := 99.0
+	var ahead_near := 99.0
+	for o in race.karts:
+		if o == self:
+			continue
+		var d: float = position.distance_to(o.position)
+		near = minf(near, d)
+		if (o.position - position).dot(forward()) > 0.0:
+			ahead_near = minf(ahead_near, d)
+	var go := false
+	match power_id():
+		"slowmo":
+			go = rank > 1
+		"guitar", "ghost":
+			go = not race.ground_hazards_ahead(self, 22).is_empty() or near < 5.0 or randf() < 0.004
+		"plant":
+			go = track.curvature_at(track_idx) < 0.3
+		"bass":
+			go = near < 10.0
+		"drift":
+			go = drifting
+		"ram":
+			go = ahead_near < 9.0
+		"steal":
+			go = race.kart_ahead_with_item(self) != null or randf() < 0.003
+	if go:
+		in_power = true
+		ai_power_wait = 1.0
+	else:
+		ai_power_wait = 0.25
+
+
+## Visuais dos poderes: anel azul de lento, transparência do fantasma, tamanho da trombada, planta.
+func _power_visuals(delta: float) -> void:
+	if slow_time > 0.0 and fx_slow == null:
+		fx_slow = MeshInstance3D.new()
+		var tm := TorusMesh.new()
+		tm.inner_radius = 1.5
+		tm.outer_radius = 1.8
+		fx_slow.mesh = tm
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.3, 0.7, 1.0, 0.85)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.emission_enabled = true
+		m.emission = Color(0.3, 0.7, 1.0)
+		m.emission_energy_multiplier = 2.0
+		fx_slow.material_override = m
+		fx_slow.position.y = 1.2
+		fx_slow.name = "SlowRing"
+		add_child(fx_slow)
+	if fx_slow:
+		fx_slow.visible = slow_time > 0.0
+		fx_slow.rotate_y(delta * 6.0)
+		fx_slow.position.y = 1.0 + 0.3 * sin(Time.get_ticks_msec() * 0.01)
+	if model:
+		var big := 1.35 if ram_time > 0.0 else 1.0
+		model.scale = model.scale.lerp(Vector3.ONE * big, 1.0 - exp(-10.0 * delta))
+		if ghost_meshes.is_empty():
+			for mi in model.find_children("*", "GeometryInstance3D", true, false):
+				ghost_meshes.append(mi)
+		var tr := 0.65 if ghost_time > 0.0 else 0.0
+		for mi in ghost_meshes:
+			(mi as GeometryInstance3D).transparency = tr
+	if power_charges > 0 and fx_plant == null:
+		fx_plant = Node3D.new()
+		fx_plant.name = "Plant"
+		var stem := MeshInstance3D.new()
+		var sm := CylinderMesh.new()
+		sm.top_radius = 0.08
+		sm.bottom_radius = 0.1
+		sm.height = 1.0
+		stem.mesh = sm
+		stem.material_override = _flat(Color(0.2, 0.7, 0.25))
+		stem.position.y = 0.5
+		fx_plant.add_child(stem)
+		var head := MeshInstance3D.new()
+		var hm := SphereMesh.new()
+		hm.radius = 0.45
+		hm.height = 0.8
+		head.mesh = hm
+		head.material_override = _flat(Color(0.9, 0.15, 0.15))
+		head.position.y = 1.2
+		fx_plant.add_child(head)
+		for k in 5:
+			var dot := MeshInstance3D.new()
+			var dm := SphereMesh.new()
+			dm.radius = 0.09
+			dm.height = 0.18
+			dot.mesh = dm
+			dot.material_override = _flat(Color(1, 1, 1))
+			dot.position = Vector3(cos(k * 1.3) * 0.4, 1.25 + sin(k * 2.1) * 0.15, sin(k * 1.3) * 0.4)
+			fx_plant.add_child(dot)
+		fx_plant.position = Vector3(0, 0.9, -1.6)
+		add_child(fx_plant)
+	if fx_plant:
+		fx_plant.visible = power_charges > 0
+		fx_plant.rotation.y = 0.4 * sin(Time.get_ticks_msec() * 0.006)
+
+
+func _flat(c: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = c
+	return m

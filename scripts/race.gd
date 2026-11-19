@@ -627,17 +627,24 @@ func _kart_collisions() -> void:
 			var b: Node3D = karts[j]
 			if a.rescue_time > 0.0 or b.rescue_time > 0.0:  # RF-310: pendurado nos balões
 				continue
+			if a.ghost_time > 0.0 or b.ghost_time > 0.0:  # RF-423: fantasma atravessa
+				continue
 			if absf(a.position.y - b.position.y) > 2.0:  # RF-320: andares diferentes (ou um no looping)
 				continue
 			var dv := b.position - a.position
 			dv.y = 0.0
 			var d := dv.length()
-			if d >= r2 or d < 0.001:
+			var rr := r2 * (1.3 if a.ram_time > 0.0 or b.ram_time > 0.0 else 1.0)
+			if d >= rr or d < 0.001:
 				continue
 			var nrm := dv / d
-			var ov := r2 - d
-			var wa: float = a.weight
-			var wb: float = b.weight
+			var ov := rr - d
+			var wa: float = a.weight * (25.0 if a.ram_time > 0.0 else 1.0)  # RF-426: trombada — ninguém empurra
+			var wb: float = b.weight * (25.0 if b.ram_time > 0.0 else 1.0)
+			if a.ram_time > 0.0 and b.ram_time <= 0.0:
+				b.hit(1.0)
+			elif b.ram_time > 0.0 and a.ram_time <= 0.0:
+				a.hit(1.0)
 			a.position -= nrm * ov * wb / (wa + wb)
 			b.position += nrm * ov * wa / (wa + wb)
 			var rel: float = (a.vel - b.vel).dot(nrm)
@@ -1732,3 +1739,101 @@ func _track_hazards_ahead(k: Node3D, samples: int, out: Array) -> void:
 		var dz := wrapi(int(z["i0"]) - k.track_idx, 0, n)
 		if dz > 0 and dz < samples:
 			out.append({"id": 2000000 + zi, "lat": (float(z["lat0"]) + float(z["lat1"])) * 0.5})
+
+
+# ---------------------------------------------------------------- poderes (RF-420..428)
+
+const BASS_RADIUS := 12.0
+const GUITAR_SHIELD := 5.0
+const GHOST_TIME := 4.0
+const RAM_TIME := 4.0
+const DRIFT_MASTER_TIME := 8.0
+const SLOW_TIME := 1.0
+signal power_used(k: Node3D, power: String, msg: String)
+
+
+## O kart k usa o poder dele (já conferido: 10 queijinhos e sem recarga).
+func use_power(k: Node3D) -> void:
+	var id: String = k.power_id()
+	var msg: String = k.power_name().to_upper() + "!"
+	match id:
+		"slowmo":
+			for o in karts:
+				if o != k:
+					o.apply_slow(SLOW_TIME)
+			k.power_cd = Chars.POWER_CD
+		"guitar":
+			k.shield_time = maxf(k.shield_time, GUITAR_SHIELD)
+			k.power_cd = Chars.POWER_CD
+		"plant":
+			k.power_charges = 5
+			k.power_time = k.PLANT_WINDOW
+			# o próprio aperto que ativa já gasta o 1º mini-turbo
+			k.power_charges -= 1
+			k.boost_time = maxf(k.boost_time, k.PLANT_BOOST)
+		"bass":
+			for o in karts:
+				if o != k and o.position.distance_to(k.position) < BASS_RADIUS:
+					o.hit(1.0)
+			_bass_ring(k.position)
+			k.power_cd = Chars.POWER_CD
+		"ghost":
+			k.ghost_time = GHOST_TIME
+			k.power_cd = Chars.POWER_CD
+		"drift":
+			k.drift_master_time = DRIFT_MASTER_TIME
+			k.power_cd = Chars.POWER_CD
+		"ram":
+			k.ram_time = RAM_TIME
+			k.power_cd = Chars.POWER_CD
+		"steal":
+			var v = kart_ahead_with_item(k)
+			if v != null:
+				msg = "ROUBOU DE %s!" % String(v.display_name).to_upper()
+				k.give_item(v.item)
+				k.item_roll = 0.0
+				v.item = ""
+				v.item_charges = 0
+			else:
+				k.give_item("triplo")
+				k.item_roll = 0.0
+				msg = "QUEIJO TRIPLO!"
+			k.power_cd = Chars.POWER_CD
+	if k.is_player:
+		sfx("trick" if id != "bass" else "bump")
+	power_used.emit(k, id, msg)
+
+
+## Quem está à frente (o mais perto na classificação) e tem item na mão; ou null.
+func kart_ahead_with_item(k: Node3D):
+	var best = null
+	for o in karts:
+		if o == k or o.item == "" or o.item_roll > 0.0 or o.rank >= k.rank:
+			continue
+		if best == null or o.rank > best.rank:
+			best = o
+	return best
+
+
+## RF-424: onda de som do Grave no Talo (anel que cresce e some).
+func _bass_ring(pos: Vector3) -> void:
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.9
+	tm.outer_radius = 1.0
+	ring.mesh = tm
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(1.0, 0.35, 0.3, 0.8)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.emission_enabled = true
+	m.emission = Color(1.0, 0.3, 0.25)
+	m.emission_energy_multiplier = 2.5
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring.material_override = m
+	ring.position = pos + Vector3.UP * 0.8
+	ring.name = "BassRing"
+	add_child(ring)
+	var tw := ring.create_tween().set_parallel(true)
+	tw.tween_property(ring, "scale", Vector3(BASS_RADIUS, 1.0, BASS_RADIUS), 0.45).set_ease(Tween.EASE_OUT)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.45)
+	tw.chain().tween_callback(ring.queue_free)

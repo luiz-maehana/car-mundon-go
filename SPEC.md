@@ -325,6 +325,17 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 ### Analógico nos menus (v0.35)
 - [x] **RF-410** O analógico nos menus anda **uma casa por empurrão** (liga acima de 60%, só solta abaixo de 30%) e, segurado, repete depois de 0,45 s a cada 0,16 s. Vale pra todo menu (o analógico saiu das ações ui_* e o Game converte); o direcional e o teclado continuam iguais. Antes cada evento de movimento contava um passo.
 
+### Poderes dos pilotos (v0.36)
+- [x] **RF-420** Cada piloto tem um **poder exclusivo**. Fica pronto com **10 queijinhos** (o máximo) e usa no botão **PODER** (J1: Q · J2: 1 do teclado numérico ou ponto · controle: Y; dá pra trocar nas configurações). Depois de usar recarrega em **20 s**; se perder queijinho, precisa encher de novo. Não gasta queijinho.
+- [x] **RF-421** **FeJauM — Câmera Lenta**: todos os outros ficam 50% mais lentos por 1 s, com um anel azul girando em volta (e "CÂMERA LENTA!" na tela de quem foi atingido). O escudo protege (e se gasta); o fantasma também.
+- [x] **RF-422** **Nanni — Planta Turbo**: uma planta aparece no kart com 5 mini-turbos; cada aperto é um turbo (o que ativa já gasta o 1º). A recarga começa quando acabam ou depois de 10 s.
+- [x] **RF-423** **Mugurin — Fantasma**: 4 s transparente; nada acerta (itens, obstáculos, ratoeira) e atravessa os outros karts.
+- [x] **RF-424** **Burcca — Grave no Talo**: onda de som (anel vermelho que cresce) que derruba quem está a até 12 m. O escudo protege.
+- [x] **RF-425** **Telles — Drift Mestre**: por 8 s todo drift já sai com o turbo máximo.
+- [x] **RF-426** **Ortiz — Trombada**: 4 s maior e pesado; quem ele encosta roda e ninguém empurra ele.
+- [x] **RF-427** **Shinando — Violão**: escudo por 5 s. **Digão — Mão Leve**: rouba o item de quem está logo à frente; se ninguém tiver, ganha um Queijo Triplo. HUD mostra o poder embaixo da caixa de item: quanto falta de queijinho, PRONTO (com a tecla), ativo/turbos sobrando ou a recarga; mensagem ao usar.
+- [x] **RF-428** Escolha de piloto mostra o poder e a explicação de cada um, e uma linha de como liberar. A IA usa o poder de cada um no momento certo (lenta quando tem alguém à frente, grave/trombada com alguém perto, fantasma/violão com perigo à frente, drift mestre no drift, mão leve quando alguém à frente tem item).
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -477,6 +488,10 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-95** Cozinha: robô anda ao longo da pista e derruba; colher no alto entre as bancadas, sem rio.
 - [x] **CA-96** Pista refeita guarda recorde em seção própria (`queijo@2`).
 - [x] **CA-97** Analógico fora das ações de menu; um empurrão tremido = uma casa; voltar só um pouco não conta; soltar e empurrar de novo conta; segurar repete.
+- [x] **CA-98** Poder só com 10 queijinhos; usou = recarga de 20 s.
+- [x] **CA-99** Câmera Lenta: todos os outros lentos (metade da velocidade, anel azul visível) por 1 s; quem tem escudo não (e perde o escudo).
+- [x] **CA-100..106** Violão (escudo 5 s), Planta (5 mini-turbos e recarga), Grave (derruba até 12 m, não mais longe), Fantasma (nada acerta, atravessa karts, transparente), Drift Mestre (drift curto sai com turbo máximo), Trombada (quem encosta roda, Ortiz não se mexe), Mão Leve (rouba o item de quem está à frente ou ganha Queijo Triplo).
+- [x] **CA-107** A IA usa os poderes (8 de 8 em 40 s com queijinho cheio) e o HUD mostra o poder.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
