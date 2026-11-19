@@ -107,7 +107,7 @@ func _build() -> void:
 			picks.clear()
 		_refresh())
 	top.add_child(mode_btn)
-	var title := _label("CAR'MUNDON'GO!", 50, Color(1.0, 0.82, 0.15))
+	var title := _label("Car Mundon'GO", 50, Color(1.0, 0.82, 0.15))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(title)
@@ -157,6 +157,7 @@ func _build() -> void:
 	row.add_child(diff_btn)
 	track_btn = _button("", 22)  # RF-122
 	track_btn.custom_minimum_size = Vector2(360, 60)
+	track_btn.clip_text = true  # nome longo de pista não estica a linha
 	track_btn.pressed.connect(func():
 		track_i = (track_i + 1) % TrackScript.TRACKS.size()
 		_refresh())

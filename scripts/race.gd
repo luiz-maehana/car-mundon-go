@@ -93,6 +93,7 @@ func _ready() -> void:
 	if not time_trial:
 		_spawn_boxes()  # RF-231: sem caixas no contra o relógio
 	_spawn_cheese()
+	_spawn_track_hazards()  # RF-271
 	if time_trial:
 		_tt_setup()
 	_build_views()
@@ -551,6 +552,7 @@ func step(delta: float) -> void:
 	_update_rubber()
 	for k in karts:
 		k.step(delta, can_drive)
+	_update_track_hazards(delta, can_drive)
 	if can_drive:
 		_kart_collisions()
 		_update_boxes(delta)
@@ -1070,6 +1072,7 @@ func gp_continue() -> void:
 func ground_hazards_ahead(k: Node3D, samples: int) -> Array:
 	var out := []
 	var n: int = track.sample_count()
+	_track_hazards_ahead(k, samples, out)  # RF-272
 	for h in hazards:
 		if not GROUND_HAZARDS.has(h["type"]):
 			continue
@@ -1210,3 +1213,255 @@ func tt_best_lap() -> float:
 	for l in tt_laps:
 		best = minf(best, l)
 	return best
+
+
+# ---------------------------------------------------------------- perigos da pista (RF-271/272)
+
+const FLAME_WARN := 0.6
+const PRESS_RISE := 0.5
+const PRESS_WARN := 0.8
+const PRESS_SLAM := 0.2
+const PRESS_UP_Y := 7.0
+const PRESS_DOWN_Y := 0.75
+const WHEEL_R := 1.8
+
+var track_hazards: Array = []  # {spec, nodes..., state}
+var hazard_clock := 0.0        # anda sempre (visual); perigo só depois do VAI!
+
+
+func _emissive(c: Color, energy: float) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = c
+	m.emission_enabled = true
+	m.emission = c
+	m.emission_energy_multiplier = energy
+	return m
+
+
+func _spawn_track_hazards() -> void:
+	for s in track.hazard_specs:
+		var i: int = s["idx"]
+		var h := {"spec": s, "state": "off"}
+		match s["kind"]:
+			"flame":
+				var flames := []
+				var embers := []
+				for lat in s["lats"]:
+					var base: Vector3 = track.points[i] + track.rights[i] * float(lat)
+					var fl := Node3D.new()
+					fl.position = base
+					var outer := MeshInstance3D.new()
+					var om := CylinderMesh.new()
+					om.top_radius = 0.0
+					om.bottom_radius = 1.0
+					om.height = 3.2
+					outer.mesh = om
+					var omat := _emissive(Color(1.0, 0.45, 0.08), 2.5)
+					omat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+					omat.albedo_color.a = 0.85
+					outer.material_override = omat
+					outer.position.y = 1.6
+					fl.add_child(outer)
+					var inner := MeshInstance3D.new()
+					var im := CylinderMesh.new()
+					im.top_radius = 0.0
+					im.bottom_radius = 0.5
+					im.height = 2.0
+					inner.mesh = im
+					inner.material_override = _emissive(Color(1.0, 0.9, 0.35), 4.0)
+					inner.position.y = 1.0
+					fl.add_child(inner)
+					fl.visible = false
+					add_child(fl)
+					flames.append(fl)
+					var em := MeshInstance3D.new()  # brasa que acende antes do fogo
+					var cm := CylinderMesh.new()
+					cm.top_radius = 1.0
+					cm.bottom_radius = 1.0
+					cm.height = 0.05
+					em.mesh = cm
+					var emat := _emissive(Color(1.0, 0.3, 0.05), 0.2)
+					em.material_override = emat
+					em.position = base + Vector3.UP * 0.1
+					add_child(em)
+					embers.append(emat)
+				h["flames"] = flames
+				h["embers"] = embers
+			"wheel":
+				var w := MeshInstance3D.new()
+				var wm := CylinderMesh.new()
+				wm.top_radius = WHEEL_R
+				wm.bottom_radius = WHEEL_R
+				wm.height = 1.3
+				wm.radial_segments = 20
+				w.mesh = wm
+				var mat := StandardMaterial3D.new()
+				mat.albedo_color = Color(1.0, 0.78, 0.25)
+				mat.roughness = 0.6
+				w.material_override = mat
+				var rind := MeshInstance3D.new()  # casca vermelha nas faces
+				var rm := CylinderMesh.new()
+				rm.top_radius = WHEEL_R * 0.98
+				rm.bottom_radius = WHEEL_R * 0.98
+				rm.height = 1.34
+				rind.mesh = rm
+				var rmat := StandardMaterial3D.new()
+				rmat.albedo_color = Color(0.8, 0.12, 0.08)
+				rind.material_override = rmat
+				rind.scale = Vector3(0.7, 1.0, 0.7)
+				w.add_child(rind)
+				add_child(w)
+				h["node"] = w
+				h["roll"] = 0.0
+				h["lat"] = 0.0
+			"press":
+				var lat: Array = s["lat"]
+				var wdt: float = absf(float(lat[1]) - float(lat[0]))
+				var blk := MeshInstance3D.new()
+				var bm := BoxMesh.new()
+				bm.size = Vector3(wdt, 1.5, 3.6)
+				blk.mesh = bm
+				var pm := StandardMaterial3D.new()
+				pm.albedo_color = Color(0.45, 0.47, 0.52)
+				pm.metallic = 0.6
+				pm.roughness = 0.4
+				blk.material_override = pm
+				blk.basis = Basis(Vector3.UP, track.heading_at(i))
+				add_child(blk)
+				var shadow := MeshInstance3D.new()
+				var sm := PlaneMesh.new()
+				sm.size = Vector2(wdt, 3.6)
+				shadow.mesh = sm
+				var smat := StandardMaterial3D.new()
+				smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+				smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				smat.albedo_color = Color(0, 0, 0, 0.0)
+				shadow.material_override = smat
+				shadow.basis = blk.basis
+				shadow.position = track.points[i] + track.rights[i] * (float(lat[0]) + float(lat[1])) * 0.5 + Vector3.UP * 0.09
+				add_child(shadow)
+				h["node"] = blk
+				h["shadow"] = smat
+				h["mid"] = (float(lat[0]) + float(lat[1])) * 0.5
+				h["half"] = wdt * 0.5
+				h["y"] = PRESS_UP_Y
+		track_hazards.append(h)
+	_update_track_hazards(0.0, false)
+
+
+func _update_track_hazards(delta: float, can_drive: bool) -> void:
+	hazard_clock += delta
+	var t_live := race_time if state != "countdown" else -1.0
+	var n: int = track.sample_count()
+	for h in track_hazards:
+		var s: Dictionary = h["spec"]
+		var i: int = s["idx"]
+		var period: float = s.get("period", 3.0)
+		var phase: float = s.get("phase", 0.0)
+		match s["kind"]:
+			"flame":
+				var on_dur: float = s.get("on", 1.0)
+				var t := fmod(t_live + phase, period) if t_live >= 0.0 else -1.0
+				var st := "off"
+				if t >= 0.0 and t < FLAME_WARN:
+					st = "warn"
+				elif t >= FLAME_WARN and t < FLAME_WARN + on_dur:
+					st = "on"
+				h["state"] = st
+				for fl in h["flames"]:
+					fl.visible = st == "on"
+					if fl.visible:
+						var flick := 1.0 + 0.18 * sin(hazard_clock * 31.0 + fl.position.x)
+						fl.scale = Vector3(1.0, flick, 1.0)
+				for em in h["embers"]:
+					em.emission_energy_multiplier = 3.0 if st == "on" else (1.2 + 1.2 * sin(hazard_clock * 25.0) if st == "warn" else 0.2)
+				if st == "on" and can_drive:
+					for fl in h["flames"]:
+						for k in karts:
+							var d := Vector2(k.position.x - fl.position.x, k.position.z - fl.position.z).length()
+							if d < 1.9 and k.position.y < 2.5:
+								k.hit(1.0)
+			"wheel":
+				var amp: float = s.get("amp", 10.0)
+				var lat := amp * sin(TAU * (hazard_clock + phase) / period)
+				var dl: float = lat - float(h["lat"])
+				h["lat"] = lat
+				h["roll"] = float(h["roll"]) + dl / WHEEL_R
+				h["state"] = "on"
+				var w: MeshInstance3D = h["node"]
+				var tan: Vector3 = track.tangents[i]
+				# cilindro deitado com o eixo na tangente da pista; rola pro lado
+				var lying := Basis(Vector3.UP, track.heading_at(i)) * Basis(Vector3.RIGHT, PI / 2.0)
+				w.basis = Basis(tan, -float(h["roll"])) * lying
+				w.position = track.points[i] + track.rights[i] * lat + Vector3.UP * WHEEL_R
+				if can_drive:
+					for k in karts:
+						if Vector2(k.position.x - w.position.x, k.position.z - w.position.z).length() < WHEEL_R + 0.7 and k.position.y < 3.0:
+							k.hit(1.0)
+			"press":
+				var hold: float = s.get("down", 0.8)
+				var up_time := maxf(0.4, period - PRESS_RISE - PRESS_WARN - PRESS_SLAM - hold)
+				var t := fmod(hazard_clock + phase, period)
+				var y := PRESS_UP_Y
+				var st := "up"
+				var shade := 0.0
+				if t < PRESS_RISE:
+					y = lerpf(PRESS_DOWN_Y, PRESS_UP_Y, t / PRESS_RISE)
+					st = "rise"
+					shade = 0.6 * (1.0 - t / PRESS_RISE)
+				elif t < PRESS_RISE + up_time:
+					y = PRESS_UP_Y
+				elif t < PRESS_RISE + up_time + PRESS_WARN:
+					var f := (t - PRESS_RISE - up_time) / PRESS_WARN
+					y = lerpf(PRESS_UP_Y, PRESS_UP_Y - 1.2, f) + 0.08 * sin(hazard_clock * 60.0)
+					st = "warn"
+					shade = 0.25 + 0.35 * f
+				elif t < PRESS_RISE + up_time + PRESS_WARN + PRESS_SLAM:
+					var f := (t - PRESS_RISE - up_time - PRESS_WARN) / PRESS_SLAM
+					y = lerpf(PRESS_UP_Y - 1.2, PRESS_DOWN_Y, f * f)
+					st = "slam"
+					shade = 0.6
+				else:
+					y = PRESS_DOWN_Y
+					st = "down"
+					shade = 0.6
+				h["state"] = st
+				h["y"] = y
+				h["shadow"].albedo_color.a = shade
+				var blk: MeshInstance3D = h["node"]
+				blk.position = track.points[i] + track.rights[i] * float(h["mid"]) + Vector3.UP * y
+				if can_drive and y < 1.8:
+					for k in karts:
+						var along: float = (k.position - track.points[i]).dot(track.tangents[i])
+						var near_idx: bool = absi(wrapi(k.track_idx - i, -n / 2, n / 2)) < 4
+						if near_idx and absf(k.lateral - float(h["mid"])) < float(h["half"]) + 0.6 and absf(along) < 2.4 and k.spin_time <= 0.0:
+							k.hit(1.4)
+							shake(k, 0.6)
+
+
+## RF-272: perigos da pista que a IA deve evitar agora (mesmo formato da casca: id, lat).
+func _track_hazards_ahead(k: Node3D, samples: int, out: Array) -> void:
+	var n: int = track.sample_count()
+	for hi in track_hazards.size():
+		var h: Dictionary = track_hazards[hi]
+		var s: Dictionary = h["spec"]
+		var ds := wrapi(int(s["idx"]) - k.track_idx, 0, n)
+		if ds <= 0 or ds >= samples:
+			continue
+		match s["kind"]:
+			"flame":
+				if h["state"] != "off":
+					for j in s["lats"].size():
+						out.append({"id": 1000000 + hi * 100 + j, "lat": float(s["lats"][j])})
+			"wheel":
+				out.append({"id": 1000000 + hi * 100, "lat": float(h["lat"])})
+			"press":
+				if h["state"] != "up":
+					out.append({"id": 1000000 + hi * 100, "lat": float(h["mid"])})
+	for zi in track.zones.size():
+		var z: Dictionary = track.zones[zi]
+		if z["kind"] != "farofa":
+			continue
+		var dz := wrapi(int(z["i0"]) - k.track_idx, 0, n)
+		if dz > 0 and dz < samples:
+			out.append({"id": 2000000 + zi, "lat": (float(z["lat0"]) + float(z["lat1"])) * 0.5})

@@ -67,6 +67,61 @@ const TRACKS := [
 		"deco": "lamp", "deco_color": Color(1.0, 0.85, 0.4),
 		"ground_tex": "tiles", "clouds": 0.15, "fog": 0.003, "exposure": 1.2, "stars": true, "cloud_color": Color(0.25, 0.22, 0.35), "scenery": "cheese",
 	},
+	{
+		"id": "churrasco", "name": "Churrascada de Domingo", "music": "churrasco",
+		"points": [
+			Vector2(-200, 0), Vector2(-140, 75), Vector2(-20, 90), Vector2(95, 85),
+			Vector2(175, 45), Vector2(200, -25), Vector2(150, -85), Vector2(65, -65),
+			Vector2(5, -115), Vector2(-60, -160), Vector2(-145, -140), Vector2(-180, -75),
+		],
+		"ground": Color(0.5, 0.31, 0.16), "offroad": Color(0.42, 0.26, 0.13),
+		"road": [Color(0.72, 0.55, 0.36), Color(0.68, 0.51, 0.33)],
+		"curb": [Color(0.85, 0.12, 0.12), Color(0.97, 0.95, 0.9)],
+		"wall": [Color(0.1, 0.6, 0.25), Color(1.0, 0.85, 0.1)],
+		"sky_top": Color(0.3, 0.55, 0.92), "sky_horizon": Color(0.98, 0.8, 0.55),
+		"ambient": Color(0.72, 0.64, 0.56), "sun": [1.2, -40.0, Color(1.0, 0.9, 0.75)],
+		"deco": "skewer", "deco_color": Color(0.55, 0.3, 0.15),
+		"ground_tex": "wood", "clouds": 0.35, "fog": 0.001, "exposure": 1.0, "scenery": "bbq",
+		# RF-273: farofa em dois trechos (meia pista), grelha com 3 linhas de fogo
+		"zones": [
+			{"kind": "farofa", "from": 0.2, "to": 0.26, "lat": [-8.0, -0.5]},
+			{"kind": "grill", "from": 0.49, "to": 0.545},
+			{"kind": "farofa", "from": 0.79, "to": 0.86, "lat": [0.5, 8.0]},
+		],
+		"hazards": [
+			{"kind": "flame", "at": 0.5, "lats": [-5.0, 0.0, 5.0], "period": 2.6, "on": 0.9, "phase": 0.0},
+			{"kind": "flame", "at": 0.517, "lats": [-2.5, 2.5], "period": 2.6, "on": 0.9, "phase": 1.3},
+			{"kind": "flame", "at": 0.534, "lats": [-5.0, 0.0, 5.0], "period": 2.6, "on": 0.9, "phase": 0.65},
+		],
+	},
+	{
+		"id": "fabrica", "name": "Fábrica de Queijo", "music": "fabrica",
+		"points": [
+			Vector2(-167, 83), Vector2(-52, 92), Vector2(61, 88), Vector2(154, 66),
+			Vector2(171, -4), Vector2(105, -22), Vector2(44, 13), Vector2(-17, -22),
+			Vector2(26, -74), Vector2(123, -83), Vector2(145, -145), Vector2(52, -171),
+			Vector2(-70, -158), Vector2(-145, -96), Vector2(-184, -4),
+		],
+		"ground": Color(0.3, 0.31, 0.34), "offroad": Color(0.22, 0.22, 0.25),
+		"road": [Color(0.17, 0.17, 0.19), Color(0.2, 0.2, 0.22)],
+		"curb": [Color(1.0, 0.8, 0.1), Color(0.08, 0.08, 0.08)],
+		"wall": [Color(1.0, 0.78, 0.1), Color(0.1, 0.1, 0.1)],
+		"sky_top": Color(0.08, 0.08, 0.11), "sky_horizon": Color(0.45, 0.25, 0.12),
+		"ambient": Color(0.6, 0.58, 0.6), "sun": [0.75, -60.0, Color(1.0, 0.75, 0.5)],
+		"deco": "machine", "deco_color": Color(0.35, 0.36, 0.4),
+		"ground_tex": "metal", "clouds": 0.1, "fog": 0.0025, "exposure": 1.15, "cloud_color": Color(0.3, 0.25, 0.22), "scenery": "cheese",
+		# RF-274: esteira pra frente na reta, esteira lateral numa curva, 2 rodas e 2 prensas
+		"zones": [
+			{"kind": "belt", "from": 0.2, "to": 0.27, "lat": [-7.5, 7.5], "dir": 1.0},
+			{"kind": "belt_side", "from": 0.79, "to": 0.85, "lat": [-7.5, 7.5], "dir": -1.0},
+		],
+		"hazards": [
+			{"kind": "wheel", "at": 0.44, "amp": 10.5, "period": 4.2, "phase": 0.0},
+			{"kind": "wheel", "at": 0.57, "amp": 10.5, "period": 3.6, "phase": 1.8},
+			{"kind": "press", "at": 0.51, "lat": [-7.5, -0.5], "period": 3.4, "down": 0.7, "phase": 0.0},
+			{"kind": "press", "at": 0.73, "lat": [0.5, 7.5], "period": 3.4, "down": 0.7, "phase": 1.7},
+		],
+	},
 ]
 
 var def: Dictionary
@@ -120,6 +175,7 @@ func _place_features() -> void:
 	for k in PAD_RANGES.size():
 		pads.append({"idx": _straightest(PAD_RANGES[k][0], PAD_RANGES[k][1]), "lat": lats[k]})
 	ramp_idx = _straightest(RAMP_RANGE[0], RAMP_RANGE[1])
+	_parse_zones()
 
 
 ## Kart está em cima de uma seta? (RF-140)
@@ -287,11 +343,14 @@ func _build_visuals() -> void:
 		_strip(st, i, -WALL - WALL_T, -WALL - WALL_T, 0.0, WALL_H, wall_c)
 	_start_line(st)
 	_pads_and_ramp(st)
+	_zones_visual(st)
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
 	mi.material_override = Gfx.track_material()  # RF-162
 	mi.name = "TrackMesh"
 	add_child(mi)
+	_build_belts()
+	_build_hazard_bases()
 	_build_ground()
 	_build_arch()
 	_build_trees()
@@ -371,7 +430,7 @@ func _build_arch() -> void:
 	gantry.add_child(panel)
 	for side in [1.0, -1.0]:
 		var lbl := Label3D.new()
-		lbl.text = "CAR'MUNDON'GO!"
+		lbl.text = "Car Mundon'GO"
 		lbl.font_size = 110
 		lbl.pixel_size = 0.014
 		lbl.outline_size = 18
@@ -448,6 +507,78 @@ func _build_trees() -> void:
 		xforms.append(Transform3D(Basis().scaled(Vector3(s, s, s)), p))
 	var deco_color: Color = def["deco_color"]
 	match def["deco"]:
+		"skewer":
+			# RF-273: espetos gigantes fincados na mesa (metade) e garrafas de vidro (outra metade)
+			var sk: Array[Transform3D] = []
+			var bt: Array[Transform3D] = []
+			for i in xforms.size():
+				(sk if i % 2 == 0 else bt).append(xforms[i])
+			var stick := CylinderMesh.new()
+			stick.top_radius = 0.12
+			stick.bottom_radius = 0.12
+			stick.height = 11.0
+			stick.material = _deco_mat(Color(0.75, 0.75, 0.78))
+			_multimesh(stick, sk, Vector3(0, 5.5, 0))
+			var chunk_cols := [Color(0.45, 0.2, 0.1), Color(0.85, 0.75, 0.85), Color(0.2, 0.55, 0.15), Color(0.55, 0.15, 0.1)]
+			for c in chunk_cols.size():
+				var chunk := BoxMesh.new()
+				chunk.size = Vector3(1.3, 1.1, 1.3)
+				chunk.material = _deco_mat(chunk_cols[c])
+				_multimesh(chunk, sk, Vector3(0, 3.0 + c * 1.6, 0))
+			var glass := CylinderMesh.new()
+			glass.top_radius = 1.0
+			glass.bottom_radius = 1.0
+			glass.height = 5.0
+			var gm := StandardMaterial3D.new()
+			gm.albedo_color = Color(0.15, 0.45, 0.2, 0.75)
+			gm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			gm.roughness = 0.1
+			gm.metallic_specular = 1.0
+			glass.material = gm
+			var neck := CylinderMesh.new()
+			neck.top_radius = 0.35
+			neck.bottom_radius = 0.9
+			neck.height = 2.2
+			neck.material = gm
+			var label := CylinderMesh.new()
+			label.top_radius = 1.03
+			label.bottom_radius = 1.03
+			label.height = 1.6
+			label.material = _deco_mat(Color(0.95, 0.85, 0.2))
+			_multimesh(glass, bt, Vector3(0, 2.5, 0))
+			_multimesh(neck, bt, Vector3(0, 6.1, 0))
+			_multimesh(label, bt, Vector3(0, 2.6, 0))
+		"machine":
+			# RF-274: chaminés com faixa (metade) e máquinas-caixa com luz (outra metade)
+			var ch: Array[Transform3D] = []
+			var mc: Array[Transform3D] = []
+			for i in xforms.size():
+				(ch if i % 2 == 0 else mc).append(xforms[i])
+			var pipe := CylinderMesh.new()
+			pipe.top_radius = 1.1
+			pipe.bottom_radius = 1.4
+			pipe.height = 18.0
+			pipe.material = _deco_mat(deco_color)
+			var band := CylinderMesh.new()
+			band.top_radius = 1.2
+			band.bottom_radius = 1.2
+			band.height = 1.2
+			band.material = _deco_mat(Color(0.75, 0.15, 0.1))
+			_multimesh(pipe, ch, Vector3(0, 9.0, 0))
+			_multimesh(band, ch, Vector3(0, 15.0, 0))
+			var box := BoxMesh.new()
+			box.size = Vector3(6.0, 4.0, 5.0)
+			box.material = _deco_mat(Color(0.25, 0.26, 0.3))
+			var lamp := BoxMesh.new()
+			lamp.size = Vector3(6.1, 0.4, 5.1)
+			var lm := StandardMaterial3D.new()
+			lm.albedo_color = Color(1.0, 0.6, 0.15)
+			lm.emission_enabled = true
+			lm.emission = Color(1.0, 0.55, 0.1)
+			lm.emission_energy_multiplier = 2.0
+			lamp.material = lm
+			_multimesh(box, mc, Vector3(0, 2.0, 0))
+			_multimesh(lamp, mc, Vector3(0, 3.2, 0))
 		"cactus":
 			var body := CylinderMesh.new()
 			body.top_radius = 0.5
@@ -701,7 +832,7 @@ func _grandstand() -> void:
 		mi.name = "BannerBoard"
 		stand.add_child(mi)
 	var banner := Label3D.new()
-	banner.text = "CAR'MUNDON'GO!"
+	banner.text = "Car Mundon'GO"
 	banner.font_size = 150
 	banner.pixel_size = 0.0115
 	banner.outline_size = 24
@@ -802,6 +933,8 @@ func _scatter() -> void:
 	var rocks: Array = []
 	var rock_cols: Array = []
 	var count := 260 if kind != "cheese" else 30
+	if kind == "bbq":
+		count = 90
 	var tries := 0
 	while tufts.size() + rocks.size() < count and tries < 6000:
 		tries += 1
@@ -811,7 +944,14 @@ func _scatter() -> void:
 		if not _clear_of_track(p, 2.5):
 			continue
 		var yaw := rng.randf() * TAU
-		if kind == "cheese":
+		if kind == "bbq":  # RF-273: tomates, pães e cebolas gigantes na mesa
+			var pal := [[Color(0.85, 0.12, 0.08), Vector3(1, 0.9, 1)], [Color(0.78, 0.55, 0.28), Vector3(2.2, 0.8, 1)], [Color(0.62, 0.3, 0.55), Vector3(1, 1.1, 1)], [Color(0.95, 0.9, 0.75), Vector3(1.6, 0.5, 1.6)]]
+			var pk: Array = pal[rng.randi_range(0, pal.size() - 1)]
+			var s := rng.randf_range(2.0, 4.5)
+			var sv: Vector3 = pk[1] * s
+			rocks.append(Transform3D(Basis(Vector3.UP, yaw).scaled(sv), p + Vector3.UP * sv.y * 0.45))
+			rock_cols.append((pk[0] as Color).darkened(rng.randf() * 0.12))
+		elif kind == "cheese":
 			var s := rng.randf_range(3.0, 8.0)
 			rocks.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(s, s * 0.6, s)), p + Vector3.UP * s * 0.3))
 			rock_cols.append(Color(1.0, 0.8, 0.25).darkened(rng.randf() * 0.15))
@@ -849,3 +989,155 @@ func _scatter() -> void:
 		sp.rings = 4
 		rock = sp
 	_multimesh_colored(rock, rocks, rock_cols, _vc_mat(0.85))
+
+
+# ---------------------------------------------------------------- zonas e perigos da pista (RF-270..274)
+
+const BELT_SPEED := 9.0       # esteira pra frente (m/s)
+const BELT_SIDE_SPEED := 5.0  # esteira lateral (m/s)
+const FAROFA_MULT := 0.62
+
+var zones: Array = []          # {kind, i0, len, lat0, lat1, dir}
+var hazard_specs: Array = []   # {kind, idx, ...} — a corrida cria e anima
+var belt_mats: Array = []      # {mat, speed}
+
+
+func _frac_idx(f: float) -> int:
+	return int(points.size() * f) % points.size()
+
+
+func _parse_zones() -> void:
+	var n := points.size()
+	for z in def.get("zones", []):
+		var i0 := _frac_idx(float(z["from"]))
+		var i1 := _frac_idx(float(z["to"]))
+		var lat: Array = z.get("lat", [-ROAD_HALF, ROAD_HALF])
+		zones.append({"kind": z["kind"], "i0": i0, "len": wrapi(i1 - i0, 0, n), "lat0": float(lat[0]), "lat1": float(lat[1]), "dir": float(z.get("dir", 1.0))})
+	for h in def.get("hazards", []):
+		var spec: Dictionary = h.duplicate()
+		spec["idx"] = _frac_idx(float(h["at"]))
+		hazard_specs.append(spec)
+
+
+## Zona sob o kart (amostra i, lateral lat): o dicionário da zona ou {}.
+func zone_at(i: int, lat: float) -> Dictionary:
+	var n := points.size()
+	for z in zones:
+		if wrapi(i - int(z["i0"]), 0, n) <= int(z["len"]) and lat >= float(z["lat0"]) and lat <= float(z["lat1"]):
+			return z
+	return {}
+
+
+func _zones_visual(st: SurfaceTool) -> void:
+	var n := points.size()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	for z in zones:
+		var la: float = z["lat0"]
+		var lb: float = z["lat1"]
+		for k in int(z["len"]):
+			var i := (int(z["i0"]) + k) % n
+			match z["kind"]:
+				"farofa":
+					# areia amarelada com grãos (pontinhos) por cima
+					_strip(st, i, la, lb, 0.06, 0.06, Color(0.86, 0.68, 0.36).darkened(rng.randf() * 0.08))
+					for g in 6:
+						var lat := rng.randf_range(la + 0.3, lb - 0.3)
+						var c := points[i] + rights[i] * lat + tangents[i] * rng.randf_range(0.0, SPACING) + Vector3.UP * 0.075
+						var s := rng.randf_range(0.12, 0.3)
+						_quad(st, c - rights[i] * s - tangents[i] * s, c + rights[i] * s - tangents[i] * s, c + rights[i] * s + tangents[i] * s, c - rights[i] * s + tangents[i] * s, Color(0.98, 0.85, 0.55) if g % 2 == 0 else Color(0.6, 0.42, 0.2))
+				"grill":
+					# grelha: fundo com brasa e barras escuras atravessadas
+					_strip(st, i, la, lb, 0.05, 0.05, Color(0.55, 0.12, 0.02))
+					var c0 := points[i] + Vector3.UP * 0.08
+					for b in 2:
+						var a := c0 + tangents[i] * (0.5 + b * 1.0)
+						_quad(st, a + rights[i] * la - tangents[i] * 0.22, a + rights[i] * lb - tangents[i] * 0.22, a + rights[i] * lb + tangents[i] * 0.22, a + rights[i] * la + tangents[i] * 0.22, Color(0.1, 0.1, 0.11))
+					if k % 6 == 0:  # longarinas
+						for lat in [la + 0.4, lb - 0.4]:
+							var p: Vector3 = points[i] + rights[i] * lat + Vector3.UP * 0.09
+							_quad(st, p - rights[i] * 0.2, p + rights[i] * 0.2, p + rights[i] * 0.2 + tangents[i] * SPACING * 6.0, p - rights[i] * 0.2 + tangents[i] * SPACING * 6.0, Color(0.12, 0.12, 0.13))
+
+
+static func _belt_texture() -> Texture2D:
+	var img := Image.create(8, 32, false, Image.FORMAT_RGBA8)
+	for y in 32:
+		var c := Color(0.13, 0.13, 0.15) if y % 16 < 11 else Color(0.32, 0.32, 0.36)
+		if y % 16 == 11:
+			c = Color(0.85, 0.7, 0.15)  # friso amarelo
+		for x in 8:
+			img.set_pixel(x, y, c)
+	return ImageTexture.create_from_image(img)
+
+
+## Esteiras: malha própria com UV e material que rola (o _process anda o UV).
+func _build_belts() -> void:
+	var n := points.size()
+	var tex := _belt_texture()
+	for z in zones:
+		if not String(z["kind"]).begins_with("belt"):
+			continue
+		var side: bool = z["kind"] == "belt_side"
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var la: float = z["lat0"]
+		var lb: float = z["lat1"]
+		for k in int(z["len"]):
+			var i := (int(z["i0"]) + k) % n
+			var j := (i + 1) % n
+			var y := Vector3.UP * 0.07
+			var v0 := float(k) * SPACING / 4.0
+			var v1 := float(k + 1) * SPACING / 4.0
+			var quad := [points[i] + rights[i] * la + y, points[i] + rights[i] * lb + y, points[j] + rights[j] * lb + y, points[j] + rights[j] * la + y]
+			# esteira lateral: frisos ao longo da pista (UV girado), andando pro lado
+			var uvs: Array = [Vector2(0, v0), Vector2(1, v0), Vector2(1, v1), Vector2(0, v1)] if not side else [Vector2(v0, la / 4.0), Vector2(v0, lb / 4.0), Vector2(v1, lb / 4.0), Vector2(v1, la / 4.0)]
+			for idx in [0, 2, 1, 0, 3, 2]:
+				st.set_normal(Vector3.UP)
+				st.set_uv(uvs[idx])
+				st.add_vertex(quad[idx])
+		var mat := StandardMaterial3D.new()
+		mat.albedo_texture = tex
+		mat.roughness = 0.7
+		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
+		var mi := MeshInstance3D.new()
+		mi.mesh = st.commit()
+		mi.material_override = mat
+		mi.name = "Belt"
+		add_child(mi)
+		var spd: float = (BELT_SIDE_SPEED if side else BELT_SPEED) * float(z["dir"])
+		belt_mats.append({"mat": mat, "speed": spd})
+
+
+func _process(delta: float) -> void:
+	for b in belt_mats:
+		var m: StandardMaterial3D = b["mat"]
+		m.uv1_offset.y = fmod(m.uv1_offset.y - float(b["speed"]) * delta / 4.0, 1.0)
+
+
+## Base fixa dos perigos (suportes); o que mexe é criado pela corrida.
+func _build_hazard_bases() -> void:
+	for h in hazard_specs:
+		var i: int = h["idx"]
+		if h["kind"] == "press":
+			# pórtico da prensa: duas colunas e uma viga por cima da faixa
+			var lat: Array = h["lat"]
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color(0.85, 0.65, 0.1)
+			mat.metallic = 0.4
+			mat.roughness = 0.5
+			for l in [float(lat[0]) - 0.8, float(lat[1]) + 0.8]:
+				var col := MeshInstance3D.new()
+				var bm := BoxMesh.new()
+				bm.size = Vector3(0.7, 9.0, 0.7)
+				col.mesh = bm
+				col.material_override = mat
+				col.position = points[i] + rights[i] * l + Vector3.UP * 4.5
+				add_child(col)
+			var beam := MeshInstance3D.new()
+			var bb := BoxMesh.new()
+			bb.size = Vector3(absf(float(lat[1]) - float(lat[0])) + 2.4, 0.8, 1.2)
+			beam.mesh = bb
+			beam.material_override = mat
+			beam.position = points[i] + rights[i] * (float(lat[0]) + float(lat[1])) * 0.5 + Vector3.UP * 9.2
+			beam.basis = Basis(Vector3.UP, heading_at(i))  # X local = lateral da pista
+			add_child(beam)

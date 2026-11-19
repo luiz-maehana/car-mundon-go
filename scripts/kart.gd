@@ -79,6 +79,7 @@ const START_WINDOW_LATE := 0.6
 var start_hold := -1.0     # countdown no momento em que começou a segurar o acelerador
 var start_stall := 0.0
 var start_result := ""     # "" | "turbo" | "queimou"
+var zone_kind := ""         # RF-270: farofa | belt | belt_side | grill | ""
 
 # v0.8: ar/rampa, manobra, queijinhos, vácuo, roleta
 var vy := 0.0
@@ -323,6 +324,13 @@ func _move(delta: float) -> void:
 		if is_player:
 			race.sfx("pad")
 	on_pad = pad_now
+	# RF-270: zonas de superfície (no ar não valem)
+	var zone: Dictionary = {} if airborne else track.zone_at(track_idx, lateral)
+	zone_kind = String(zone.get("kind", ""))
+	if zone_kind == "farofa" and boost_time <= 0.0:
+		top *= TrackScript.FAROFA_MULT
+	elif zone_kind == "belt":
+		top *= 1.15
 	if boost_time > 0.0:
 		boost_time -= delta
 		top *= BOOST_MULT
@@ -374,6 +382,11 @@ func _move(delta: float) -> void:
 	var grip := 2.5 if drifting else (1.5 if airborne else 9.0)
 	vel = vel.lerp(forward() * speed, 1.0 - exp(-grip * delta))
 	position += vel * delta
+	# esteiras carregam o kart (mesmo parado)
+	if zone_kind == "belt":
+		position += track.tangents[track_idx] * TrackScript.BELT_SPEED * float(zone["dir"]) * delta
+	elif zone_kind == "belt_side":
+		position += track.rights[track_idx] * TrackScript.BELT_SIDE_SPEED * float(zone["dir"]) * delta
 
 
 ## RF-141: sobe a rampa, decola, gravidade, manobra no ar e pouso.

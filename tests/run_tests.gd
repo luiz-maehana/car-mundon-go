@@ -49,6 +49,7 @@ func _run() -> void:
 	await _test_layout()
 	await _test_remap()
 	await _test_char_select()
+	await _test_new_tracks()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -634,7 +635,7 @@ func _test_assets() -> void:
 	var th: Theme = Game.build_theme()
 	var f: Font = th.default_font
 	check(f != null and f.resource_path.ends_with("Kenney Future Narrow.ttf"), "tema usa Kenney Future Narrow")
-	var need := "CAR'MUNDON'GO! Digão CONTRAMÃO VÁCUO 1º/8 Começar · ç ã õ é í ó ú"
+	var need := "Car Mundon'GO Digão CONTRAMÃO VÁCUO 1º/8 Começar · ç ã õ é í ó ú"
 	var missing := ""
 	for ch in need:
 		if ch != " " and not f.has_char(ch.unicode_at(0)):
@@ -953,7 +954,7 @@ func _test_music() -> void:
 	var Track = load("res://scripts/track.gd")
 	var sigs := {}
 	var ok := true
-	for style in ["menu", "queijo", "deserto", "cozinha", "victory"]:
+	for style in ["menu", "queijo", "deserto", "cozinha", "churrasco", "fabrica", "victory"]:
 		var t0 := Time.get_ticks_msec()
 		var w: AudioStream = Sfx.music(style)
 		var secs: float = w.get_length()
@@ -962,7 +963,7 @@ func _test_music() -> void:
 		if not looped or secs < 8.0:
 			ok = false
 		sigs[w.resource_name] = true
-	check(ok and sigs.size() == 5, "5 trilhas em loop, > 8 s e diferentes entre si")
+	check(ok and sigs.size() == 7, "7 trilhas em loop, > 8 s e diferentes entre si")
 	var tracks_ok := true
 	for td in Track.TRACKS:
 		if not Sfx.MUSIC_STYLES.has(td.get("music", td["id"])):
@@ -1419,3 +1420,175 @@ func _test_char_select() -> void:
 	menu.queue_free()
 	game.num_players = 1
 	await process_frame
+
+
+func _race_on(track_id: String) -> Node:
+	var race = load("res://scripts/race.gd").new()
+	race.use_game_settings = false
+	race.autopilot_player = false
+	race.player_chars = ["nanni"]
+	race.track_id = track_id
+	race.laps = 1
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	race.state = "racing"
+	race.countdown = 0.0
+	return race
+
+
+## Anda só o kart k por `secs` segundos (sem os outros atrapalharem).
+func _drive(k, secs: float) -> void:
+	var dt := 1.0 / 60.0
+	var t := 0.0
+	while t < secs:
+		k.step(dt, true)
+		t += dt
+
+
+func _test_new_tracks() -> void:
+	print("CA-57 zonas de superfície")
+	var race = await _race_on("churrasco")
+	var k = race.player
+	var fz: Dictionary = {}
+	for z in race.track.zones:
+		if z["kind"] == "farofa":
+			fz = z
+			break
+	var mid_lat: float = (fz["lat0"] + fz["lat1"]) * 0.5
+	Input.action_press("p1_accelerate")
+	_put(k, int(fz["i0"]) + 2, mid_lat, 0.0)
+	_drive(k, 1.6)
+	var on_farofa: float = k.speed
+	var kind_seen: String = k.zone_kind
+	_put(k, int(fz["i0"]) + 2, -mid_lat, 0.0)  # o outro lado da pista não tem farofa
+	_drive(k, 1.6)
+	var clean: float = k.speed
+	Input.action_release("p1_accelerate")
+	check(kind_seen == "farofa" and on_farofa <= k.top_speed() * 0.62 + 0.5 and clean > on_farofa + 2.0, "farofa segura (%.1f m/s na farofa x %.1f fora)" % [on_farofa, clean])
+	race.queue_free()
+	await process_frame
+
+	race = await _race_on("fabrica")
+	k = race.player
+	var belt: Dictionary = {}
+	var side: Dictionary = {}
+	for z in race.track.zones:
+		if z["kind"] == "belt":
+			belt = z
+		elif z["kind"] == "belt_side":
+			side = z
+	_put(k, int(belt["i0"]) + 2, 0.0, 0.0)
+	var p0: Vector3 = k.position
+	var i0: int = k.track_idx
+	_drive(k, 1.0)
+	var moved: float = (k.position - p0).dot(race.track.tangents[i0])
+	check(k.zone_kind == "belt" and moved > 7.0, "esteira leva o kart parado pra frente (%.1f m em 1 s)" % moved)
+	_put(k, int(side["i0"]) + 3, 0.0, 0.0)
+	_drive(k, 0.6)
+	check(k.zone_kind == "belt_side" and k.lateral < -2.0, "esteira lateral empurra pro lado (lateral %.1f)" % k.lateral)
+	_put(k, int(belt["i0"]) + 2, 0.0, 0.0)
+	k.airborne = true
+	k.position.y = 4.0
+	k.step(1.0 / 60.0, true)
+	check(k.zone_kind == "", "no ar a esteira não vale")
+	race.queue_free()
+	await process_frame
+
+	print("CA-58 perigos da pista")
+	race = await _race_on("churrasco")
+	k = race.player
+	var fh: Dictionary = race.track_hazards[0]
+	var fs: Dictionary = fh["spec"]
+	var flame: Node3D = fh["flames"][1]
+	var dt := 1.0 / 60.0
+	# aceso: ajusta o relógio da corrida pro meio da janela de fogo
+	race.race_time = race.FLAME_WARN + 0.3 - float(fs["phase"])
+	_put(k, int(fs["idx"]), float(fs["lats"][1]), 0.0)
+	k.spin_time = 0.0
+	race._update_track_hazards(dt, true)
+	check(fh["state"] == "on" and k.spin_time > 0.0, "labareda acesa roda o kart")
+	race.race_time = race.FLAME_WARN + float(fs["on"]) + 0.3 - float(fs["phase"])
+	k.spin_time = 0.0
+	race._update_track_hazards(dt, true)
+	check(fh["state"] == "off" and k.spin_time == 0.0, "labareda apagada não faz nada")
+	race.state = "countdown"
+	race.race_time = race.FLAME_WARN + 0.3 - float(fs["phase"])
+	race._update_track_hazards(dt, false)
+	check(k.spin_time == 0.0 and not flame.visible, "antes do VAI! o fogo não acende")
+	race.queue_free()
+	await process_frame
+
+	race = await _race_on("fabrica")
+	k = race.player
+	var wheel: Dictionary = {}
+	var press: Dictionary = {}
+	for h in race.track_hazards:
+		if h["spec"]["kind"] == "wheel" and wheel.is_empty():
+			wheel = h
+		elif h["spec"]["kind"] == "press" and press.is_empty():
+			press = h
+	race._update_track_hazards(dt, false)
+	var wpos: Vector3 = wheel["node"].position
+	k.place(race.track.nearest_index(wpos), race.track.lateral_of(wpos, race.track.nearest_index(wpos)))
+	k.spin_time = 0.0
+	race._update_track_hazards(0.0, true)
+	check(k.spin_time > 0.0, "roda de queijo roda quem encosta")
+	# prensa: procura no relógio um instante "down" e um "up"
+	var ps: Dictionary = press["spec"]
+	_put(k, int(ps["idx"]), float(press["mid"]), 0.0)
+	var got_down := false
+	var got_up := false
+	for step_i in 400:
+		k.spin_time = 0.0
+		race._update_track_hazards(1.0 / 60.0, true)
+		if press["state"] == "down" and k.spin_time > 0.0:
+			got_down = true
+		if press["state"] == "up" and k.spin_time > 0.0:
+			got_up = true
+	check(got_down and not got_up, "prensa pega embaixo e em cima não")
+	race.queue_free()
+	await process_frame
+
+	print("CA-59 IA desvia de labareda")
+	race = await _race_on("churrasco")
+	var ai = race.karts[0]
+	fh = race.track_hazards[0]
+	fs = fh["spec"]
+	race.race_time = 0.1 - float(fs["phase"])  # aviso (brasa)
+	race._update_track_hazards(0.0, true)
+	_put(ai, int(fs["idx"]) - 14, 0.0, 15.0)
+	ai.ai_avoid = 1.0
+	ai.ai_lane = 0.0
+	ai.ai_lane_timer = 10.0
+	ai.ai_seen.clear()
+	ai._ai_tactics(race.track.sample_count(), race.track.ROAD_HALF - 2.5)
+	check(fh["state"] == "warn" and absf(ai.ai_lane) > 2.8, "IA troca de faixa antes do fogo (faixa %.1f)" % ai.ai_lane)
+	race.queue_free()
+	await process_frame
+
+	print("CA-60 voltas da IA nas pistas novas")
+	for tid in ["churrasco", "fabrica"]:
+		race = load("res://scripts/race.gd").new()
+		race.use_game_settings = false
+		race.autopilot_player = true
+		race.player_chars = ["nanni"]
+		race.track_id = tid
+		race.laps = 2
+		root.add_child(race)
+		if race.karts.is_empty():
+			await process_frame
+		var t := 0.0
+		var hits := 0
+		while t < 200.0 and not race.all_finished():
+			race.step(1.0 / 60.0)
+			t += 1.0 / 60.0
+		var best := INF
+		var worst := 0.0
+		for kk in race.karts:
+			if kk.finished:
+				best = minf(best, kk.finish_time / 2.0)
+				worst = maxf(worst, kk.finish_time / 2.0)
+		check(race.all_finished() and best > 30.0 and worst < 60.0, "%s: volta da IA %.1f..%.1f s" % [race.track.def["name"], best, worst])
+		race.queue_free()
+		await process_frame

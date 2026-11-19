@@ -2,6 +2,7 @@ extends Node
 ## Autoload "Game": escolhas do menu e mapa de controles por jogador (SPEC §5).
 ## Ações: "p<N>_<acao>", N = 1..4. Controle (joypad) do jogador N = device N-1.
 
+const GAME_TITLE := "Car Mundon'GO"
 const MAX_PLAYERS := 4
 const ACTIONS := ["accelerate", "brake", "steer_left", "steer_right", "drift", "use_item"]
 
@@ -46,6 +47,10 @@ var graphics_high: bool:
 
 func _ready() -> void:
 	setup_inputs()
+	# nome mostrado: Car Mundon'GO. O config/name do projeto continua o antigo de propósito:
+	# ele define a pasta de save (user://) e trocar apagaria configurações e recordes.
+	if DisplayServer.get_name() != "headless":
+		DisplayServer.window_set_title(GAME_TITLE)
 	_setup_ui()
 	_setup_buses()
 	load_settings()

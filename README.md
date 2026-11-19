@@ -1,4 +1,4 @@
-# Car'mundon'GO!
+# Car Mundon'GO
 
 Kart racer arcade em Godot 4.7 com a turma como pilotos. Especificação completa em [SPEC.md](SPEC.md).
 

@@ -119,6 +119,15 @@ static func ground_material(kind: String, base: Color) -> StandardMaterial3D:
 	m.uv1_world_triplanar = true
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	match kind:
+		"wood":  # RF-273: mesa de madeira (veio esticado numa direção)
+			m.albedo_texture = noise_tex("wood", 0.06, [base.darkened(0.3), base, base.lightened(0.12), base.darkened(0.12)])
+			m.uv1_scale = Vector3(0.004, 0.004, 0.06)
+			m.roughness = 0.75
+		"metal":  # RF-274: chapas de 8 m
+			m.albedo_texture = checker_tex(base.lightened(0.12), base.darkened(0.05), base.darkened(0.45))
+			m.uv1_scale = Vector3(0.0625, 0.0625, 0.0625)
+			m.roughness = 0.45
+			m.metallic = 0.55
 		"tiles":
 			m.albedo_texture = checker_tex(base.lightened(0.25), base.darkened(0.2), base.darkened(0.55))
 			m.uv1_scale = Vector3(0.125, 0.125, 0.125)  # azulejos de 4 m

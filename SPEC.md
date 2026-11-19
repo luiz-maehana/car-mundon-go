@@ -1,4 +1,4 @@
-# Car'mundon'GO! — Especificação (MVP)
+# Car Mundon'GO — Especificação (MVP)
 
 > Spec viva do projeto. Toda feature nova entra aqui **antes** do código, com ID e critério de aceite.
 > Status: `[x]` feito · `[ ]` pendente · `[~]` parcial.
@@ -241,6 +241,14 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-262** Animações: carta selecionada cresce e a borda pulsa; trocar de piloto desliza/esmaece a arte grande e anima as barras até o valor novo, com som; o corpo do piloto "respira". Passar o mouse numa carta seleciona.
 - [x] **RF-263** Confirmar: a carta dá um pulo com brilho, ganha o selo J1..J4 com a cor do jogador e toca o som de confirmação. No último jogador a tela escurece rápido antes da corrida.
 
+### Pistas novas: Churrascada e Fábrica (v0.21)
+- [x] **RF-270** Zonas de superfície por trecho da pista (dados da pista, `zones`): **farofa** (velocidade máx. ×0,62, igual fora da pista), **esteira** (carrega o kart pra frente a 9 m/s, mesmo parado, e dá +15% de velocidade máx.), **esteira lateral** (empurra pro lado a 5 m/s) e **grelha** (só visual, onde ficam as labaredas). No ar nada vale. Esteiras têm faixas que andam.
+- [x] **RF-271** Perigos da pista (`hazards`), controlados pela corrida, só depois do VAI!: **labareda** (ciclo: aviso com brasa 0,6 s → fogo `on` s → apagada; quem passa no fogo roda), **roda de queijo** (rola de um lado pro outro da pista, quem encosta roda) e **prensa** (desce com aviso de sombra; pega quem está embaixo, rodada forte). Escudo protege como de costume.
+- [x] **RF-272** A IA enxerga labaredas acesas/avisando, a roda e a prensa descendo, e as zonas de farofa, pelo mesmo sensor de casca/ratoeira (com a personalidade de desvio de cada piloto).
+- [x] **RF-273** **Churrascada de Domingo**: mesa de madeira, pista de tábua, zebra de toalha xadrez, muro verde e amarelo, espetos e garrafas em volta, tomates/pães/cebolas espalhados; farofa em dois trechos e grelha com 3 linhas de labaredas; rampa = pulo da tábua pro prato.
+- [x] **RF-274** **Fábrica de Queijo**: galpão escuro com luz de forno, chão de chapa, muro amarelo e preto, chaminés e máquinas, queijos empilhados; esteira pra frente na reta, esteira lateral numa curva, 2 rodas de queijo e 2 prensas.
+- [x] **RF-275** Cada uma com música CC0 própria.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -352,6 +360,10 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-54** Na tela de configurações, apertar o botão de uma ação e depois uma tecla faz a troca; Esc cancela sem mudar; a dica da corrida mostra a tecla nova.
 - [x] **CA-55** Em 1280×720, 1024×768 e 2560×1080 a arte de cada carta fica dentro da carta e o painel do piloto cabe na tela.
 - [x] **CA-56** Trocar a seleção atualiza o painel (nome e barras chegam ao valor do piloto após a animação); confirmar marca a carta com o selo do jogador.
+- [x] **CA-57** Farofa reduz a velocidade máxima; esteira leva o kart parado pra frente; esteira lateral empurra pro lado; no ar não vale.
+- [x] **CA-58** Labareda acesa roda o kart e apagada não; roda de queijo roda quem encosta; prensa embaixo pega e em cima não; nada disso antes do VAI!.
+- [x] **CA-59** A IA desvia de labareda acesa à frente (troca de faixa).
+- [x] **CA-60** As 2 pistas novas: geometria válida (CA-02), 8 karts terminam 1 volta sem atravessar o muro (CA-15), volta da IA entre 30 e 60 s.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
