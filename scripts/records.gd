@@ -9,10 +9,14 @@ const DEFAULT_PATH := "user://records.cfg"
 static var path := DEFAULT_PATH  # os testes trocam
 
 
+const SafeCfg = preload("res://scripts/safe_cfg.gd")
+const Chars = preload("res://scripts/characters.gd")
+const MAX_GHOST := 4 * 36000   # 1 h de fantasma (x, y, z, heading a cada 0,1 s)
+
+
+## RF-440: arquivo de recordes lido com segurança (pode ter vindo de outra pessoa).
 static func _cfg() -> ConfigFile:
-	var cfg := ConfigFile.new()
-	cfg.load(path)
-	return cfg
+	return SafeCfg.load_file(path)
 
 
 ## RF-393: seção do arquivo = id da pista + versão do traçado ("queijo@2"). Pista refeita começa
@@ -28,9 +32,19 @@ static func get_record(track_id: String) -> Dictionary:
 	var cfg := _cfg()
 	if not cfg.has_section(track_id):
 		return {}
+	# RF-441: só os campos conhecidos, com tipo e faixa conferidos
 	var out := {}
-	for k in cfg.get_section_keys(track_id):
-		out[k] = cfg.get_value(track_id, k)
+	for k in ["race_time", "lap_time"]:
+		var t := SafeCfg.num(cfg.get_value(track_id, k, -1.0), 0.0, 36000.0, -1.0)
+		if t > 0.0:
+			out[k] = t
+	for k in ["race_char", "lap_char"]:
+		var c = cfg.get_value(track_id, k, "")
+		if typeof(c) == TYPE_STRING and Chars.index_of(c) >= 0 and Chars.find(c).get("id", "") == c:
+			out[k] = c
+	var g = cfg.get_value(track_id, "ghost", null)
+	if g is PackedFloat32Array and g.size() % 4 == 0 and g.size() <= MAX_GHOST:
+		out["ghost"] = g
 	return out
 
 
@@ -39,13 +53,13 @@ static func submit(track_id: String, char_id: String, race_time: float, best_lap
 	track_id = section(track_id)
 	var cfg := _cfg()
 	var got := {"race": false, "lap": false}
-	var old_race: float = cfg.get_value(track_id, "race_time", INF)
+	var old_race: float = SafeCfg.num(cfg.get_value(track_id, "race_time", INF), 0.0, INF, INF)
 	if race_time < old_race:
 		cfg.set_value(track_id, "race_time", race_time)
 		cfg.set_value(track_id, "race_char", char_id)
 		cfg.set_value(track_id, "ghost", ghost)
 		got["race"] = true
-	var old_lap: float = cfg.get_value(track_id, "lap_time", INF)
+	var old_lap: float = SafeCfg.num(cfg.get_value(track_id, "lap_time", INF), 0.0, INF, INF)
 	if best_lap < old_lap:
 		cfg.set_value(track_id, "lap_time", best_lap)
 		cfg.set_value(track_id, "lap_char", char_id)

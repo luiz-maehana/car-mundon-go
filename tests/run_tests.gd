@@ -64,6 +64,7 @@ func _run() -> void:
 	await _test_stick_menu()
 	await _test_powers()
 	await _test_drift_vs_turn()
+	_test_safe_files()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -2890,3 +2891,51 @@ func _test_drift_vs_turn() -> void:
 	check(drift_mid <= normal * 0.65 and drift_mid > 0.1, "drift solto (sem direcional) é um arco aberto: %.2f rad/s" % drift_mid)
 	race.queue_free()
 	await process_frame
+
+
+func _write(p: String, text: String) -> void:
+	var f := FileAccess.open(p, FileAccess.WRITE)
+	f.store_string(text)
+	f.close()
+
+
+func _test_safe_files() -> void:
+	print("CA-109 arquivo trocado não roda código (settings e recordes)")
+	var game = root.get_node_or_null("Game")
+	var evil_gd := "user://_evil.gd"
+	var pwned := "user://_pwned.txt"
+	if FileAccess.file_exists(pwned):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(pwned))
+	_write(evil_gd, "extends Node\nfunc _init():\n\tvar f := FileAccess.open(\"%s\", FileAccess.WRITE)\n\tf.store_string(\"x\")\n" % pwned)
+	var payload := "Object(Node,\"script\":Resource(\"%s\"))" % ProjectSettings.globalize_path(evil_gd)
+	# configurações
+	var old_path: String = game.settings_path
+	var sp := "user://_evil_settings.cfg"
+	_write(sp, "[settings]\nfov=70.0\nhack=%s\n" % payload)
+	game.settings_path = sp
+	game.load_settings()
+	check(not FileAccess.file_exists(pwned), "settings.cfg com script embutido: o código NÃO rodou")
+	check(FileAccess.file_exists(sp + ".bloqueado") and not FileAccess.file_exists(sp), "arquivo suspeito vira .bloqueado")
+	check(is_equal_approx(float(game.settings["fov"]), float(game.DEFAULTS["fov"])), "e o jogo segue com o padrão")
+	# valores fora da faixa e teclas lixo
+	_write(sp, "[settings]\nfov=9999.0\nrender_scale=-5.0\nvol_music=3.0\nspeed_unit=\"xyz\"\n[keys]\np1_drift=\"lixo\"\np1_hackear=[[65]]\n")
+	game.load_settings()
+	check(float(game.settings["fov"]) <= 110.0 and float(game.settings["render_scale"]) >= 0.5 and float(game.settings["vol_music"]) <= 1.0 and game.settings["speed_unit"] == "kmh", "números fora da faixa são corrigidos")
+	check(not game.key_binds.has("p1_drift") and not game.key_binds.has("p1_hackear"), "teclas inválidas são ignoradas")
+	game.settings_path = old_path
+	game.load_settings()
+	# recordes
+	var Records = load("res://scripts/records.gd")
+	var old_rec: String = Records.path
+	var rp := "user://_evil_records.cfg"
+	_write(rp, "[queijo@2]\nrace_time=50.0\nghost=%s\n" % payload)
+	Records.path = rp
+	var rec: Dictionary = Records.get_record("queijo")
+	check(not FileAccess.file_exists(pwned) and rec.is_empty(), "records.cfg com script embutido: não roda e não é usado")
+	_write(rp, "[queijo@2]\nrace_time=-3.0\nlap_time=40.0\nrace_char=\"ninguem\"\nghost=PackedFloat32Array(1, 2, 3)\n")
+	rec = Records.get_record("queijo")
+	check(not rec.has("race_time") and rec.get("lap_time", 0.0) == 40.0 and not rec.has("race_char") and not rec.has("ghost"), "recorde com campos inválidos: só o que é válido passa")
+	Records.path = old_rec
+	for p in [sp, sp + ".bloqueado", rp, rp + ".bloqueado", evil_gd, pwned]:
+		if FileAccess.file_exists(p):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))

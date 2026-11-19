@@ -26,6 +26,13 @@ var last_device := "kbd"
 const SETTINGS_PATH := "user://settings.cfg"
 const QUALITY_NAMES := ["BAIXO", "MÉDIO", "ALTO"]
 const FPS_OPTIONS := [0, 30, 60, 120, 144, 240]
+const SafeCfg = preload("res://scripts/safe_cfg.gd")
+## RF-441: faixa válida de cada configuração numérica.
+const SETTING_RANGES := {
+	"vol_master": [0.0, 1.0], "vol_music": [0.0, 1.0], "vol_sfx": [0.0, 1.0], "vol_engine": [0.0, 1.0],
+	"max_fps": [0.0, 360.0], "quality": [0.0, 2.0], "render_scale": [0.5, 2.0], "fov": [50.0, 110.0],
+	"shake": [0.0, 1.0], "deadzone": [0.05, 0.9],
+}
 const DEFAULTS := {
 	"vol_master": 0.85, "vol_music": 0.7, "vol_sfx": 0.9, "vol_engine": 0.7,
 	"fullscreen": false, "vsync": true, "max_fps": 0, "quality": 2, "render_scale": 1.0, "fov": 72.0, "show_fps": false,
@@ -323,27 +330,49 @@ func _setup_buses() -> void:
 
 func load_settings() -> void:
 	settings = DEFAULTS.duplicate()
-	var cfg := ConfigFile.new()
-	if cfg.load(settings_path) == OK:
+	var cfg: ConfigFile = SafeCfg.load_file(settings_path)  # RF-440: nada de objeto/script vindo do arquivo
+	if cfg.has_section("settings"):
 		for k in DEFAULTS:
 			var v = cfg.get_value("settings", k, DEFAULTS[k])
 			if typeof(v) == typeof(DEFAULTS[k]) or (typeof(DEFAULTS[k]) == TYPE_FLOAT and typeof(v) == TYPE_INT):
 				settings[k] = v
+			if SETTING_RANGES.has(k):  # RF-441: número fora da faixa não quebra o jogo
+				var r: Array = SETTING_RANGES[k]
+				var x: float = SafeCfg.num(settings[k], r[0], r[1], float(DEFAULTS[k]))
+				settings[k] = int(x) if typeof(DEFAULTS[k]) == TYPE_INT else x
+		if not String(settings["speed_unit"]) in ["kmh", "mph"]:
+			settings["speed_unit"] = DEFAULTS["speed_unit"]
 	# RF-253: teclas e botões trocados
 	key_binds.clear()
 	pad_binds.clear()
 	if cfg.has_section("keys"):
 		for act in cfg.get_section_keys("keys"):
 			var v = cfg.get_value("keys", act)
-			if v is Array:
+			if _valid_key_bind(act, v):
 				key_binds[act] = v
 	if cfg.has_section("pad"):
 		for a in cfg.get_section_keys("pad"):
 			var v = cfg.get_value("pad", a)
-			if v is Array and PAD_REMAP.has(a):
+			if v is Array and PAD_REMAP.has(a) and v.size() <= 4 and v.all(func(b): return typeof(b) == TYPE_INT and b >= 0 and b < 128):
 				pad_binds[a] = v
 	rebuild_inputs()
 	apply_settings()
+
+
+## RF-441: tecla salva = lista de [keycode, location] de uma ação conhecida (ex.: "p1_drift").
+func _valid_key_bind(act: String, v) -> bool:
+	if not (v is Array) or v.size() > 4:
+		return false
+	var parts := act.split("_", true, 1)
+	if parts.size() != 2 or not parts[0].begins_with("p") or not ACTIONS.has(parts[1]):
+		return false
+	for k in v:
+		if not (k is Array) or k.size() < 1 or k.size() > 2:
+			return false
+		for x in k:
+			if typeof(x) != TYPE_INT or x < 0 or x > 0x7FFFFFFF:
+				return false
+	return true
 
 
 func save_settings() -> void:
