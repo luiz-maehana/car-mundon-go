@@ -23,15 +23,12 @@ func _run() -> void:
 	root.add_child(menu)
 	await process_frame
 	game.note_device(_pad(JOY_BUTTON_A))
-	menu._input(_pad(JOY_BUTTON_DPAD_DOWN))
-	menu._input(_pad(JOY_BUTTON_DPAD_DOWN))
-	menu._input(_pad(JOY_BUTTON_DPAD_RIGHT))
-	menu._input(_pad(JOY_BUTTON_DPAD_RIGHT))
-	menu._input(_pad(JOY_BUTTON_DPAD_RIGHT))
+	for b in [JOY_BUTTON_A, JOY_BUTTON_A, JOY_BUTTON_A, JOY_BUTTON_DPAD_UP]:  # modo, piloto, pista → ajustes (foco na IA)
+		menu._input(_pad(b))
 	for i in 5:
 		await process_frame
 	await _shot(out + "/ui_menu_opts.png")
-	menu._focus_zone(0, 0)
+	menu._focus(0, 1)
 	for i in 5:
 		await process_frame
 	await _shot(out + "/ui_menu_top.png")

@@ -1104,50 +1104,74 @@ func _test_ui_nav() -> void:
 	game.laps = 3
 	game.track_id = "queijo"
 	game.difficulty = 1
-	print("CA-46 menu só com controle")
+	print("CA-46 menu em etapas só com controle")
 	check(_pad(JOY_BUTTON_A).is_action_pressed("ui_accept") and _pad(JOY_BUTTON_B).is_action_pressed("ui_cancel"), "A = ui_accept e B = ui_cancel (botões focados funcionam no controle)")
 	var menu = await _new_menu()
 	var up := JOY_BUTTON_DPAD_UP
 	var down := JOY_BUTTON_DPAD_DOWN
 	var right := JOY_BUTTON_DPAD_RIGHT
+	var left := JOY_BUTTON_DPAD_LEFT
 	var a := JOY_BUTTON_A
-	# cartas -> opções (fileira de baixo leva pra linha de opções)
+	check(menu.step == menu.STEP_MODE and menu.get_viewport().gui_get_focus_owner() == menu.mode_cards[0], "começa na etapa MODO com foco no cartão")
+	menu._input(_pad(right))
+	menu._input(_pad(right))
+	check(menu.MODE_IDS[menu.mode_i] == "tt", "→→ escolhe CONTRA O RELÓGIO")
 	menu._input(_pad(down))
+	check(menu.nav_r == 2 and menu.player_btns[1].disabled, "↓ vai pros jogadores (só 1 no contra o relógio)")
+	menu._input(_pad(up))
+	menu._input(_pad(left))
 	menu._input(_pad(down))
-	check(menu.nav_zone == 2 and menu.get_viewport().gui_get_focus_owner() == menu.nav_rows[2][menu.nav_i], "↓↓ leva o foco pra linha de opções")
-	menu._focus_zone(2, 1)  # VOLTAS
-	var laps0: int = menu.laps_i
-	menu._input(_pad(a))
-	check(menu.laps_i == (laps0 + 1) % menu.LAP_OPTIONS.size(), "A em VOLTAS troca as voltas")
-	menu._input(_pad(right))
-	var diff0: int = menu.diff_i
-	menu._input(_pad(a))
-	check(menu.nav_i == 2 and menu.diff_i != diff0, "→ vai pra IA e A troca a dificuldade")
-	menu._input(_pad(right))
-	var tr0: int = menu.track_i
-	menu._input(_pad(a))
-	check(menu.track_i != tr0, "→ PISTA e A troca a pista")
-	menu._input(_pad(up))
-	check(menu.nav_zone == 1, "↑ volta pras cartas")
-	menu._input(_pad(up))
-	menu._input(_pad(up))
-	check(menu.nav_zone == 0, "↑ da fileira de cima vai pra MODO/CONFIGURAÇÕES")
-	menu._focus_zone(0, 0)
-	menu._input(_pad(a))
-	menu._input(_pad(a))
-	check(menu.MODE_IDS[menu.mode_i] == "tt" and menu.players_btn.disabled, "A em MODO chega no CONTRA O RELÓGIO (JOGADORES travado)")
 	menu._input(_pad(right))
 	menu._input(_pad(a))
-	check(menu.settings_overlay != null, "A em CONFIGURAÇÕES abre a tela")
+	check(menu.MODE_IDS[menu.mode_i] == "gp" and menu.num_players == 2, "GRAND PRIX com 2 jogadores")
+	menu._input(_pad(up))
+	menu._input(_pad(up))
+	menu._input(_pad(right))
+	menu._input(_pad(a))
+	check(menu.settings_overlay != null, "↑ até a barra de cima e A em CONFIGURAÇÕES abre")
 	if menu.settings_overlay:
 		menu.settings_overlay._unhandled_input(_pad(JOY_BUTTON_B))
 	await process_frame
 	check(menu.settings_overlay == null, "B fecha as configurações")
-	menu._focus_zone(2, 0)
-	check(menu.nav_rows[2][menu.nav_i] != menu.players_btn, "foco pula botão desativado")
-	menu._focus_zone(2, 4)
+	menu._input(_pad(down))
+	menu._input(_pad(right))
+	menu._input(_pad(right))
+	menu._input(_pad(right))  # volta pro GRAND PRIX (3 cartões, dá a volta)
 	menu._input(_pad(a))
-	check(menu.started and game.is_tt() and game.track_id == menu.TrackScript.TRACKS[menu.track_i]["id"], "A em CORRER! começa (modo %s, pista %s)" % [game.mode, game.track_id])
+	check(menu.step == menu.STEP_PILOT, "A no cartão vai pra etapa PILOTO")
+	menu._input(_pad(right))
+	menu._input(_pad(a))
+	menu._input(_pad(a))
+	check(menu.picks.size() == 2 and menu.step == menu.STEP_TRACK, "J1 e J2 escolhem e vai pra PISTA")
+	check(menu.track_btns[0].visible and not menu.track_btns[1].visible, "no Grand Prix a etapa PISTA mostra só a copa")
+	menu._input(_pad(a))
+	check(menu.step == menu.STEP_SETUP and menu.get_viewport().gui_get_focus_owner() == menu.go_btn, "A na copa vai pra AJUSTES com foco no CORRER!")
+	menu._input(_pad(up))
+	menu._input(_pad(up))
+	var laps0: int = menu.laps_i
+	menu._input(_pad(right))
+	check(menu.laps_i == (laps0 + 1) % menu.LAP_OPTIONS.size(), "→ em VOLTAS muda o valor")
+	menu._input(_pad(down))
+	var diff0: int = menu.diff_i
+	menu._input(_pad(left))
+	check(menu.diff_i != diff0, "← em IA muda a dificuldade")
+	menu._input(_pad(down))
+	menu._input(_pad(a))
+	check(menu.started and game.is_gp() and game.num_players == 2 and game.selected_chars.size() == 2, "A em CORRER! começa o GP com 2 jogadores")
+	menu.queue_free()
+	await process_frame
+
+	game.mode = "race"
+	game.num_players = 1
+	menu = await _new_menu()
+	menu._input(_pad(a))       # CORRIDA
+	menu._input(_pad(a))       # piloto
+	for i in 4:
+		menu._input(_pad(down))  # 5ª pista
+	check(menu.TrackScript.TRACKS[menu.track_i]["id"] == "fabrica" and menu.track_map.track_id == "fabrica", "↓ na lista troca a pista e o trajeto")
+	menu._input(_pad(a))
+	menu._input(_pad(a))
+	check(menu.started and game.track_id == "fabrica" and game.mode == "race", "corrida na pista escolhida (%s)" % game.track_id)
 	menu.queue_free()
 	await process_frame
 
@@ -1156,12 +1180,18 @@ func _test_ui_nav() -> void:
 	game.num_players = 2
 	menu = await _new_menu()
 	menu._input(_pad(a))
+	menu._input(_pad(a))
 	check(menu.picks.size() == 1, "J1 confirmou")
 	menu._input(_pad(JOY_BUTTON_B))
-	check(menu.picks.is_empty() and menu.nav_zone == 1, "B desfaz o piloto")
-	menu._focus_zone(2, 1)
+	check(menu.picks.is_empty() and menu.step == menu.STEP_PILOT, "B desfaz o piloto")
 	menu._input(_pad(JOY_BUTTON_B))
-	check(menu.nav_zone == 1 and menu.get_viewport().gui_get_focus_owner() == null, "B sai das opções pras cartas")
+	check(menu.step == menu.STEP_MODE, "B sem piloto escolhido volta pra MODO")
+	menu._input(_pad(a))
+	menu._input(_pad(a))
+	menu._input(_pad(a))
+	check(menu.step == menu.STEP_TRACK, "de volta na PISTA")
+	menu._input(_pad(JOY_BUTTON_B))
+	check(menu.step == menu.STEP_PILOT and menu.picks.size() == 1, "B na PISTA volta pro PILOTO reabrindo o último")
 	menu.queue_free()
 	game.num_players = 1
 	await process_frame
@@ -1235,15 +1265,15 @@ func _test_layout() -> void:
 			var menu = load("res://scenes/menu.tscn").instantiate()
 			menu.start_scene = false
 			box.add_child(menu)
-			for t in menu.TrackScript.TRACKS.size():  # o nome de pista mais longo
-				if menu.TrackScript.TRACKS[t]["name"].length() > menu.TrackScript.TRACKS[menu.track_i]["name"].length():
-					menu.track_i = t
-			menu._refresh()
-			await process_frame
-			await process_frame
 			var bad := []
-			_all_inside(menu, Rect2(Vector2.ZERO, sz), bad)
-			check(bad.is_empty(), "menu (%s) em %s %s" % [mode, label, str(bad.slice(0, 3))])
+			for s in 4:  # cada etapa
+				menu._go_step(s, false)
+				await process_frame
+				await process_frame
+				_all_inside(menu, Rect2(Vector2.ZERO, sz), bad)
+			check(bad.is_empty(), "menu (%s, 4 etapas) em %s %s" % [mode, label, str(bad.slice(0, 3))])
+			menu._go_step(menu.STEP_PILOT, false)
+			await process_frame
 			var heads_ok := true
 			for card in menu.cards:
 				var cr: Rect2 = card.get_global_rect()
@@ -1403,6 +1433,7 @@ func _test_char_select() -> void:
 	game.num_players = 2
 	var menu = await _new_menu()
 	var Chars = load("res://scripts/characters.gd")
+	menu._go_step(menu.STEP_PILOT, false)
 	menu._select(3)
 	await create_timer(0.6).timeout
 	var c: Dictionary = Chars.LIST[3]

@@ -241,6 +241,14 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-262** Animações: carta selecionada cresce e a borda pulsa; trocar de piloto desliza/esmaece a arte grande e anima as barras até o valor novo, com som; o corpo do piloto "respira". Passar o mouse numa carta seleciona.
 - [x] **RF-263** Confirmar: a carta dá um pulo com brilho, ganha o selo J1..J4 com a cor do jogador e toca o som de confirmação. No último jogador a tela escurece rápido antes da corrida.
 
+### Menu em etapas (v0.23)
+- [x] **RF-290** Fluxo: abertura → **1 MODO** → **2 PILOTO** → **3 PISTA** → **4 AJUSTES** → corrida. Barra de cima com VOLTAR, título, trilha das etapas (atual em amarelo, feitas em verde) e CONFIGURAÇÕES.
+- [x] **RF-291** MODO: três cartões grandes (CORRIDA, GRAND PRIX, CONTRA O RELÓGIO) com ícone e descrição + linha JOGADORES 1–4 (só 1 no contra o relógio; passar por ele não zera a escolha).
+- [x] **RF-292** PISTA: lista à esquerda e painel com o **trajeto desenhado** (se desenha ao trocar, depois um ponto dá voltas), largada, setas (T), rampa (R), zonas coloridas (farofa, esteiras, grelha) e perigos (F, Q, P), descrição, extensão, recorde e o que tem na pista. No Grand Prix mostra a copa.
+- [x] **RF-293** AJUSTES: VOLTAS e IA mudam com ◄ ► (setas desenhadas), resumo de modo/pilotos/pista e CORRER!.
+- [x] **RF-294** Cada etapa entra deslizando; ao subir/descer o foco cai no item escolhido.
+- [x] **RF-295** Voltar: desfaz o último piloto → etapa anterior (da PISTA reabre o último piloto) → abertura.
+
 ### Drift no estilo arcade (v0.22)
 - [x] **RF-280** No drift o kart gira no máx. 1,05× o giro normal (0,45× abrindo), a velocidade acompanha o bico (aderência alta; o "de lado" é só o modelo) e, ao soltar, sai alinhado — o mini-turbo empurra reto pra frente.
 
@@ -368,6 +376,8 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-59** A IA desvia de labareda acesa à frente (troca de faixa).
 - [x] **CA-60** As 2 pistas novas: geometria válida (CA-02), 8 karts terminam 1 volta sem atravessar o muro (CA-15), volta da IA entre 30 e 60 s.
 - [x] **CA-61** Depois de um drift completo numa curva, ao soltar o ângulo entre velocidade e direção do kart é < 3° e o mini-turbo acelera pra frente; o giro máximo no drift não passa de 1,05× o normal.
+- [x] **CA-62** (CA-46 refeito) Só com controle: escolher modo e jogadores, abrir/fechar configurações, 2 pilotos, copa, mudar voltas e IA e começar; numa corrida, trocar a pista muda o trajeto e a corrida sai na pista escolhida.
+- [x] **CA-63** (CA-47 refeito) B desfaz piloto, volta etapas e reabre o último piloto ao sair da PISTA. CA-49 cobre as 4 etapas em 3 proporções.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

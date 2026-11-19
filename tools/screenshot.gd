@@ -17,6 +17,7 @@ func _run() -> void:
 	var menu = load("res://scenes/menu.tscn").instantiate()
 	root.add_child(menu)
 	await process_frame
+	menu._go_step(menu.STEP_PILOT, false)
 	menu._confirm()  # J1 escolhe; tela fica no J2
 	for i in 10:
 		await process_frame
