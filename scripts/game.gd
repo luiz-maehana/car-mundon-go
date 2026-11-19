@@ -71,6 +71,9 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if stick_menu_event(event):  # RF-410
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_M:
 		toggle_mute()
 	note_device(event)
@@ -118,6 +121,7 @@ static func action(player: int, name: String) -> String:
 
 
 static func setup_inputs() -> void:
+	strip_stick_from_ui()  # RF-410: o analógico nos menus vem do Game (um passo por empurrão)
 	# RF-240: o Godot não põe botão de controle no ui_accept/ui_cancel — A confirma e B volta em toda tela
 	for pair in [["ui_accept", JOY_BUTTON_A], ["ui_cancel", JOY_BUTTON_B]]:
 		var has := false
@@ -398,6 +402,7 @@ func apply_settings() -> void:
 
 
 func _process(_delta: float) -> void:
+	_stick_repeat(_delta)
 	if loading and loading.visible and loading_spin:
 		loading_spin.rotation += _delta * 7.0
 	if fps_label and fps_label.visible:
@@ -817,3 +822,67 @@ func go_race(reload := false) -> void:
 		get_tree().reload_current_scene()
 	else:
 		get_tree().change_scene_to_file("res://scenes/race.tscn")
+
+
+# ---------------------------------------------------------------- analógico nos menus (RF-410)
+
+## O analógico nos menus anda UMA casa por empurrão (com "trava": precisa voltar perto do centro)
+## e, segurado, repete devagar. O Godot mandava um passo por evento de movimento — sensível demais.
+const STICK_ON := 0.6
+const STICK_OFF := 0.3
+const STICK_REPEAT_DELAY := 0.45
+const STICK_REPEAT := 0.16
+const STICK_ACTIONS := {JOY_AXIS_LEFT_X: ["ui_left", "ui_right"], JOY_AXIS_LEFT_Y: ["ui_up", "ui_down"]}
+var stick_dir := {}    # axis -> -1 | 0 | 1
+var stick_hold := {}   # axis -> tempo segurando
+
+
+static func strip_stick_from_ui() -> void:
+	for a in ["ui_left", "ui_right", "ui_up", "ui_down"]:
+		for ev in InputMap.action_get_events(a):
+			if ev is InputEventJoypadMotion:
+				InputMap.action_erase_event(a, ev)
+
+
+## Lê o eixo do analógico e devolve se deu um passo (manda ui_* como ação).
+func stick_menu_event(event: InputEvent) -> bool:
+	if not (event is InputEventJoypadMotion) or not STICK_ACTIONS.has(event.axis):
+		return false
+	var axis: int = event.axis
+	var v: float = event.axis_value
+	var held: int = int(stick_dir.get(axis, 0))
+	var now := held
+	if absf(v) < STICK_OFF:
+		now = 0
+	elif v >= STICK_ON:
+		now = 1
+	elif v <= -STICK_ON:
+		now = -1
+	stick_dir[axis] = now
+	if now != 0 and now != held:
+		stick_hold[axis] = 0.0
+		_stick_step(axis, now)
+		return true
+	return false
+
+
+func _stick_step(axis: int, dir: int) -> void:
+	var names: Array = STICK_ACTIONS[axis]
+	var act: String = names[1] if dir > 0 else names[0]
+	for pressed in [true, false]:
+		var e := InputEventAction.new()
+		e.action = act
+		e.pressed = pressed
+		Input.parse_input_event(e)
+
+
+func _stick_repeat(delta: float) -> void:
+	for axis in stick_dir.keys():
+		var dir: int = stick_dir[axis]
+		if dir == 0:
+			continue
+		var t: float = float(stick_hold.get(axis, 0.0)) + delta
+		if t >= STICK_REPEAT_DELAY:
+			t -= STICK_REPEAT
+			_stick_step(axis, dir)
+		stick_hold[axis] = t

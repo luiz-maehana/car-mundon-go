@@ -322,6 +322,9 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-401** Terceira copa no Grand Prix: **Copa Lua** (Feira Livre, Geladeira Polar, Telhados da Vila).
 - [x] **RF-402** O trajeto do painel marca buracos, ponte (P) e obstáculos que andam (O), e a lista de atrações fala deles (vacas, bolas de feno, robô aspirador, buracos, ponte).
 
+### Analógico nos menus (v0.35)
+- [x] **RF-410** O analógico nos menus anda **uma casa por empurrão** (liga acima de 60%, só solta abaixo de 30%) e, segurado, repete depois de 0,45 s a cada 0,16 s. Vale pra todo menu (o analógico saiu das ações ui_* e o Game converte); o direcional e o teclado continuam iguais. Antes cada evento de movimento contava um passo.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -473,6 +476,7 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-94** Deserto: rápido passa o cânion voando; 3 bolas de feno.
 - [x] **CA-95** Cozinha: robô anda ao longo da pista e derruba; colher no alto entre as bancadas, sem rio.
 - [x] **CA-96** Pista refeita guarda recorde em seção própria (`queijo@2`).
+- [x] **CA-97** Analógico fora das ações de menu; um empurrão tremido = uma casa; voltar só um pouco não conta; soltar e empurrar de novo conta; segurar repete.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

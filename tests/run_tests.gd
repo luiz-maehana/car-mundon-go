@@ -61,6 +61,7 @@ func _run() -> void:
 	await _test_feira()
 	_test_char_colors()
 	await _test_redone_tracks()
+	await _test_stick_menu()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -2596,3 +2597,52 @@ func _test_redone_tracks() -> void:
 	print("CA-96 recorde por versão do traçado")
 	var Records = load("res://scripts/records.gd")
 	check(Records.section("queijo") == "queijo@2" and Records.section("churrasco") == "churrasco", "pista refeita guarda recorde à parte (%s)" % Records.section("queijo"))
+
+
+func _stick(v: float) -> InputEventJoypadMotion:
+	var e := InputEventJoypadMotion.new()
+	e.axis = JOY_AXIS_LEFT_X
+	e.axis_value = v
+	e.device = 0
+	return e
+
+
+func _test_stick_menu() -> void:
+	print("CA-97 analógico no menu: uma casa por empurrão")
+	var game = root.get_node_or_null("Game")
+	game.mode = "race"
+	game.num_players = 1
+	var menu = await _new_menu()
+	var has_axis := false
+	for a in ["ui_left", "ui_right", "ui_up", "ui_down"]:
+		for ev in InputMap.action_get_events(a):
+			if ev is InputEventJoypadMotion:
+				has_axis = true
+	check(not has_axis, "analógico fora das ações de menu (o Game converte)")
+	var m0: int = menu.mode_i
+	# um empurrão "tremido" chega como vários eventos acima do limite
+	for v in [0.4, 0.65, 0.8, 0.95, 1.0, 0.9, 0.7, 0.62]:
+		Input.parse_input_event(_stick(v))
+	await process_frame
+	await process_frame
+	check(menu.mode_i == (m0 + 1) % 3, "um empurrão = uma casa (%d → %d)" % [m0, menu.mode_i])
+	Input.parse_input_event(_stick(0.5))  # ainda inclinado: não conta de novo
+	await process_frame
+	check(menu.mode_i == (m0 + 1) % 3, "voltar só um pouco não dá outro passo")
+	Input.parse_input_event(_stick(0.05))
+	Input.parse_input_event(_stick(0.9))
+	await process_frame
+	await process_frame
+	check(menu.mode_i == (m0 + 2) % 3, "soltou e empurrou de novo: mais uma casa")
+	# segurando: repete devagar
+	var before: int = menu.mode_i
+	for s in 60:  # 1 s segurado
+		game._stick_repeat(1.0 / 60.0)
+	await process_frame
+	await process_frame
+	var steps := wrapi(menu.mode_i - before, 0, 3)
+	check(steps >= 1, "segurando 1 s repete (%d passos a mais)" % steps)
+	Input.parse_input_event(_stick(0.0))
+	await process_frame
+	menu.queue_free()
+	await process_frame
