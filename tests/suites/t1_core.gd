@@ -1,0 +1,634 @@
+extends "res://tests/suites/test_base.gd"
+## Testes — núcleo: pilotos, pistas, corrida, controles, multijogador, sons, largada, pausa, abertura, gráficos, assets, configurações, HUD.
+## (camada de run_tests.gd — ver o topo de run_tests.gd)
+
+
+func _test_characters() -> void:
+	print("CA-01 pilotos")
+	var chars: Array = load("res://scripts/characters.gd").LIST
+	check(chars.size() == 8, "8 pilotos")
+	var ids := {}
+	for c in chars:
+		ids[c["id"]] = true
+		var total := 0
+		for s in ["speed", "accel", "handling", "weight"]:
+			check(c[s] >= 1 and c[s] <= 5, "%s.%s em 1..5" % [c["name"], s])
+			total += c[s]
+		check(total == 12, "%s soma 12 (=%d)" % [c["name"], total])
+	check(ids.size() == 8, "IDs únicos")
+	print("CA-09 arte dos camundongos")
+	var Chars = load("res://scripts/characters.gd")
+	for c in chars:
+		for kind in ["full", "head"]:
+			var tex: Texture2D = Chars.art(c["id"], kind)
+			var ok: bool = tex != null and tex.get_width() > 64
+			if ok:
+				var img := tex.get_image()
+				if img.is_compressed():
+					img.decompress()
+				ok = img.get_pixel(0, 0).a < 0.05 or img.get_pixel(img.get_width() - 1, 0).a < 0.05
+			check(ok, "%s: arte '%s' com fundo transparente" % [c["name"], kind])
+
+
+func _test_track() -> void:
+	var Track = load("res://scripts/track.gd")
+	for td in Track.TRACKS:
+		_test_one_track(td["id"])
+
+
+func _test_one_track(track_id: String) -> void:
+	var Track = load("res://scripts/track.gd")
+	var t = Track.new(track_id)
+	print("CA-02 pista: %s" % t.def["name"])
+	check(t.def["id"] == track_id, "pista '%s' encontrada" % track_id)
+	var n: int = t.sample_count()
+	check(t.length > 800.0, "comprimento %.0f m > 800" % t.length)
+	var min_s := INF
+	var max_s := 0.0
+	for i in n:
+		var d: float = t.points[i].distance_to(t.points[(i + 1) % n])
+		min_s = minf(min_s, d)
+		max_s = maxf(max_s, d)
+	check(min_s > 1.8 and max_s < 2.2, "espaçamento %.2f..%.2f m" % [min_s, max_s])
+	# sem sobreposição: amostras longe no índice devem estar longe no espaço
+	var gap := int(80.0 / Track.SPACING)
+	var worst := INF
+	for i in n:
+		for j in range(i + gap, n):
+			if n - (j - i) < gap:
+				continue
+			if _at_crossing(t, i, j):  # RF-300: o 8 se cruza de propósito, só ali
+				continue
+			if absf(t.points[i].y - t.points[j].y) >= 6.0:  # RF-322: andares diferentes (viaduto)
+				continue
+			# RF-320: muro estreito (looping, ponte) deixa os trechos chegarem mais perto
+			worst = minf(worst, t.points[i].distance_to(t.points[j]) - (t.wall_at(i) + t.wall_at(j) - Track.WALL * 2.0))
+	check(worst > Track.WALL * 2.0 + 2.0, "menor distância entre trechos %.1f m > %.1f" % [worst, Track.WALL * 2.0 + 2.0])
+	t.free()
+
+
+func _test_race() -> void:
+	print("CA-03..06 corrida simulada")
+	var Race = load("res://scripts/race.gd")
+	var race = Race.new()
+	race.use_game_settings = false
+	race.autopilot_player = true
+	race.player_chars = ["telles"]
+	race.laps = 3
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	check(race.karts.size() == 8, "8 karts no grid")
+	var dt := 1.0 / 60.0
+	var t := 0.0
+	while t < 360.0 and not race.all_finished():
+		race.step(dt)
+		t += dt
+	check(race.all_finished(), "todos terminaram (%.1f s simulados)" % t)
+	var ranking: Array = race.ranking()
+	var ranks := {}
+	var last_time := -1.0
+	var ordered := true
+	var max_lat := 0.0
+	var fastest := INF
+	for k in ranking:
+		ranks[k.rank] = true
+		if k.finish_time < last_time:
+			ordered = false
+		last_time = k.finish_time
+		max_lat = maxf(max_lat, k.max_abs_lateral)
+		fastest = minf(fastest, k.finish_time)
+		print("     %dº %-9s %s" % [k.rank, k.display_name, "%.2f s" % k.finish_time if k.finished else "--"])
+	check(ranks.size() == 8, "posições 1..8 sem repetição")
+	check(ordered, "tempos de chegada crescentes")
+	var Track = load("res://scripts/track.gd")
+	check(max_lat <= Track.WALL + 0.5, "lateral máx %.2f <= muro+0.5" % max_lat)
+	var min_possible: float = race.laps * race.track.length / 45.0
+	check(fastest > min_possible, "corrida mais rápida %.1f s > limite físico %.1f s" % [fastest, min_possible])
+	var used := 0
+	for k in race.karts:
+		used += k.items_used
+	check(race.boxes_picked > 0 and used > 0, "itens pegos=%d usados=%d" % [race.boxes_picked, used])
+	check(race.results_shown, "tela de resultado apareceu")
+	race.queue_free()
+	await process_frame
+
+
+func _test_inputs() -> void:
+	print("CA-08 controles por jogador")
+	var Game = load("res://scripts/game.gd")
+	Game.setup_inputs()
+	var all_ok := true
+	var pads_ok := true
+	for p in 4:
+		for a in Game.ACTIONS:
+			var act: String = Game.action(p, a)
+			if not InputMap.has_action(act):
+				all_ok = false
+				continue
+			for e in InputMap.action_get_events(act):
+				if (e is InputEventJoypadButton or e is InputEventJoypadMotion) and e.device != p:
+					pads_ok = false
+	check(all_ok, "todas as ações existem para J1..J4")
+	check(pads_ok, "eventos de controle presos ao device do jogador")
+	var w := InputEventKey.new()
+	w.physical_keycode = KEY_W
+	var up := InputEventKey.new()
+	up.physical_keycode = KEY_UP
+	check(InputMap.event_is_action(w, "p1_accelerate") and not InputMap.event_is_action(w, "p2_accelerate"), "W acelera só o J1")
+	check(InputMap.event_is_action(up, "p2_accelerate") and not InputMap.event_is_action(up, "p1_accelerate"), "↑ acelera só o J2")
+	var rshift := InputEventKey.new()
+	rshift.physical_keycode = KEY_SHIFT
+	rshift.location = KEY_LOCATION_RIGHT
+	var lshift := InputEventKey.new()
+	lshift.physical_keycode = KEY_SHIFT
+	lshift.location = KEY_LOCATION_LEFT
+	check(InputMap.event_is_action(rshift, "p2_drift") and not InputMap.event_is_action(rshift, "p1_drift"), "Shift direito = drift do J2")
+	check(InputMap.event_is_action(lshift, "p1_drift") and not InputMap.event_is_action(lshift, "p2_drift"), "Shift esquerdo = drift do J1")
+	var pad2 := InputEventJoypadButton.new()
+	pad2.button_index = JOY_BUTTON_A
+	pad2.device = 1
+	pad2.pressed = true
+	check(InputMap.event_is_action(pad2, "p2_accelerate") and not InputMap.event_is_action(pad2, "p1_accelerate"), "controle 2 acelera só o J2")
+
+
+func _test_multiplayer() -> void:
+	print("CA-07 tela dividida com 4 jogadores")
+	var Race = load("res://scripts/race.gd")
+	var race = Race.new()
+	race.use_game_settings = false
+	race.autopilot_player = true
+	race.player_chars = ["digao", "nanni", "burcca", "mugurin"]
+	race.laps = 1
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	check(race.players.size() == 4 and race.cameras.size() == 4 and race.huds.size() == 4, "4 jogadores, 4 câmeras, 4 HUDs")
+	var back_ok := true
+	for i in 4:
+		if race.karts.find(race.players[i]) != 4 + i or race.players[i].char_id != race.player_chars[i]:
+			back_ok = false
+	check(back_ok, "humanos nas 4 últimas posições do grid, na ordem J1..J4")
+	var ids := {}
+	for k in race.karts:
+		ids[k.char_id] = true
+	check(ids.size() == 8, "8 pilotos diferentes no grid")
+	var masks_ok := true
+	for i in 4:
+		var bit := 1 << (10 + i)
+		if race.cameras[i].cull_mask & bit != 0:
+			masks_ok = false
+	check(masks_ok, "cada câmera esconde só o nome do próprio jogador")
+	var dt := 1.0 / 60.0
+	var t := 0.0
+	while t < 200.0 and not race.all_finished():
+		race.step(dt)
+		t += dt
+	check(race.all_finished(), "todos terminaram (%.1f s simulados)" % t)
+	check(race.results_shown, "resultado apareceu após todos os humanos terminarem")
+	race.queue_free()
+	await process_frame
+
+
+func _test_sounds() -> void:
+	print("CA-10 sons")
+	var Sfx = load("res://scripts/sfx.gd")
+	var ok := true
+	var files := 0
+	for n in Sfx.NAMES:
+		var s: AudioStream = Sfx.get_sound(n)
+		if s == null or s.get_length() < 0.05:
+			ok = false
+			printerr("     som vazio: ", n)
+		if s and s.resource_name.begins_with("res://assets/audio"):
+			files += 1
+	check(ok, "%d efeitos com conteúdo" % Sfx.NAMES.size())
+	check(files == Sfx.NAMES.size(), "todos vêm de arquivo CC0 (%d/%d)" % [files, Sfx.NAMES.size()])
+	var eng: AudioStream = Sfx.get_sound("engine")
+	check(eng is AudioStreamWAV and eng.loop_mode == AudioStreamWAV.LOOP_FORWARD, "motor em loop")
+	var m: AudioStreamWAV = Sfx.synth("music_menu")
+	var secs: float = m.data.size() / 2.0 / m.mix_rate
+	check(m.loop_mode == AudioStreamWAV.LOOP_FORWARD and secs > 8.0, "reserva sintetizada em loop (%.1f s)" % secs)
+
+
+func _test_start() -> void:
+	print("CA-11 largada turbo")
+	var r: String = await _run_start(1.2)
+	check(r.begins_with("turbo|true|false"), "acelerar a 1.2 s do VAI dá turbo (%s)" % r)
+	check(r.ends_with("|3|true"), "3 bipes + som do VAI")
+	r = await _run_start(3.0)
+	check(r.begins_with("queimou|false|true"), "acelerar desde o início queima (%s)" % r)
+	r = await _run_start(-1.0)
+	check(r.begins_with("|false|false"), "sem acelerar, largada normal (%s)" % r)
+
+
+func _test_pause() -> void:
+	print("CA-12 pause")
+	var race = await _new_race(["telles"], true)
+	var dt := 1.0 / 60.0
+	for i in 60 * 6:
+		race.step(dt)
+	race.toggle_pause()
+	var t0: float = race.race_time
+	var p0: Vector3 = race.karts[0].position
+	for i in 120:
+		race.step(dt)
+	check(race.paused and race.race_time == t0 and race.karts[0].position == p0, "pausado: tempo e karts parados")
+	race.toggle_pause()
+	for i in 60:
+		race.step(dt)
+	check(not race.paused and race.race_time > t0, "despausou: corrida continua")
+	race.queue_free()
+	await process_frame
+
+
+func _test_intro() -> void:
+	print("CA-13 tela de abertura")
+	check(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/intro.tscn", "intro é a cena principal")
+	var intro = load("res://scenes/intro.tscn").instantiate()
+	root.add_child(intro)
+	await process_frame
+	var tex: Texture2D = intro.art.texture
+	check(tex != null and tex.get_width() >= 1280, "arte da abertura carregada (%s)" % (str(tex.get_size()) if tex else "null"))
+	var ev := InputEventKey.new()
+	ev.physical_keycode = KEY_ENTER
+	ev.pressed = true
+	intro._unhandled_input(ev)
+	check(intro.leaving, "tecla leva pro menu")
+	await process_frame
+	await process_frame
+	var cur := current_scene
+	check(cur != null and cur.scene_file_path == "res://scenes/menu.tscn", "menu carregado depois da abertura")
+	if cur:
+		cur.queue_free()
+	await process_frame
+
+
+func _test_faces() -> void:
+	print("CA-14 caras só no mapa/HUD")
+	var race = await _new_race(["fejaum"], true)
+	var textured := 0
+	for k in race.karts:
+		for n in k.find_children("*", "MeshInstance3D", true, false):
+			var m = n.material_override
+			if m is StandardMaterial3D and m.albedo_texture != null:
+				textured += 1
+	check(textured == 0, "nenhum kart com a arte do rosto (%d)" % textured)
+	for i in 120:
+		race.step(1.0 / 60.0)
+	var hud = race.huds[0]
+	hud.update_hud(1.0 / 60.0)
+	var order: Array = race.ranking()
+	var names_ok: bool = hud.rank_rows.size() == 8
+	for i in mini(8, hud.rank_rows.size()):
+		if hud.rank_rows[i]["name"].text != order[i].display_name or hud.rank_rows[i]["head"].texture == null:
+			names_ok = false
+	check(names_ok, "HUD lista os 8 pilotos com busto, na ordem do ranking")
+	hud.minimap.queue_redraw()
+	await process_frame
+	await process_frame
+	check(hud.minimap.heads_drawn == 8, "minimapa desenha 8 bustos (%d)" % hud.minimap.heads_drawn)
+	race.queue_free()
+	await process_frame
+
+
+func _test_all_tracks() -> void:
+	print("CA-15 corrida de 1 volta em cada pista")
+	var Track = load("res://scripts/track.gd")
+	for td in Track.TRACKS:
+		var race = load("res://scripts/race.gd").new()
+		race.use_game_settings = false
+		race.autopilot_player = true
+		race.player_chars = ["nanni"]
+		race.track_id = td["id"]
+		race.laps = 1
+		root.add_child(race)
+		if race.karts.is_empty():
+			await process_frame
+		var t := 0.0
+		while t < 150.0 and not race.all_finished():
+			race.step(1.0 / 60.0)
+			t += 1.0 / 60.0
+		var max_lat := 0.0
+		for k in race.karts:
+			max_lat = maxf(max_lat, k.max_abs_lateral)
+		check(race.track.def["id"] == td["id"] and race.all_finished(), "%s: 8 terminaram em %.1f s" % [td["name"], t])
+		check(max_lat <= Track.WALL + 0.5, "%s: ninguém atravessou o muro (%.2f)" % [td["name"], max_lat])
+		race.queue_free()
+		await process_frame
+
+
+func _test_v08() -> void:
+	var dt := 1.0 / 60.0
+	var race = await _new_race(["telles"], true)
+	race.state = "racing"
+	race.countdown = 0.0
+	var tr = race.track
+	var n: int = tr.sample_count()
+	var a = race.karts[0]
+	var b = race.karts[1]
+	# afasta todo mundo pra não interferir
+	for i in race.karts.size():
+		_put(race.karts[i], (i * 60) % n, 0.0, 0.0)
+
+	print("CA-16 seta de turbo")
+	var pad: Dictionary = tr.pads[0]
+	_put(a, wrapi(int(pad["idx"]) - 3, 0, n), float(pad["lat"]), 20.0)
+	a.ai_lane = float(pad["lat"])
+	var got_pad := false
+	for i in 30:
+		a.step(dt, true)
+		if a.boost_time > 0.0:
+			got_pad = true
+	check(got_pad, "passou na seta e ganhou turbo")
+
+	print("CA-17 rampa e manobra")
+	_put(a, wrapi(tr.ramp_idx - 4, 0, n), 0.0, 26.0)
+	a.ai_lane = 0.0
+	a.ai_trick_chance = 1.0
+	a.max_height = 0.0
+	var landed_with_boost := false
+	var was_air := false
+	for i in 180:
+		a.step(dt, true)
+		if a.airborne:
+			was_air = true
+		elif was_air and not landed_with_boost:
+			landed_with_boost = a.boost_time > 0.0
+			break
+	check(was_air and a.max_height > 1.0, "decolou (altura máx %.2f m)" % a.max_height)
+	check(not a.airborne and a.position.y == 0.0, "voltou ao chão")
+	check(landed_with_boost, "manobra no ar deu turbo no pouso")
+
+	print("CA-18 vácuo")
+	var si := int(n * 0.0) + 5
+	_put(a, si + 4, 0.0, 25.0)   # na frente
+	_put(b, si, 0.0, 25.0)       # 8 m atrás, alinhado
+	var slip := false
+	var t := 0.0
+	while t < 2.0:
+		race._update_slipstream(dt)
+		if b.boost_time > 0.0:
+			slip = true
+			break
+		t += dt
+	check(slip, "atrás e alinhado: turbo de vácuo em %.2f s" % t)
+	_put(b, si + 4, 6.0, 25.0)   # do lado
+	b.slip_time = 0.0
+	var side_slip := false
+	for i in 150:
+		race._update_slipstream(dt)
+		if b.boost_time > 0.0:
+			side_slip = true
+	check(not side_slip, "do lado: sem vácuo")
+
+	print("CA-19 queijinhos")
+	a.cheese = 0
+	var top0: float = a.top_speed()
+	var c0: Dictionary = race.cheeses[0]
+	c0["cd"] = 0.0
+	a.position = c0["pos"] - Vector3.UP * 0.7
+	race._update_cheese(dt)
+	check(a.cheese == 1 and a.top_speed() > top0, "pegou 1 queijo e ficou mais rápido")
+	a.cheese = 10
+	var c1: Dictionary = race.cheeses[1]
+	c1["cd"] = 0.0
+	a.position = c1["pos"] - Vector3.UP * 0.7
+	race._update_cheese(dt)
+	check(a.cheese == 10, "máximo de 10")
+	a.spin_time = 0.0
+	a.hit()
+	check(a.cheese == 7, "casca tira 3 (%d)" % a.cheese)
+
+	print("CA-21 roleta")
+	a.spin_time = 0.0
+	a.item = ""
+	a.give_item("turbo")
+	check(not a.can_use_item(), "item recém-pego bloqueado")
+	for i in 70:
+		a.item_roll -= dt
+	check(a.can_use_item(), "liberado depois de 1 s")
+
+	print("CA-22 drift nível 3")
+	_put(a, 20, 0.0, 22.0)
+	a.drifting = true
+	a.drift_dir = 1.0
+	a.drift_charge = 2.5
+	a.in_drift = false
+	a._move(dt)
+	check(not a.drifting and a.boost_time >= 1.5, "turbo roxo %.2f s" % a.boost_time)
+	race.queue_free()
+	await process_frame
+
+	print("CA-20 dificuldade")
+	var ranges := []
+	for d in 3:
+		var r = load("res://scripts/race.gd").new()
+		r.use_game_settings = false
+		r.autopilot_player = true
+		r.player_chars = ["telles"]
+		r.difficulty = d
+		root.add_child(r)
+		if r.karts.is_empty():
+			await process_frame
+		var lo := INF
+		var hi := -INF
+		for k in r.karts:
+			if not k.is_player:
+				lo = minf(lo, k.ai_skill)
+				hi = maxf(hi, k.ai_skill)
+		var sk: Array = r.DIFFICULTY[d]["skill"]
+		ranges.append(lo >= sk[0] - 0.0001 and hi <= sk[1] + 0.0001)
+		r.queue_free()
+		await process_frame
+	check(ranges == [true, true, true], "habilidade da IA dentro da faixa em fácil/normal/difícil")
+
+
+func _test_graphics() -> void:
+	var Gfx = load("res://scripts/gfx.gd")
+	var Track = load("res://scripts/track.gd")
+	print("CA-23 qualidade gráfica")
+	var d: Dictionary = Track.TRACKS[0]
+	var hi: Environment = Gfx.environment(d, 2)
+	var lo: Environment = Gfx.environment(d, 0)
+	check(hi.glow_enabled and hi.ssao_enabled, "ALTO: glow e SSAO ligados")
+	check(not lo.glow_enabled and not lo.ssao_enabled, "BAIXO: glow e SSAO desligados")
+	var game = root.get_node_or_null("Game")
+	if game:
+		game.graphics_high = false
+		var r_lo = await _new_race(["telles"], true)
+		check(r_lo.get_viewport().msaa_3d == Viewport.MSAA_DISABLED, "BAIXO: MSAA desligado")
+		r_lo.queue_free()
+		await process_frame
+		game.graphics_high = true
+
+	print("CA-24 partículas")
+	var race = await _new_race(["telles"], true)
+	var k = race.karts[0]
+	check(k.sparks.size() == 2 and k.p_flame != null and k.p_dust != null and k.p_confetti != null, "kart tem emissores")
+	race.state = "racing"
+	k.drifting = true
+	k.drift_charge = 1.0
+	k.boost_time = 1.0
+	k.lateral = 12.0
+	k.speed = 20.0
+	k._update_visuals(1.0 / 60.0)
+	check(k.sparks[0].emitting and k.p_flame.emitting and k.p_dust.emitting, "drift → faíscas, turbo → fogo, grama → poeira")
+
+	print("CA-25 texturas e cenário")
+	var tm: StandardMaterial3D = race.track.get_node("TrackMesh").material_override
+	var gm: StandardMaterial3D = race.track.get_node("Ground").material_override
+	check(tm.albedo_texture != null and tm.normal_texture != null and tm.uv1_triplanar, "pista com granulado + relevo triplanar")
+	check(gm.albedo_texture != null, "chão com textura")
+	check(race.track.get_node_or_null("Grandstand") != null and race.track.scenery_count > 100, "arquibancada + cenário (%d instâncias)" % race.track.scenery_count)
+	race.queue_free()
+	await process_frame
+
+
+func _test_assets() -> void:
+	var race = await _new_race(["burcca"], true)
+	print("CA-26 kart do Kenney")
+	var ok := true
+	for k in race.karts:
+		var kk = k.model.get_node_or_null("KenneyKart")
+		var ch = kk.find_child("character", true, false) if kk else null
+		if kk == null or ch == null or ch.visible or k.wheels.size() != 4 or k.front_wheels.size() != 2 or k.kart_body == null:
+			ok = false
+	check(ok, "8 karts com GLB do Car Kit, piloto original escondido, 4 rodas (2 dianteiras)")
+	var sm = race.karts[0].kart_body.material_override
+	check(sm is ShaderMaterial and sm.get_shader_parameter("tint") == race.karts[0].color, "carroceria recolorida na cor do piloto")
+
+	print("CA-27 visual de cada amigo")
+	var Chars = load("res://scripts/characters.gd")
+	var looks_ok := true
+	for c in Chars.LIST:
+		var lk: Dictionary = c.get("look", {})
+		for key in ["fur", "hair", "hair_color", "beard", "glasses", "shirt"]:
+			if not lk.has(key):
+				looks_ok = false
+	check(looks_ok, "8 pilotos com look completo")
+	var by_id := {}
+	for k in race.karts:
+		by_id[k.char_id] = k.driver
+	var b = by_id["burcca"]
+	var t = by_id["telles"]
+	check(_has_part(b, "Glasses") and _has_part(b, "Beard") and _has_part(b, "Headphones"), "Burcca: óculos + barba + fone")
+	check(_has_part(t, "Glasses") and _has_part(t, "Beard") and not _has_part(t, "Headphones"), "Telles: óculos escuros + cavanhaque, sem fone")
+	check(not _has_part(by_id["mugurin"], "Glasses") and not _has_part(by_id["digao"], "Glasses"), "Mugurin e Digão sem óculos")
+
+	print("CA-28 itens e cenário do Kenney")
+	check(race.cheeses.size() > 0 and race.cheeses[0]["node"].name == "cheese", "queijinhos com o queijo do Food Kit")
+	var k0 = race.karts[0]
+	race._spawn_hazard("casca", k0.position, Vector3.ZERO, 5.0, k0)
+	check(race.hazards[-1]["node"].name == "banana", "casca é a banana do Food Kit")
+	var tr = race.track
+	check(tr.get_node_or_null("StartGantry") != null, "pórtico de largada do Racing Kit")
+	var props := 0
+	for c in tr.get_children():
+		if c.name.begins_with("pits") or c.name.begins_with("tent") or c.name.begins_with("banner") or c.name.begins_with("billboard"):
+			props += 1
+	check(props >= 4, "props do Racing Kit no cenário (%d)" % props)
+	var tank := 0
+	var zaw := 0
+	for mi in tr.find_children("*", "MeshInstance3D", true, false):
+		for s in mi.mesh.get_surface_count():
+			var m = mi.get_active_material(s)
+			if m and m.resource_name.to_lower().contains("tankco"):
+				tank += 1
+			if m and m.resource_name == "zawsze":
+				zaw += 1
+	check(tank == 0 and zaw > 0, "marca ZAWSZE no lugar de TANKCO (%d banners)" % zaw)
+	race.queue_free()
+	await process_frame
+
+	print("CA-29 fonte e tema")
+	var Game = load("res://scripts/game.gd")
+	var th: Theme = Game.build_theme()
+	var f: Font = th.default_font
+	check(f != null and f.resource_path.ends_with("Kenney Future Narrow.ttf"), "tema usa Kenney Future Narrow")
+	var need := "Car Mundon'GO Digão CONTRAMÃO VÁCUO 1º/8 Começar · ç ã õ é í ó ú"
+	var missing := ""
+	for ch in need:
+		if ch != " " and not f.has_char(ch.unicode_at(0)):
+			missing += ch
+	check(missing == "", "fonte tem todos os caracteres do jogo%s" % ("" if missing == "" else " (faltam: %s)" % missing))
+
+
+func _test_settings() -> void:
+	var game = root.get_node_or_null("Game")
+	if game == null:
+		check(false, "autoload Game presente")
+		return
+	print("CA-30 salvar/carregar configurações")
+	game.reset_settings()
+	game.settings["vol_music"] = 0.35
+	game.settings["fov"] = 80.0
+	game.settings["show_names"] = false
+	game.settings["speed_unit"] = "mph"
+	game.save_settings()
+	game.settings = game.DEFAULTS.duplicate()
+	game.load_settings()
+	check(is_equal_approx(game.settings["vol_music"], 0.35) and game.settings["fov"] == 80.0 and game.settings["show_names"] == false and game.settings["speed_unit"] == "mph", "valores voltam iguais do arquivo")
+	var cfg := ConfigFile.new()
+	cfg.load(game.settings_path)
+	cfg.erase_section_key("settings", "quality")
+	cfg.save(game.settings_path)
+	game.load_settings()
+	check(game.settings["quality"] == game.DEFAULTS["quality"], "chave faltando usa o padrão")
+
+	print("CA-31 volumes nos buses")
+	game.set_setting("vol_sfx", 0.5)
+	game.set_setting("vol_engine", 0.0)
+	var sfx_db := AudioServer.get_bus_volume_db(AudioServer.get_bus_index("SFX"))
+	var eng_db := AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Engine"))
+	check(absf(sfx_db - linear_to_db(0.5)) < 0.1 and eng_db <= -79.0, "SFX %.1f dB, Engine %.1f dB (silêncio)" % [sfx_db, eng_db])
+
+	print("CA-32 tela de configurações")
+	var SM = load("res://scripts/settings_menu.gd")
+	var sm = SM.new()
+	root.add_child(sm)
+	await process_frame
+	check(sm.tabs.get_tab_count() == 4, "4 abas (ÁUDIO, VÍDEO, JOGO, CONTROLES)")
+	check(sm.controls.size() >= 15, "%d opções configuráveis" % sm.controls.size())
+	sm.controls["vol_master"]["node"].value = 0.2
+	check(is_equal_approx(game.settings["vol_master"], 0.2), "mexer no slider muda a configuração")
+	sm._reset()
+	check(game.settings == game.DEFAULTS and is_equal_approx(sm.controls["vol_master"]["node"].value, game.DEFAULTS["vol_master"]), "PADRÃO restaura tudo (e a tela)")
+	sm.close()
+	await process_frame
+
+	print("CA-33 configurações na corrida")
+	var race = await _new_race(["nanni"], true)
+	game.set_setting("show_names", false)
+	game.set_setting("show_minimap", false)
+	game.set_setting("show_ranking", false)
+	game.set_setting("fov", 64.0)
+	race.apply_settings()
+	var names_off := true
+	for k in race.karts:
+		if k.name_label.visible:
+			names_off = false
+	check(names_off and not race.huds[0].minimap.visible and not race.huds[0].ranking_box.visible, "nomes, minimapa e lista escondidos")
+	check(race.base_fov == 64.0, "campo de visão base = 64°")
+	game.reset_settings()
+	race.apply_settings()
+	check(race.karts[0].name_label.visible and race.huds[0].minimap.visible, "voltam ao ligar de novo")
+	race.queue_free()
+	await process_frame
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(game.settings_path))
+
+
+## Regressão: com 1 jogador a contagem ficava num canto (label não esticava pra tela toda).
+func _test_hud_layout() -> void:
+	print("CA-34 contagem no centro da tela")
+	for chars in [["telles"], ["telles", "nanni"]]:
+		var race = await _new_race(chars, true)
+		for i in 3:
+			await process_frame
+		race.step(1.0 / 60.0)
+		var h = race.huds[0]
+		var c: Vector2 = h.lbl_center.position + h.lbl_center.size * 0.5
+		var mid: Vector2 = h.root.size * 0.5
+		check(h.lbl_center.text == "3" and c.distance_to(mid) < 2.0 and h.lbl_center.size.x >= h.root.size.x - 2.0, "%d jogador(es): '3' centralizado (%s vs %s)" % [chars.size(), c, mid])
+		race.queue_free()
+		await process_frame

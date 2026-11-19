@@ -30,6 +30,19 @@ func _frames(n: int) -> void:
 		await process_frame
 
 
+## Menu em 4 etapas (MODO → PILOTO → PISTA → AJUSTES/CORRER!) e espera a corrida carregar
+## (passa pela tela de carregamento).
+func _start_from_menu() -> void:
+	for i in 4:
+		await _press(KEY_ENTER)
+		await _frames(20)
+	for i in 300:
+		if _scene().ends_with("race.tscn") and current_scene.get("player") != null:
+			break
+		await process_frame
+	await _frames(30)
+
+
 func _scene() -> String:
 	return current_scene.scene_file_path if current_scene else "?"
 
@@ -44,8 +57,7 @@ func _run() -> void:
 	await _press(KEY_ENTER)
 	await _frames(20)
 	_log("menu: " + _scene())
-	await _press(KEY_ENTER)
-	await _frames(60)
+	await _start_from_menu()
 	_log("corrida: " + _scene())
 	var race = current_scene
 	race.player.autopilot = true
@@ -60,11 +72,10 @@ func _run() -> void:
 	await _press(KEY_ESCAPE)
 	await _frames(10)
 	_log("pause de novo; aperta Menu")
-	race.pause_layer.get_child(1).get_child(0).get_child(4).pressed.emit()
+	race.menu_from_pause()  # mesmo caminho do botão MENU
 	await _frames(30)
 	_log("menu: " + _scene())
-	await _press(KEY_ENTER)
-	await _frames(60)
+	await _start_from_menu()
 	race = current_scene
 	_log("corrida 2: " + _scene())
 	race.player.autopilot = true

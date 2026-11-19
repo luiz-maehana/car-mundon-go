@@ -57,7 +57,9 @@ my $dir = $src; $dir =~ s{[^/]+$}{};
 my $prev = '';
 for my $i (0..$#layers) {
 	my $ly = $layers[$i];
-	my $ext = $i == 0 ? $ly->{ext} : "\"res://scripts/$prev\"";
+	my $ext = $i == 0 ? $ly->{ext} : "\"res://$dir$prev\"";  # caminho relativo à pasta do original
+	my $sub = "$dir$ly->{file}"; $sub =~ s{[^/]+$}{};
+	mkdir $sub unless -d $sub;
 	my $txt = "extends $ext\n## $ly->{doc}\n## (camada de " . ($src =~ s{.*/}{}r) . " — ver o topo de " . ($src =~ s{.*/}{}r) . ")\n\n" . $ly->{out};
 	$txt =~ s/\n{3,}/\n\n\n/g;
 	open my $o, '>:raw', "$dir$ly->{file}" or die; print $o $txt; close $o;
@@ -65,6 +67,6 @@ for my $i (0..$#layers) {
 }
 # arquivo original: cabeçalho com o novo extends + o que sobrou
 my $head = join('', @L[0..$hdr_end-1]);
-$head =~ s/^extends .*$/extends "res:\/\/scripts\/$prev"/m;
+$head =~ s/^extends .*$/extends "res:\/\/$dir$prev"/m;
 open my $o, '>:raw', $src or die; print $o $head . $rest; close $o;
 printf "%s: %d blocos; camadas: %s\n", $src, scalar(@blocks), join(', ', map { $_->{file} } @layers);

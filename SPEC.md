@@ -343,6 +343,12 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-440** **Leitura segura** de `settings.cfg` e `records.cfg` (`scripts/safe_cfg.gd`): o ConfigFile do Godot cria objetos e carrega scripts a partir do texto (`Object(...)`, `Resource("...")`) — um arquivo trocado rodava código só de ser aberto (comprovado). Agora o texto é conferido antes: com objeto/recurso/chamada embutido, ou maior que 4 MB, o arquivo é recusado, renomeado pra `.bloqueado` e o jogo usa o padrão.
 - [x] **RF-441** **Validação** do que é lido: cada configuração numérica tem faixa (volume 0–1, campo de visão 50–110, escala 0,5–2...), unidade só kmh/mph, teclas só de ações conhecidas com códigos inteiros, botões 0–127; recorde só com tempo positivo, piloto que existe e fantasma do tamanho certo (até 1 h).
 
+### Código organizado (v0.39)
+- [x] **RF-450** Perigos da pista: um script por tipo com a mesma interface (spawn/update/ahead) e um registro; a corrida só itera.
+- [x] **RF-451** Poderes: um script por poder (use/ai_wants) e um registro; corrida e IA só delegam.
+- [x] **RF-452** Dados das pistas em `track_data.gd`; nomes de tipos em `ids.gd`.
+- [x] **RF-453** `track`, `kart`, `race` e `menu` divididos em camadas por responsabilidade (ver §7); testes divididos em grupos. Nenhuma mudança pra quem joga (os mesmos testes passam).
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -373,23 +379,39 @@ Jogadores 3 e 4 só por controle. Com 1 jogador, as teclas do J2 também valem p
 
 ## 7. Arquitetura
 
+As classes grandes são **divididas em camadas por responsabilidade** (cadeia de herança: cada
+arquivo estende o anterior e tem um trabalho só; o estado fica na base). Quem usa continua
+carregando o arquivo do topo (`track.gd`, `kart.gd`, `race.gd`, `menu.gd`).
+
 ```
 scenes/intro.tscn    -> scripts/intro.gd       tela de abertura (cena principal)
-scenes/menu.tscn     -> scripts/menu.gd        jogadores, seleção de piloto e voltas
-scenes/race.tscn     -> scripts/race.gd        orquestra a corrida (estado, itens, colisões, ranking, câmera)
+scenes/menu.tscn     -> scripts/menu.gd        menu em etapas
+                        menu_widgets.gd → menu_pilot.gd → menu_track.gd → menu.gd
+                        (peças comuns · MODO/PILOTO · PISTA/AJUSTES · navegação e entrada)
+scenes/race.tscn     -> scripts/race.gd        corrida
+                        race_state.gd → race_world.gd → race_track_hazards.gd → race_items.gd → race_modes.gd → race.gd
+                        (estado · ambiente/câmeras/karts · perigos · itens/caixas/batidas/poderes · contra o relógio/GP/chegada · passo/pausa)
 scenes/gp_final.tscn -> scripts/gp_final.gd    pódio final do Grand Prix
-scripts/game.gd      (autoload "Game")         piloto escolhido, voltas, mapa de inputs
-scripts/characters.gd                          dados dos 8 pilotos
-scripts/track.gd                               pista procedural (Catmull-Rom -> amostras a cada 2 m) + malhas
-scripts/kart.gd                                física arcade, drift, IA, visual do kart
-scripts/hud.gd, scripts/minimap.gd             interface
-tests/run_tests.gd                             testes headless
-scripts/records.gd                             recordes e fantasma do contra o relógio (user://records.cfg)
-tools/screenshot.gd                            prints do menu/corrida para revisão visual
-tools/screenshot_tt.gd                         prints do contra o relógio (usa recordes à parte)
-tools/screenshot_ui.gd                         prints da navegação por controle (menu, pause, confirmação do GP)
-tools/esc_flow.gd                              fluxo real abertura→menu→corrida→pause→resultado com teclas simuladas (procura erro/travada)
+scripts/game.gd      (autoload "Game")         escolhas, copas, controles (troca de teclas, analógico nos menus), carregamento
+scripts/characters.gd                          dados dos 8 pilotos (stats, cor/número, poder)
+scripts/track.gd                               pista: track_geometry.gd → track_features.gd → track_visuals.gd → track_scenery.gd → track.gd
+                                               (traçado/largura/altura · atrações e resgate · malhas · cenário dos temas · montagem)
+scripts/track_data.gd                          dados das 9 pistas (só dados)
+scripts/kart.gd                                kart: kart_state.gd → kart_physics.gd → kart_power.gd → kart_ai.gd → kart.gd
+                                               (estado · física/resgate · poder · IA · modelo/controle/visual)
+scripts/hazards/*.gd + registry.gd             um script por perigo da pista (spawn/update/ahead) — Strategy + registro
+scripts/powers/*.gd + registry.gd              um script por poder (use/ai_wants) — Strategy + registro
+scripts/ids.gd                                 nomes de perigos, zonas, poderes (sem texto solto no código)
+scripts/safe_cfg.gd                            leitura segura dos arquivos do jogador (RF-440)
+scripts/records.gd                             recordes e fantasma (user://records.cfg, seção por versão do traçado)
+scripts/hud.gd, scripts/minimap.gd, scripts/track_map.gd   interface
+tests/run_tests.gd + tests/suites/*.gd         testes headless (base de ajudantes + 5 grupos por assunto)
+tools/split_gd.pl                              refatoração mecânica: move funções inteiras pra camadas
+tools/probe_track.gd, probe_all.gd, ai_report.gd   medir pista e IA (extensão, alturas, quedas por trecho)
+tools/screenshot*.gd                           prints pra revisão visual
 ```
+
+**Como estender:** perigo novo = `scripts/hazards/<tipo>.gd` + uma linha em `hazards/registry.gd` + o tipo em `ids.gd`; poder novo = `scripts/powers/<id>.gd` + uma linha em `powers/registry.gd` + `"power"` no piloto; pista nova = uma entrada em `track_data.gd` (e decoração em `track_scenery.gd` se tiver tema novo).
 
 **Modelo de pista:** a linha central é amostrada a cada 2 m (`points`, `tangents`, `rights`). Todo kart guarda o índice da amostra mais próxima (busca local numa janela) e a distância lateral. Isso resolve sem motor de física: grama (`|lateral| > 8`), muro (`|lateral| > 15`), progresso/voltas e mira da IA.
 
