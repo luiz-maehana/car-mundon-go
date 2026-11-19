@@ -63,6 +63,7 @@ func _run() -> void:
 	await _test_redone_tracks()
 	await _test_stick_menu()
 	await _test_powers()
+	await _test_drift_vs_turn()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -2849,4 +2850,43 @@ func _test_powers() -> void:
 	hud.update_hud(1.0 / 60.0)
 	check(hud.lbl_power.text != "" and r2.player.power_name().to_upper() in hud.lbl_power.text, "HUD mostra o poder (%s)" % hud.lbl_power.text)
 	r2.queue_free()
+	await process_frame
+
+
+## Giro (rad/s) medido em 0,5 s: drift (com o direcional "dentro", neutro) ou curva normal.
+func _yaw_rate(race, drift: bool, steer: float) -> float:
+	var k = race.player
+	_put(k, 60, 0.0, 26.0)
+	k.speed = 26.0
+	var h0: float = k.heading
+	Input.action_press("p1_accelerate")
+	if drift:
+		Input.action_press("p1_steer_left")
+		Input.action_press("p1_drift")
+		for s in 4:  # entra no drift
+			k.step(1.0 / 60.0, true)
+		Input.action_release("p1_steer_left")
+		if steer < 0.0:
+			Input.action_press("p1_steer_left")
+		h0 = k.heading
+	else:
+		Input.action_press("p1_steer_left")
+	for s in 30:
+		k.speed = 26.0
+		k.step(1.0 / 60.0, true)
+	var rate := absf(wrapf(k.heading - h0, -PI, PI)) / 0.5
+	for a in ["p1_accelerate", "p1_steer_left", "p1_drift"]:
+		Input.action_release(a)
+	return rate
+
+
+func _test_drift_vs_turn() -> void:
+	print("CA-108 drift não gira mais que uma curva normal (estilo Mario Kart)")
+	var race = await _power_race(["telles"])
+	var normal := _yaw_rate(race, false, -1.0)
+	var drift_in := _yaw_rate(race, true, -1.0)
+	var drift_mid := _yaw_rate(race, true, 0.0)
+	check(drift_in <= normal * 0.92, "fechando o drift: %.2f rad/s x curva normal %.2f" % [drift_in, normal])
+	check(drift_mid <= normal * 0.65 and drift_mid > 0.1, "drift solto (sem direcional) é um arco aberto: %.2f rad/s" % drift_mid)
+	race.queue_free()
 	await process_frame

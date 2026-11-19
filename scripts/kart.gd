@@ -25,8 +25,8 @@ const SHIELD_TIME := 8.0    # RF-203
 const TRAP_TIME := 1.2      # RF-202
 const MAX_CHEESE := 10
 const ITEM_BOOST := 1.3
-const DRIFT_TURN_MIN := 0.45  # RF-280: giro no drift (× turn_rate) abrindo a curva...
-const DRIFT_TURN_MAX := 1.05  # ...e fechando
+const DRIFT_TURN_MIN := 0.2   # RF-280/430: giro no drift (× giro normal) abrindo a curva...
+const DRIFT_TURN_MAX := 0.85  # ...e fechando (nunca mais que uma curva normal, igual Mario Kart)
 const DRIFT_GRIP := 6.0
 const BOOST_MULT := 1.3
 const OFFROAD_MULT := 0.5
@@ -433,7 +433,9 @@ func _move(delta: float) -> void:
 	if drifting:
 		var into := (steer * drift_dir + 1.0) * 0.5
 		var amount := lerpf(DRIFT_TURN_MIN, DRIFT_TURN_MAX, into)  # RF-280: mais suave
-		heading -= drift_dir * amount * turn_rate * delta
+		# RF-430: mesmo amortecimento de velocidade da curva normal (antes o drift girava ~30% a mais)
+		var drift_damp := lerpf(1.0, 0.8, clampf(speed / max_speed, 0.0, 1.0))
+		heading -= drift_dir * amount * turn_rate * drift_damp * delta
 		drift_charge += delta * (0.6 + 0.8 * into)
 		if drift_master_time > 0.0:  # RF-425: drift mestre do Telles
 			drift_charge = maxf(drift_charge, MINI_TURBO_3)

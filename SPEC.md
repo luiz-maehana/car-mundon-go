@@ -336,6 +336,9 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-427** **Shinando — Violão**: escudo por 5 s. **Digão — Mão Leve**: rouba o item de quem está logo à frente; se ninguém tiver, ganha um Queijo Triplo. HUD mostra o poder embaixo da caixa de item: quanto falta de queijinho, PRONTO (com a tecla), ativo/turbos sobrando ou a recarga; mensagem ao usar.
 - [x] **RF-428** Escolha de piloto mostra o poder e a explicação de cada um, e uma linha de como liberar. A IA usa o poder de cada um no momento certo (lenta quando tem alguém à frente, grave/trombada com alguém perto, fantasma/violão com perigo à frente, drift mestre no drift, mão leve quando alguém à frente tem item).
 
+### Drift no estilo Mario Kart, de novo (v0.37)
+- [x] **RF-430** O drift passa a ter o mesmo amortecimento de velocidade da curva normal (antes girava ~30% a mais em alta velocidade) e é um **arco que se abre e fecha**: fechando (direcional pro lado do drift) gira no máximo 85% de uma curva normal; solto, metade disso; abrindo, quase reto. O ganho do drift é o mini-turbo, não girar mais.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -492,6 +495,7 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-99** Câmera Lenta: todos os outros lentos (metade da velocidade, anel azul visível) por 1 s; quem tem escudo não (e perde o escudo).
 - [x] **CA-100..106** Violão (escudo 5 s), Planta (5 mini-turbos e recarga), Grave (derruba até 12 m, não mais longe), Fantasma (nada acerta, atravessa karts, transparente), Drift Mestre (drift curto sai com turbo máximo), Trombada (quem encosta roda, Ortiz não se mexe), Mão Leve (rouba o item de quem está à frente ou ganha Queijo Triplo).
 - [x] **CA-107** A IA usa os poderes (8 de 8 em 40 s com queijinho cheio) e o HUD mostra o poder.
+- [x] **CA-108** Na mesma velocidade, drift fechado gira no máximo 92% da curva normal e o drift solto até 65% (arco aberto).
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
