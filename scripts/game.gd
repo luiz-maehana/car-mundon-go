@@ -285,7 +285,7 @@ const GP_POINTS := [15, 12, 10, 8, 6, 4, 2, 1]
 const GP_TRACKS := ["queijo", "deserto", "cozinha"]
 const CharsData = preload("res://scripts/characters.gd")
 
-var mode := "race"          # "race" | "gp"
+var mode := "race"          # "race" | "gp" | "tt" (contra o relógio, RF-230)
 var gp_index := 0           # corrida atual (0..2)
 var gp_points := {}         # id -> pontos
 var gp_wins := {}           # id -> vitórias
@@ -309,6 +309,10 @@ func start_gp() -> void:
 
 func is_gp() -> bool:
 	return mode == "gp"
+
+
+func is_tt() -> bool:
+	return mode == "tt"
 
 
 ## Pontua a corrida atual a partir da ordem final (ids, 1º primeiro). Devolve id -> pontos

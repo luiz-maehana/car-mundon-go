@@ -49,6 +49,7 @@ var speed_lines: ColorRect
 var ranking_box: Control
 var lbl_unit: Label
 var boost_fx := 0.0
+var lbl_record: Label
 
 
 func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
@@ -149,6 +150,12 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 		gpl.text = "GRAND PRIX · CORRIDA %d/%d" % [g.gp_index + 1, g.GP_TRACKS.size()]
 		gpl.position = lbl_laptime.position + Vector2(0, 26)
 		gpl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.2))
+	# RF-232: recorde da pista no contra o relógio
+	if race.time_trial:
+		lbl_record = _label(20)
+		lbl_record.position = lbl_laptime.position + Vector2(0, 26)
+		lbl_record.add_theme_color_override("font_color", Color(0.75, 0.9, 1.0))
+		lbl_record.text = record_text(race.tt_record)
 	# RF-131: velocímetro + barra de drift (canto inferior direito)
 	lbl_speed = _label(64)
 	lbl_speed.anchor_left = 1.0
@@ -232,6 +239,9 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 	mm.setup(race.track, race.karts, kart)
 	minimap = mm
 	_build_ranking()
+	if race.time_trial:
+		lbl_pos.visible = false
+		ranking_box.visible = false
 
 
 ## RF-113: lista de posições ao vivo com busto + nome, na lateral direita.
@@ -274,6 +284,8 @@ func _build_ranking() -> void:
 
 
 func _update_ranking() -> void:
+	if race.time_trial:
+		return
 	var order: Array = race.ranking()
 	for i in rank_rows.size():
 		var r: Dictionary = rank_rows[i]
@@ -398,7 +410,7 @@ func update_hud(delta: float) -> void:
 		pop = 1.0 - race.race_time / 0.8
 		center_color = Color(0.35, 1.0, 0.45)
 	elif p.finished and race.race_time - p.finish_time < FINISH_TEXT_TIME:
-		lbl_center.text = "CHEGOU! %dº" % p.rank
+		lbl_center.text = "CHEGOU!" if race.time_trial else "CHEGOU! %dº" % p.rank
 	else:
 		lbl_center.text = ""
 	lbl_center.add_theme_color_override("font_color", center_color)
@@ -435,6 +447,9 @@ func show_results() -> void:
 	if results:
 		return
 	_fit()
+	if race.time_trial:
+		_show_tt_results()
+		return
 	results = PanelContainer.new()
 	results.add_theme_stylebox_override("panel", _panel_style(Color(0.05, 0.06, 0.12, 0.94)))
 	results.anchor_left = 0.5
@@ -560,4 +575,99 @@ func apply_settings() -> void:
 	if minimap:
 		minimap.visible = Gfx.setting("show_minimap", true)
 	if ranking_box:
-		ranking_box.visible = Gfx.setting("show_ranking", true)
+		ranking_box.visible = Gfx.setting("show_ranking", true) and not race.time_trial
+
+
+# ---------------------------------------------------------------- contra o relógio (RF-232/234)
+
+static func record_text(rec: Dictionary) -> String:
+	if not rec.has("race_time"):
+		return "RECORDE: --  (seja o primeiro!)"
+	var who: String = Chars.find(String(rec.get("race_char", ""))).get("name", "?")
+	return "RECORDE %s (%s)" % [fmt_time(float(rec["race_time"])), who]
+
+
+## Diferença pro recorde antigo: "-0:01.23" (melhor) ou "+0:00.50" (pior).
+static func diff_text(t: float, ref: float) -> String:
+	var d := t - ref
+	return ("-" if d < 0.0 else "+") + fmt_time(absf(d))
+
+
+func _show_tt_results() -> void:
+	_fit()
+	var k: Node3D = race.player
+	var old: Dictionary = race.tt_record
+	var got: Dictionary = race.tt_result
+	results = PanelContainer.new()
+	results.add_theme_stylebox_override("panel", _panel_style(Color(0.05, 0.06, 0.12, 0.94)))
+	results.anchor_left = 0.5
+	results.anchor_right = 0.5
+	results.anchor_top = 0.5
+	results.anchor_bottom = 0.5
+	results.offset_left = -440
+	results.offset_right = 440
+	results.offset_top = -300
+	results.offset_bottom = 300
+	root.add_child(results)
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 10)
+	results.add_child(outer)
+	var title := _label(40, outer)
+	title.text = "CONTRA O RELÓGIO · %s" % race.track.def["name"]
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 28)
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	outer.add_child(body)
+	var art := Chars.art_rect(k.char_id, 300, "full")
+	if art:
+		art.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		body.add_child(art)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 6)
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	body.add_child(vb)
+	if got.get("race", false):
+		var nr := _label(46, vb)
+		nr.text = "NOVO RECORDE!"
+		nr.add_theme_color_override("font_color", Color(0.45, 1.0, 0.5))
+	var total := _label(56, vb)
+	total.text = fmt_time(k.finish_time)
+	if old.has("race_time"):
+		var cmp := _label(24, vb)
+		cmp.text = "Recorde anterior %s   (%s)" % [fmt_time(float(old["race_time"])), diff_text(k.finish_time, float(old["race_time"]))]
+		cmp.add_theme_color_override("font_color", Color(0.45, 1.0, 0.5) if k.finish_time < float(old["race_time"]) else Color(1.0, 0.5, 0.4))
+	var best: float = race.tt_best_lap()
+	for i in race.tt_laps.size():
+		var lt: float = race.tt_laps[i]
+		var row := _label(26, vb)
+		row.text = "Volta %d   %s" % [i + 1, fmt_time(lt)]
+		if is_equal_approx(lt, best):
+			row.text += "   ★ melhor"
+			row.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	var lap_rec := _label(22, vb)
+	if got.get("lap", false):
+		lap_rec.text = "NOVA MELHOR VOLTA DA PISTA!"
+		lap_rec.add_theme_color_override("font_color", Color(0.45, 1.0, 0.5))
+	elif old.has("lap_time"):
+		var who: String = Chars.find(String(old.get("lap_char", ""))).get("name", "?")
+		lap_rec.text = "Melhor volta da pista %s (%s)" % [fmt_time(float(old["lap_time"])), who]
+		lap_rec.modulate = Color(1, 1, 1, 0.75)
+	var buttons := HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.add_theme_constant_override("separation", 16)
+	outer.add_child(buttons)
+	var again := Button.new()
+	again.text = "TENTAR DE NOVO (R)"
+	again.pressed.connect(race.restart)
+	GameScript.make_primary(again)
+	again.add_theme_font_size_override("font_size", 22)
+	buttons.add_child(again)
+	var menu := Button.new()
+	menu.text = "MENU (Esc)"
+	menu.add_theme_font_size_override("font_size", 22)
+	menu.pressed.connect(race.to_menu)
+	buttons.add_child(menu)
+	again.grab_focus()

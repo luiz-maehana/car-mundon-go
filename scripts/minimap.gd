@@ -43,6 +43,13 @@ func _draw() -> void:
 	var a := _map(pts[0] + track.rights[0] * 8.0)
 	var b := _map(pts[0] - track.rights[0] * 8.0)
 	draw_line(a, b, Color.WHITE, 3.0)
+	# RF-233: fantasma do recorde (bolinha translúcida)
+	var race: Node = track.get_parent()
+	var ghost = race.get("tt_ghost") if race else null
+	if ghost and is_instance_valid(ghost) and ghost.visible:
+		var gc := _map(ghost.position)
+		draw_circle(gc, 9.0, Color(1, 1, 1, 0.35))
+		draw_circle(gc, 6.0, Color(0.75, 0.9, 1.0, 0.7))
 	# RF-112: busto de cada piloto; o jogador por último (por cima) e maior
 	heads_drawn = 0
 	var base := clampf(minf(size.x, size.y) * 0.15, 22.0, 56.0)

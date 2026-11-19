@@ -217,6 +217,13 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-221** A música troca sozinha ao mudar de tela/pista (`Game.play_music`), sem reiniciar se o estilo já está tocando. A aceleração da volta final continua valendo.
 - [x] **RF-222** Torcida sintetizada (`crowd`) no VAI! e quando um humano cruza a chegada.
 
+### Contra o relógio (v0.16)
+- [x] **RF-230** `MODO` no menu alterna CORRIDA → GRAND PRIX → **CONTRA O RELÓGIO**. Nesse modo é sempre 1 jogador (o botão de jogadores fica travado em 1) e a pista é escolhida normalmente.
+- [x] **RF-231** Na corrida contra o relógio só existe o kart do jogador (sem IA, sem caixas de item); ele larga na frente do grid e recebe um **Queijo Triplo** no VAI!. Queijinhos e setas continuam valendo.
+- [x] **RF-232** Recordes por pista em `user://records.cfg`: melhor tempo total (e quem fez) e melhor volta (e quem fez). O HUD mostra o recorde durante a corrida.
+- [x] **RF-233** **Fantasma**: a posição/direção do jogador é gravada a cada 0.1 s; a melhor corrida da pista vira um kart translúcido que repete o percurso (interpolado) nas próximas tentativas. Também aparece como bolinha azul no minimapa.
+- [x] **RF-234** Resultado do contra o relógio: tempo total, tempo de cada volta, melhor volta, comparação com o recorde e "NOVO RECORDE!" quando bate; botões `TENTAR DE NOVO (R)` e `MENU`.
+
 ## 5. Controles
 
 | Ação | Jogador 1 (teclado) | Jogador 2 (teclado) | Controle (J1..J4 = controle 1..4) |
@@ -251,7 +258,9 @@ scripts/track.gd                               pista procedural (Catmull-Rom -> 
 scripts/kart.gd                                física arcade, drift, IA, visual do kart
 scripts/hud.gd, scripts/minimap.gd             interface
 tests/run_tests.gd                             testes headless
+scripts/records.gd                             recordes e fantasma do contra o relógio (user://records.cfg)
 tools/screenshot.gd                            prints do menu/corrida para revisão visual
+tools/screenshot_tt.gd                         prints do contra o relógio (usa recordes à parte)
 ```
 
 **Modelo de pista:** a linha central é amostrada a cada 2 m (`points`, `tangents`, `rights`). Todo kart guarda o índice da amostra mais próxima (busca local numa janela) e a distância lateral. Isso resolve sem motor de física: grama (`|lateral| > 8`), muro (`|lateral| > 15`), progresso/voltas e mira da IA.
@@ -303,6 +312,9 @@ tools/screenshot.gd                            prints do menu/corrida para revis
 - [x] **CA-40** IA sem item vai pra faixa da caixa da próxima fileira; IA atrás de um kart lento na mesma faixa troca de faixa.
 - [x] **CA-41** Os 8 pilotos têm personalidade completa e diferente entre si.
 - [x] **CA-42** Os 5 estilos de música existem, em loop, com mais de 8 s e diferentes entre si; cada pista aponta pra um estilo; `play_music` troca o stream e não reinicia o mesmo estilo; a torcida existe e não está vazia.
+- [x] **CA-43** Recordes: gravar e ler devolve os mesmos tempos; só um tempo melhor substitui o recorde.
+- [x] **CA-44** Corrida contra o relógio tem 1 kart, nenhuma caixa e o jogador com Queijo Triplo após o VAI!; termina e registra o recorde e as voltas.
+- [x] **CA-45** O fantasma grava a corrida e, na tentativa seguinte, passa pelos mesmos pontos nos mesmos tempos (erro < 1 m).
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

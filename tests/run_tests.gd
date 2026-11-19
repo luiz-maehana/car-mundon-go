@@ -44,6 +44,7 @@ func _run() -> void:
 	await _test_new_items()
 	await _test_smart_ai()
 	_test_music()
+	await _test_time_trial()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -967,3 +968,91 @@ func _test_music() -> void:
 		check(game.music.stream != s1 and game.current_music == "menu", "estilo novo troca a trilha")
 	var crowd: AudioStreamWAV = Sfx.get_sound("crowd")
 	check(crowd != null and crowd.data.size() > 20000, "torcida existe")
+
+
+func _tt_race(laps: int) -> Node:
+	var race = load("res://scripts/race.gd").new()
+	race.use_game_settings = false
+	race.autopilot_player = true
+	race.time_trial = true
+	race.player_chars = ["burcca", "telles"]  # o 2º tem que ser ignorado
+	race.track_id = "queijo"
+	race.laps = laps
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	return race
+
+
+func _test_time_trial() -> void:
+	var Records = load("res://scripts/records.gd")
+	Records.path = "user://test_records.cfg"
+	Records.clear_all()
+
+	print("CA-43 recordes")
+	var g1 := PackedFloat32Array([1, 2, 3, 0.5, 4, 5, 6, 0.7])
+	var got: Dictionary = Records.submit("pista_x", "nanni", 61.5, 20.25, g1)
+	check(got["race"] and got["lap"], "primeiro tempo vira recorde de corrida e de volta")
+	var rec: Dictionary = Records.get_record("pista_x")
+	check(is_equal_approx(rec["race_time"], 61.5) and is_equal_approx(rec["lap_time"], 20.25) and rec["race_char"] == "nanni" and rec["ghost"] == g1, "ler devolve os mesmos tempos, piloto e fantasma")
+	got = Records.submit("pista_x", "ortiz", 62.0, 21.0, PackedFloat32Array())
+	check(not got["race"] and not got["lap"] and Records.get_record("pista_x")["race_char"] == "nanni", "tempo pior não substitui")
+	got = Records.submit("pista_x", "ortiz", 63.0, 19.0, PackedFloat32Array())
+	rec = Records.get_record("pista_x")
+	check(not got["race"] and got["lap"] and rec["lap_char"] == "ortiz" and rec["race_char"] == "nanni" and rec["ghost"] == g1, "só a melhor volta muda quando só ela é melhor")
+	var s: Dictionary = Records.ghost_sample(g1, 0.05)
+	check(s["pos"].is_equal_approx(Vector3(2.5, 3.5, 4.5)), "fantasma interpola entre quadros")
+	Records.clear_all()
+
+	print("CA-44 corrida contra o relógio")
+	var race = await _tt_race(2)
+	check(race.karts.size() == 1 and race.players.size() == 1, "1 kart só (%d)" % race.karts.size())
+	check(race.boxes.is_empty(), "nenhuma caixa de item")
+	check(not race.cheeses.is_empty(), "queijinhos continuam")
+	check(race.tt_ghost == null, "sem recorde = sem fantasma")
+	var dt := 1.0 / 60.0
+	while race.state == "countdown":
+		race.step(dt)
+	check(race.player.item == "triplo" or race.player.items_used > 0, "Queijo Triplo no VAI! (item=%s)" % race.player.item)
+	var marks := {}  # race_time (quadro) -> posição real, pra comparar com o fantasma
+	var t := 0.0
+	while t < 300.0 and not race.results_shown:
+		race.step(dt)
+		t += dt
+		var f := int(round(race.race_time / dt))
+		if f % 90 == 0 and not race.player.finished:
+			marks[f] = race.player.position
+	check(race.results_shown and race.tt_submitted, "terminou e mostrou o resultado")
+	check(race.tt_laps.size() == 2, "2 voltas registradas (%s)" % str(race.tt_laps))
+	var sum := 0.0
+	for l in race.tt_laps:
+		sum += l
+	check(absf(sum - race.player.finish_time) < 0.05, "voltas somam o tempo total (%.2f / %.2f)" % [sum, race.player.finish_time])
+	rec = Records.get_record("queijo")
+	check(race.tt_result.get("race", false) and is_equal_approx(rec.get("race_time", 0.0), race.player.finish_time) and rec.get("race_char") == "burcca", "recorde gravado (%s)" % str(rec.get("race_time")))
+	check(is_equal_approx(rec.get("lap_time", 0.0), race.tt_best_lap()), "melhor volta gravada")
+	var frames: int = rec.get("ghost", PackedFloat32Array()).size() / 4
+	check(absf(frames * Records.GHOST_STEP - race.player.finish_time) < 0.25, "fantasma cobre a corrida (%d quadros)" % frames)
+	race.queue_free()
+	await process_frame
+
+	print("CA-45 fantasma na tentativa seguinte")
+	race = await _tt_race(2)
+	check(race.tt_ghost != null and not race.karts.has(race.tt_ghost), "fantasma existe e não é um kart da corrida")
+	while race.state == "countdown":
+		race.step(dt)
+	var worst := 0.0
+	var checked := 0
+	t = 0.0
+	while t < 300.0 and not race.results_shown:
+		race.step(dt)
+		t += dt
+		var f := int(round(race.race_time / dt))
+		if marks.has(f) and race.tt_ghost.visible:
+			worst = maxf(worst, race.tt_ghost.position.distance_to(marks[f]))
+			checked += 1
+	check(checked > 10 and worst < 1.0, "fantasma passa nos mesmos pontos (%d pontos, erro máx %.2f m)" % [checked, worst])
+	race.queue_free()
+	Records.clear_all()
+	Records.path = Records.DEFAULT_PATH
+	await process_frame
