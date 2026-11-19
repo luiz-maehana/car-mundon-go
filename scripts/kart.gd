@@ -7,6 +7,8 @@ const GameScript = preload("res://scripts/game.gd")
 const Chars = preload("res://scripts/characters.gd")
 const Gfx = preload("res://scripts/gfx.gd")
 const MouseModel = preload("res://scripts/mouse_model.gd")
+const PowerRegistry = preload("res://scripts/powers/registry.gd")
+const Ids = preload("res://scripts/ids.gd")
 const KenneyKart = preload("res://assets/kenney/karts/kart-oopi.glb")
 const RecolorShader = preload("res://shaders/kart_recolor.gdshader")
 const KART_SCALE := 2.3
@@ -382,13 +384,13 @@ func _move(delta: float) -> void:
 	# RF-270: zonas de superfície (no ar não valem)
 	var zone: Dictionary = {} if airborne else track.zone_at(track_idx, lateral)
 	zone_kind = String(zone.get("kind", ""))
-	if zone_kind == "farofa" and boost_time <= 0.0:
+	if zone_kind == Ids.ZN_FAROFA and boost_time <= 0.0:
 		top *= TrackScript.FAROFA_MULT
-	elif zone_kind == "sand" and boost_time <= 0.0:  # RF-301: caixa de areia
+	elif zone_kind == Ids.ZN_SAND and boost_time <= 0.0:  # RF-301: caixa de areia
 		top *= TrackScript.SAND_MULT
-	elif zone_kind == "belt":
+	elif zone_kind == Ids.ZN_BELT:
 		top *= 1.15
-	elif zone_kind == "ice":
+	elif zone_kind == Ids.ZN_ICE:
 		top *= 1.05
 	if boost_time > 0.0:
 		boost_time -= delta
@@ -445,14 +447,14 @@ func _move(delta: float) -> void:
 		heading -= steer * turn_rate * speed_factor * high_speed_damp * air_damp * delta
 
 	var grip := DRIFT_GRIP if drifting else (1.5 if airborne else 9.0)  # RF-280: no drift a direção segue o bico; o "de lado" é só no modelo
-	if zone_kind == "ice" and not airborne:  # RF-323: gelo escorrega (a direção demora a obedecer)
+	if zone_kind == Ids.ZN_ICE and not airborne:  # RF-323: gelo escorrega (a direção demora a obedecer)
 		grip = ICE_GRIP * (0.75 if drifting else 1.0)
 	vel = vel.lerp(forward() * speed, 1.0 - exp(-grip * delta))
 	position += vel * delta
 	# esteiras carregam o kart (mesmo parado)
-	if zone_kind == "belt":
+	if zone_kind == Ids.ZN_BELT:
 		position += track.tangents[track_idx] * TrackScript.BELT_SPEED * float(zone["dir"]) * delta
-	elif zone_kind == "belt_side":
+	elif zone_kind == Ids.ZN_BELT_SIDE:
 		position += track.rights[track_idx] * TrackScript.BELT_SIDE_SPEED * float(zone["dir"]) * delta
 
 
@@ -840,10 +842,10 @@ func _ai_tactics(n: int, m: float) -> void:
 	# desvio de casca/ratoeira
 	var reach := int(16 + 10 * ai_avoid)
 	var ahead: Array = race.ground_hazards_ahead(self, reach)
-	ahead.sort_custom(func(a, b): return a.get("pit", false) and not b.get("pit", false))  # buraco primeiro
+	ahead.sort_custom(func(a, b): return a.get(Ids.AHEAD_PIT, false) and not b.get(Ids.AHEAD_PIT, false))  # buraco primeiro
 	for hz in ahead:
 		var id: int = hz["id"]
-		var must: bool = hz.get("pit", false)  # RF-390: buraco — todo mundo desvia, com folga do tamanho dele
+		var must: bool = hz.get(Ids.AHEAD_PIT, false)  # RF-390: buraco — todo mundo desvia, com folga do tamanho dele
 		if not ai_seen.has(id):
 			ai_seen[id] = must or randf() < 0.25 + 0.75 * ai_avoid
 		var clear: float = float(hz.get("r", 0.0)) + 2.4 if must else 2.8
@@ -1199,22 +1201,8 @@ func _ai_power(delta: float) -> void:
 		near = minf(near, d)
 		if (o.position - position).dot(forward()) > 0.0:
 			ahead_near = minf(ahead_near, d)
-	var go := false
-	match power_id():
-		"slowmo":
-			go = rank > 1
-		"guitar", "ghost":
-			go = not race.ground_hazards_ahead(self, 22).is_empty() or near < 5.0 or randf() < 0.004
-		"plant":
-			go = track.curvature_at(track_idx) < 0.3
-		"bass":
-			go = near < 10.0
-		"drift":
-			go = drifting
-		"ram":
-			go = ahead_near < 9.0
-		"steal":
-			go = race.kart_ahead_with_item(self) != null or randf() < 0.003
+	var impl := PowerRegistry.of(power_id())  # RF-451: cada poder decide (scripts/powers)
+	var go: bool = impl != null and impl.ai_wants(race, self, {"near": near, "ahead_near": ahead_near})
 	if go:
 		in_power = true
 		ai_power_wait = 1.0
