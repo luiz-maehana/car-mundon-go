@@ -686,13 +686,27 @@ func _grandstand() -> void:
 		post.material_override = concrete
 		post.position = Vector3(side * 9.5, 3.6, z)
 		stand.add_child(post)
+	# placa pendurada na frente do telhado: o letreiro tem fundo (antes flutuava no ar)
+	var frame_mat := StandardMaterial3D.new()
+	frame_mat.albedo_color = def["wall"][0]
+	var board_mat := StandardMaterial3D.new()
+	board_mat.albedo_color = Color(0.08, 0.09, 0.16)
+	for part in [[Vector3(0.22, 2.3, 33.0), frame_mat, -1.62], [Vector3(0.12, 1.9, 32.2), board_mat, -1.75]]:
+		var mi := MeshInstance3D.new()
+		var bx := BoxMesh.new()
+		bx.size = part[0]
+		mi.mesh = bx
+		mi.material_override = part[1]
+		mi.position = Vector3(side * float(part[2]), 5.9, 0)
+		mi.name = "BannerBoard"
+		stand.add_child(mi)
 	var banner := Label3D.new()
 	banner.text = "CAR'MUNDON'GO!"
-	banner.font_size = 160
-	banner.pixel_size = 0.02
+	banner.font_size = 150
+	banner.pixel_size = 0.0115
 	banner.outline_size = 24
 	banner.modulate = Color(1.0, 0.85, 0.2)
-	banner.position = Vector3(side * -1.9, 6.3, 0)
+	banner.position = Vector3(side * -1.84, 5.9, 0)
 	banner.rotation.y = -PI / 2.0 * side
 	banner.double_sided = false  # sem texto espelhado por trás
 	stand.add_child(banner)

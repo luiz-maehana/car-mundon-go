@@ -367,3 +367,37 @@ Teste manual (checklist por release):
 6. ~~**Largada turbo**~~ → §4 RF-85..87.
 7. **Export web** (GitHub Pages) pra turma jogar no navegador.
 8. **Multiplayer online.**
+
+## 10. Plano: pistas novas (rascunho, nada implementado)
+
+Ideia geral: o mundo é **visto do tamanho de um camundongo** — cada pista é um lugar comum da casa/cidade em escala gigante, com um "truque" que muda o jeito de pilotar. Uma segunda copa (**Copa Farofa**, 4 pistas) entra no Grand Prix junto da atual (**Copa Queijo**). Tudo original; assets só CC0.
+
+### Pistas
+
+| # | Pista | Onde | Truque de pilotagem | Tecnologia nova |
+|---|---|---|---|---|
+| P1 | **Churrascada de Domingo** | em cima de uma mesa de churrasco | trecho sobre a **grelha** com labaredas que sobem em ritmo (acertam quem passa na hora errada); **farofa** espalhada = areia que segura o kart; espetos e vinagrete de cenário; pulo da tábua de carne pro prato | T1 superfícies, T4 perigos com tempo |
+| P2 | **Parquinho em Oito** | parquinho da praça à tarde | traçado em **8 com cruzamento no mesmo nível** (dá pra bater de lado em quem cruza); **escorregador** vira rampa gigante; **caixa de areia** como atalho lento; gangorra que sobe e desce | T5 cruzamento, T4 gangorra |
+| P3 | **Fábrica de Queijo** | linha de produção | **esteiras** que empurram pra frente (rápido) ou pro lado; **rodas de queijo rolando** pela pista como obstáculo; prensas que descem; queijinhos em dobro | T1 esteira, T4 obstáculos móveis |
+| P4 | **Geladeira Polar** | dentro da geladeira aberta, luz azul | **prateleiras em andares** ligadas por rampas (pista sobe e desce); **gelo** que escorrega no congelador; potes de iogurte e caixa de leite como túnel | T3 elevação, T1 gelo |
+| P5 | **Telhados da Vila** | telhados à noite, lua cheia | **pulos entre prédios** (cair = volta pro último ponto); varal de roupa como teto; **gato de verdade patrulhando** um telhado; antenas e caixas d'água | T3 elevação, T6 vãos + respawn, T4 gato |
+| P6 | **Feira Livre** | rua de feira de manhã | pista que **afunila** entre as barracas e abre na rua; caixotes, pastel, caldo de cana; um atalho por baixo das barracas | T2 largura variável, T5 atalho |
+
+### Tecnologia, em ordem de custo
+
+| Id | O que | Custo | Libera |
+|---|---|---|---|
+| T1 | **Zonas de superfície** por trecho: gelo (menos aderência), farofa/areia (freia), esteira (empurra), água (corrente lateral). Visual + física + IA sabendo evitar\/aproveitar | baixo | P1, P3, P4 |
+| T2 | **Largura variável** por ponto de controle (muro acompanha; IA usa a largura local) | baixo | P6 |
+| T4 | **Perigos com tempo/movimento** reaproveitando o sistema de perigos: labareda cíclica, roda rolando no trilho, prensa, gangorra, gato patrulha | médio | P1, P2, P3, P5 |
+| T5 | **Cruzamento / atalho**: pista que passa por cima de si no mesmo nível (busca de amostra já é local) e atalho como segundo caminho curto com progresso próprio | médio–alto | P2, P6 |
+| T3 | **Elevação + inclinação**: altura por ponto de controle, chão do kart segue a pista, curvas inclinadas, câmera acompanha | alto | P4, P5 |
+| T6 | **Vãos + respawn**: trechos sem chão; cair devolve no último checkpoint (junta com o item do roadmap "voltar o kart preso") | médio (depois de T3) | P5 |
+
+### Ordem sugerida
+1. **T1 + T4 → P1 Churrascada e P3 Fábrica** (tecnologia barata, muda bastante o jogo).
+2. **T5 → P2 Parquinho em Oito** (fecha a Copa Farofa com 3 pistas novas + uma das atuais).
+3. **"Voltar o kart preso" + T3 + T6 → P4 Geladeira e P5 Telhados** (o salto técnico grande).
+4. **T2 + atalho → P6 Feira Livre.**
+
+Cada pista nova ganha: música CC0 própria, critério de aceite com a IA completando 3 voltas sem ficar presa, tempo de volta entre 35 e 55 s, e prints de revisão.
