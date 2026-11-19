@@ -1177,7 +1177,7 @@ func _test_ui_nav() -> void:
 	menu._input(_pad(a))
 	menu._input(_pad(a))
 	check(menu.picks.size() == 2 and menu.step == menu.STEP_TRACK, "J1 e J2 escolhem e vai pra PISTA")
-	check(menu.track_btns[0].visible and menu.track_btns[1].visible and not menu.track_btns[2].visible, "no Grand Prix a etapa PISTA mostra as 2 copas")
+	check(menu.track_btns[2].visible and not menu.track_btns[3].visible, "no Grand Prix a etapa PISTA mostra as 3 copas")
 	menu._input(_pad(a))
 	check(menu.step == menu.STEP_SETUP and menu.get_viewport().gui_get_focus_owner() == menu.go_btn, "A na copa vai pra AJUSTES com foco no CORRER!")
 	menu._input(_pad(up))
@@ -1200,8 +1200,8 @@ func _test_ui_nav() -> void:
 	menu = await _new_menu()
 	menu._input(_pad(a))       # CORRIDA
 	menu._input(_pad(a))       # piloto
-	for i in 4:
-		menu._input(_pad(down))  # 5ª pista
+	menu._input(_pad(down))   # grade 3x3: ↓ pula uma linha (4ª pista)
+	menu._input(_pad(right))  # → 5ª pista
 	check(menu.TrackScript.TRACKS[menu.track_i]["id"] == "fabrica" and menu.track_map.track_id == "fabrica", "↓ na lista troca a pista e o trajeto")
 	menu._input(_pad(a))
 	menu._input(_pad(a))
@@ -1816,7 +1816,7 @@ func _test_parquinho() -> void:
 
 	print("CA-68 Copa Farofa no Grand Prix")
 	var game = root.get_node_or_null("Game")
-	check(game.CUPS.size() == 2 and game.CUPS[1]["tracks"].has("parquinho") and game.CUPS[1]["tracks"].size() == 4, "Copa Farofa com 4 pistas, incluindo o Parquinho")
+	check(game.CUPS.size() == 3 and game.CUPS[1]["tracks"].has("parquinho") and game.CUPS[1]["tracks"].size() == 4, "Copa Farofa com 4 pistas, incluindo o Parquinho")
 	game.mode = "race"
 	game.num_players = 1
 	var menu = await _new_menu()
@@ -1824,8 +1824,8 @@ func _test_parquinho() -> void:
 	menu._input(_pad(JOY_BUTTON_A))
 	menu._input(_pad(JOY_BUTTON_A))           # piloto
 	check(menu.step == menu.STEP_TRACK, "etapa PISTA")
-	menu._input(_pad(JOY_BUTTON_DPAD_DOWN))
-	check(menu.cup_i == 1 and menu.track_map.track_id == "churrasco" and menu.track_title.text == "COPA FAROFA", "↓ escolhe a Copa Farofa e mostra a 1ª pista dela")
+	menu._input(_pad(JOY_BUTTON_DPAD_RIGHT))  # copas lado a lado na grade
+	check(menu.cup_i == 1 and menu.track_map.track_id == "churrasco" and menu.track_title.text == "COPA FAROFA", "→ escolhe a Copa Farofa e mostra a 1ª pista dela")
 	menu._input(_pad(JOY_BUTTON_A))
 	menu._input(_pad(JOY_BUTTON_A))           # CORRER!
 	check(menu.started and game.is_gp() and game.gp_cup == 1 and game.track_id == "churrasco", "GP começa na Churrascada")

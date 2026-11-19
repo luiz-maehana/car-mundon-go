@@ -12,6 +12,7 @@ var track_id := ""
 var reveal := 1.0         # 0..1 quanto do traço já apareceu
 var runner := 0.0         # posição do pontinho (0..1)
 var line_color := Color(1.0, 0.85, 0.3)
+var thin := false        # RF-400: miniatura do cartão (traço fino, sem marcadores nem pontinho)
 
 
 ## Dados 2D da pista (gerados uma vez; a pista é criada só pra calcular e logo liberada).
@@ -34,11 +35,11 @@ static func data(id: String) -> Dictionary:
 		zones.append({"kind": z["kind"], "i0": z["i0"], "len": z["len"]})
 	var hazards := []
 	for h in t.hazard_specs:
-		hazards.append({"kind": h["kind"], "idx": h["idx"]})
+		hazards.append({"kind": h["kind"], "idx": h["idx"], "model": h.get("model", "")})
 	var pads := []
 	for p in t.pads:
 		pads.append(int(p["idx"]))
-	var d := {"pts": pts, "pads": pads, "ramp": t.ramp_idx, "zones": zones, "hazards": hazards, "length": t.length, "crossings": t.crossings.duplicate(), "overpasses": t.overpasses.duplicate(), "loops": t.loops.map(func(l): return int(l["i0"])), "ys": _ys(t), "gaps": t.gaps.map(func(g): return int(g["i0"])), "islands": t.islands.map(func(s): return int(s["i0"]) + int(s["len"]) / 2), "halfs": t.halfs.duplicate()}
+	var d := {"pts": pts, "pads": pads, "ramp": t.ramp_idx, "zones": zones, "hazards": hazards, "length": t.length, "crossings": t.crossings.duplicate(), "overpasses": t.overpasses.duplicate(), "loops": t.loops.map(func(l): return int(l["i0"])), "ys": _ys(t), "gaps": t.gaps.map(func(g): return int(g["i0"])), "islands": t.islands.map(func(s): return int(s["i0"]) + int(s["len"]) / 2), "halfs": t.halfs.duplicate(), "pits": t.pits.map(func(p): return int(p["idx"])), "bridges": t.bridges.map(func(b): return int(b["i0"]) + int(b["len"]) / 2)}
 	t.free()
 	_cache[id] = d
 	return d
@@ -55,6 +56,8 @@ func set_track(id: String, animate := true) -> void:
 
 func _process(delta: float) -> void:
 	if track_id == "":
+		return
+	if thin:
 		return
 	if reveal < 1.0:
 		reveal = minf(1.0, reveal + delta * 1.4)
@@ -77,7 +80,7 @@ func _draw() -> void:
 	for p in pts:
 		lo = Vector2(minf(lo.x, p.x), minf(lo.y, p.y))
 		hi = Vector2(maxf(hi.x, p.x), maxf(hi.y, p.y))
-	var pad := 26.0
+	var pad := 8.0 if thin else 26.0
 	var sc := minf((size.x - pad * 2.0) / maxf(hi.x - lo.x, 1.0), (size.y - pad * 2.0) / maxf(hi.y - lo.y, 1.0))
 	var off := (size - (hi - lo) * sc) * 0.5
 	var map := func(p: Vector2) -> Vector2: return off + (p - lo) * sc
@@ -86,13 +89,15 @@ func _draw() -> void:
 	for i in shown + 1:
 		poly.append(map.call(pts[i % n]))
 	if poly.size() >= 2:
-		draw_polyline(poly, Color(0, 0, 0, 0.6), 16.0, true)
+		draw_polyline(poly, Color(0, 0, 0, 0.6), 7.0 if thin else 16.0, true)
 		# RF-324: quanto mais alto o trecho, mais claro (andares)
 		var ys: PackedFloat32Array = d.get("ys", PackedFloat32Array())
 		var ymax := 1.0
 		for y in ys:
 			ymax = maxf(ymax, y)
-		if ys.is_empty() or ymax <= 1.0:
+		if thin:
+			draw_polyline(poly, line_color, 4.0, true)
+		elif ys.is_empty() or ymax <= 1.0:
 			draw_polyline(poly, Color(0.85, 0.87, 0.92), 11.0, true)
 		else:
 			var cols := PackedColorArray()
@@ -127,6 +132,8 @@ func _draw() -> void:
 		draw_line(cp + Vector2(-6, 6), cp + Vector2(6, -6), Color.WHITE, 3.0, true)
 	for oi in d.get("overpasses", []):  # viaduto: o trecho de cima por cima do de baixo
 		_marker(map.call(pts[int(oi[1])]), Color(0.75, 0.85, 1.0), "V")
+	if thin:
+		return
 	# RF-370: onde a rua alarga, o traço engrossa (e afina nos becos)
 	var hf: PackedFloat32Array = d.get("halfs", PackedFloat32Array())
 	if reveal >= 1.0 and not hf.is_empty():
@@ -134,6 +141,11 @@ func _draw() -> void:
 			var wq := hf[q] / 8.0
 			if absf(wq - 1.0) > 0.15:
 				draw_line(map.call(pts[q]), map.call(pts[(q + 2) % n]), Color(0.85, 0.87, 0.92), 11.0 * wq, true)
+	for pi in d.get("pits", []):  # RF-390: buraco
+		draw_circle(map.call(pts[int(pi)]), 7.0, Color(0.02, 0.02, 0.03))
+		draw_arc(map.call(pts[int(pi)]), 7.0, 0.0, TAU, 16, Color(1.0, 0.8, 0.3), 2.0)
+	for bi in d.get("bridges", []):  # RF-392: ponte
+		_marker(map.call(pts[int(bi)]), Color(0.6, 0.4, 0.2), "P")
 	for ii in d.get("islands", []):  # RF-371: barracas no meio = atalho
 		_marker(map.call(pts[int(ii)]), Color(0.4, 0.9, 0.5), "A")
 	for gi in d.get("gaps", []):  # RF-330: vão entre prédios (salto)
@@ -145,8 +157,8 @@ func _draw() -> void:
 		_marker(map.call(pts[pi]), Color(1.0, 0.55, 0.1), "T")
 	if int(d["ramp"]) >= 0:
 		_marker(map.call(pts[int(d["ramp"])]), Color(1.0, 0.85, 0.15), "R")
-	var hz_cols := {"flame": Color(1.0, 0.35, 0.1), "wheel": Color(1.0, 0.8, 0.25), "press": Color(0.7, 0.72, 0.78), "seesaw": Color(0.3, 0.55, 1.0), "roofcat": Color(0.95, 0.6, 0.3)}
-	var hz_txt := {"flame": "F", "wheel": "Q", "press": "P", "seesaw": "G", "roofcat": "C"}
+	var hz_cols := {"flame": Color(1.0, 0.35, 0.1), "wheel": Color(1.0, 0.8, 0.25), "press": Color(0.7, 0.72, 0.78), "seesaw": Color(0.3, 0.55, 1.0), "roofcat": Color(0.95, 0.6, 0.3), "crosser": Color(0.95, 0.6, 0.3), "rover": Color(0.4, 0.75, 1.0)}
+	var hz_txt := {"flame": "F", "wheel": "Q", "press": "P", "seesaw": "G", "roofcat": "C", "crosser": "O", "rover": "O"}
 	for h in d["hazards"]:
 		_marker(map.call(pts[int(h["idx"])]), hz_cols.get(h["kind"], Color.WHITE), hz_txt.get(h["kind"], "!"))
 	# pontinho dando voltas

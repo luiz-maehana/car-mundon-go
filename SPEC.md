@@ -317,6 +317,11 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-396** **Deserto do Parmesão** (rev 2): dunas que sobem e descem (terreno maciço), salto por cima do cânion do alto da duna, 3 bolas de feno rolando, areia fofa.
 - [x] **RF-397** **Cozinha à Meia-Noite** (rev 2): sobe do chão pra bancada (armário maciço), atravessa uma colher gigante entre as bancadas, desce; robô aspirador no chão, 2 ralos e poça d'água escorregadia.
 
+### Escolha de pista em cartões (v0.34)
+- [x] **RF-400** A etapa PISTA vira uma grade 3×3 de cartões (cor do tema, trajeto em miniatura e nome) com o painel de detalhes do lado; o direcional anda na grade. No Grand Prix os cartões viram as copas.
+- [x] **RF-401** Terceira copa no Grand Prix: **Copa Lua** (Feira Livre, Geladeira Polar, Telhados da Vila).
+- [x] **RF-402** O trajeto do painel marca buracos, ponte (P) e obstáculos que andam (O), e a lista de atrações fala deles (vacas, bolas de feno, robô aspirador, buracos, ponte).
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.

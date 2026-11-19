@@ -411,6 +411,7 @@ const GP_POINTS := [15, 12, 10, 8, 6, 4, 2, 1]
 const CUPS := [
 	{"id": "queijo", "name": "Copa Queijo", "tracks": ["queijo", "deserto", "cozinha"]},
 	{"id": "farofa", "name": "Copa Farofa", "tracks": ["churrasco", "parquinho", "deserto", "fabrica"]},
+	{"id": "lua", "name": "Copa Lua", "tracks": ["feira", "geladeira", "telhados"]},  # RF-401: as pistas mais novas
 ]
 const CharsData = preload("res://scripts/characters.gd")
 

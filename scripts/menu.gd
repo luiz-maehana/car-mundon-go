@@ -84,6 +84,10 @@ var preview_bars: Array = []
 var preview_vals: Array = []
 var shown := -1
 var track_btns: Array = []
+var track_minis: Array = []    # RF-400: trajeto em miniatura de cada cartão
+var track_names: Array = []    # nome no cartão (no GP vira o nome da copa)
+const GRID_COLS := 3
+const TRACK_CARD := Vector2(200, 150)
 var track_map: Control
 var track_title: Label
 var track_info: Label
@@ -364,22 +368,41 @@ func _build_pilot() -> Control:
 func _build_track() -> Control:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 22)
-	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 8)
+	# RF-400: grade de cartões (trajeto em miniatura + nome) no lugar da lista comprida
+	var list := GridContainer.new()
+	list.columns = GRID_COLS
+	list.add_theme_constant_override("h_separation", 12)
+	list.add_theme_constant_override("v_separation", 12)
 	list.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hb.add_child(list)
 	for i in TrackScript.TRACKS.size():
 		var td: Dictionary = TrackScript.TRACKS[i]
-		var b := _button(td["name"], 20)
-		b.custom_minimum_size = Vector2(380, 54)
+		var b := _button("", 16)
+		b.custom_minimum_size = TRACK_CARD
 		b.focus_mode = Control.FOCUS_ALL
-		b.clip_text = true
-		var chip := ColorRect.new()  # cor do tema da pista
-		chip.color = td["wall"][0]
-		chip.size = Vector2(8, 34)
-		chip.position = Vector2(-2, 9)
-		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		b.add_child(chip)
+		var band := ColorRect.new()  # cor do tema da pista
+		band.color = td["wall"][0]
+		band.position = Vector2(10, 8)
+		band.size = Vector2(TRACK_CARD.x - 20, 5)
+		band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(band)
+		var mini := TrackMap.new()
+		mini.thin = true
+		mini.position = Vector2(8, 16)
+		mini.size = Vector2(TRACK_CARD.x - 16, TRACK_CARD.y - 58)
+		mini.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mini.line_color = (td["wall"][0] as Color).lightened(0.35)
+		mini.set_track(td["id"], false)
+		b.add_child(mini)
+		track_minis.append(mini)
+		var nm := _label(td["name"], 15, Color.WHITE)
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nm.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		nm.position = Vector2(6, TRACK_CARD.y - 44)
+		nm.size = Vector2(TRACK_CARD.x - 12, 38)
+		b.add_child(nm)
+		track_names.append(nm)
 		b.pressed.connect(func(): _pick_track(i))
 		b.focus_entered.connect(func():
 			if started:
@@ -400,7 +423,7 @@ func _build_track() -> Control:
 	st.border_color = Color(1.0, 0.82, 0.2, 0.7)
 	st.set_content_margin_all(16)
 	panel.add_theme_stylebox_override("panel", st)
-	panel.custom_minimum_size = Vector2(560, 0)
+	panel.custom_minimum_size = Vector2(520, 0)
 	hb.add_child(panel)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 6)
@@ -409,16 +432,16 @@ func _build_track() -> Control:
 	track_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(track_title)
 	track_map = TrackMap.new()
-	track_map.custom_minimum_size = Vector2(528, 290)
+	track_map.custom_minimum_size = Vector2(488, 270)
 	track_map.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vb.add_child(track_map)
 	track_desc = _label("", 17, Color(0.9, 0.92, 1.0))
 	track_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	track_desc.custom_minimum_size.x = 528
+	track_desc.custom_minimum_size.x = 488
 	vb.add_child(track_desc)
 	track_info = _label("", 16, Color(0.75, 0.9, 1.0))
 	track_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	track_info.custom_minimum_size.x = 528
+	track_info.custom_minimum_size.x = 488
 	vb.add_child(track_info)
 	return hb
 
@@ -815,7 +838,8 @@ func _go_step(s: int, animate := true) -> void:
 			_refresh_pilot()
 		STEP_TRACK:
 			_refresh_track()
-			_focus(1 + (cup_i if _is_gp() else track_i), 0)
+			var sel: int = cup_i if _is_gp() else track_i
+			_focus(1 + sel / GRID_COLS, sel % GRID_COLS)
 		STEP_SETUP:
 			_refresh_setup()
 			_focus(nav_rows.size() - 1, 0)
@@ -837,9 +861,12 @@ func _build_nav() -> void:
 		STEP_PILOT:
 			nav_rows.append([])   # cartas: navegação própria (selected)
 		STEP_TRACK:
+			var shown := []
 			for i in track_btns.size():
-				if not _is_gp() or i < _cups().size():  # no GP a lista vira a lista de copas
-					nav_rows.append([track_btns[i]])
+				if not _is_gp() or i < _cups().size():  # no GP os cartões viram as copas
+					shown.append(track_btns[i])
+			for r in range(0, shown.size(), GRID_COLS):
+				nav_rows.append(shown.slice(r, r + GRID_COLS))
 		STEP_SETUP:
 			nav_rows.append([laps_btn])
 			nav_rows.append([diff_btn])
@@ -1056,11 +1083,17 @@ func _refresh_track() -> void:
 	for i in track_btns.size():
 		var b: Button = track_btns[i]
 		b.visible = not gp or i < _cups().size()
-		b.text = ("%s (%d PISTAS)" % [String(_cups()[i]["name"]).to_upper(), _cups()[i]["tracks"].size()]) if gp and i < _cups().size() else TrackScript.TRACKS[i]["name"]
-		if i == (cup_i if gp else track_i):
+		var nm: Label = track_names[i]
+		var tid: String = (_cups()[i]["tracks"][0] if gp and i < _cups().size() else TrackScript.TRACKS[i]["id"])
+		nm.text = ("%s (%d)" % [_cups()[i]["name"], _cups()[i]["tracks"].size()]) if gp and i < _cups().size() else TrackScript.TRACKS[i]["name"]
+		track_minis[i].set_track(tid, false)
+		var on := i == (cup_i if gp else track_i)
+		if on:
 			GameScript.make_primary(b)
 		else:
 			GameScript.clear_primary(b)
+		nm.add_theme_color_override("font_color", Color(0.22, 0.13, 0.03) if on else Color.WHITE)
+		nm.add_theme_constant_override("outline_size", 0 if on else 4)
 	var td: Dictionary = TrackScript.find(cup[0]) if gp else TrackScript.TRACKS[track_i]
 	track_map.set_track(td["id"])
 	track_map.line_color = (td["wall"][0] as Color).lightened(0.3)
@@ -1086,7 +1119,7 @@ func _refresh_track() -> void:
 		if e != "" and not uniq.has(e):
 			uniq.append(e)
 	for h in d["hazards"]:
-		var e: String = {"flame": "labaredas", "wheel": "rodas de queijo", "press": "prensas", "seesaw": "gangorras", "roofcat": "gato no telhado"}.get(h["kind"], "")
+		var e: String = {"flame": "labaredas", "wheel": "rodas de queijo", "press": "prensas", "seesaw": "gangorras", "roofcat": "gato no telhado", "rover": "robô aspirador"}.get(h["kind"], {"cow": "vacas", "tumbleweed": "bolas de feno", "cat": "gato"}.get(String(h.get("model", "")), "") if h["kind"] == "crosser" else "")
 		if e != "" and not uniq.has(e):
 			uniq.append(e)
 	if not d.get("crossings", []).is_empty():
@@ -1097,6 +1130,10 @@ func _refresh_track() -> void:
 		uniq.append("viaduto")
 	if not d.get("islands", []).is_empty():
 		uniq.append("atalho")
+	if not d.get("pits", []).is_empty():
+		uniq.append("buracos")
+	if not d.get("bridges", []).is_empty():
+		uniq.append("ponte")
 	if not d.get("gaps", []).is_empty():
 		uniq.append("%d vãos pra pular" % d["gaps"].size())
 	track_info.text = "%.1f km · %s%s" % [float(d["length"]) / 1000.0, rec_txt, (" · " + ", ".join(uniq)) if not uniq.is_empty() else ""]
