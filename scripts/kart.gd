@@ -493,7 +493,7 @@ func _update_air(delta: float) -> void:
 		var f: float = track.ramp_frac(track_idx, track.along_of(position, track_idx), lateral)
 		if f >= 0.0:
 			on_ramp = true
-			position.y = ground + f * track.ramp_h
+			position.y = ground + f * track.ramp_height(track_idx)
 		elif on_ramp:
 			on_ramp = false
 			if speed > 8.0:
@@ -505,6 +505,11 @@ func _update_air(delta: float) -> void:
 					_start_trick()
 			else:
 				position.y = ground
+		elif not on_loop and track.gap_at(track_idx):
+			# RF-330: acabou o telhado: começa a cair (rápido o bastante, a rampinha já te lançou)
+			airborne = true
+			vy = 0.0
+			air_time = 0.0
 		elif not on_loop:
 			position.y = ground  # RF-320: acompanha a subida e a descida da pista
 		return
@@ -515,6 +520,11 @@ func _update_air(delta: float) -> void:
 	position.y += vy * delta
 	max_height = maxf(max_height, position.y - ground)
 	if position.y <= ground:
+		if track.gap_at(track_idx):
+			return  # RF-330: em cima do vão não tem onde pousar
+		if position.y < ground - 0.9:
+			start_rescue(true)  # bateu na parede do prédio: caiu
+			return
 		position.y = ground
 		vy = 0.0
 		airborne = false

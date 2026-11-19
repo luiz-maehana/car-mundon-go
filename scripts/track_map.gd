@@ -38,7 +38,7 @@ static func data(id: String) -> Dictionary:
 	var pads := []
 	for p in t.pads:
 		pads.append(int(p["idx"]))
-	var d := {"pts": pts, "pads": pads, "ramp": t.ramp_idx, "zones": zones, "hazards": hazards, "length": t.length, "crossings": t.crossings.duplicate(), "overpasses": t.overpasses.duplicate(), "loops": t.loops.map(func(l): return int(l["i0"])), "ys": _ys(t)}
+	var d := {"pts": pts, "pads": pads, "ramp": t.ramp_idx, "zones": zones, "hazards": hazards, "length": t.length, "crossings": t.crossings.duplicate(), "overpasses": t.overpasses.duplicate(), "loops": t.loops.map(func(l): return int(l["i0"])), "ys": _ys(t), "gaps": t.gaps.map(func(g): return int(g["i0"]))}
 	t.free()
 	_cache[id] = d
 	return d
@@ -127,14 +127,17 @@ func _draw() -> void:
 		draw_line(cp + Vector2(-6, 6), cp + Vector2(6, -6), Color.WHITE, 3.0, true)
 	for oi in d.get("overpasses", []):  # viaduto: o trecho de cima por cima do de baixo
 		_marker(map.call(pts[int(oi[1])]), Color(0.75, 0.85, 1.0), "V")
+	for gi in d.get("gaps", []):  # RF-330: vão entre prédios (salto)
+		draw_circle(map.call(pts[int(gi)]), 7.0, Color(0.05, 0.05, 0.1))
+		_marker(map.call(pts[int(gi)]) + Vector2(0, -16), Color(1.0, 0.6, 0.2), "S")
 	for li in d.get("loops", []):
 		_marker(map.call(pts[int(li)]), Color(1.0, 0.45, 0.85), "L")
 	for pi in d["pads"]:
 		_marker(map.call(pts[pi]), Color(1.0, 0.55, 0.1), "T")
 	if int(d["ramp"]) >= 0:
 		_marker(map.call(pts[int(d["ramp"])]), Color(1.0, 0.85, 0.15), "R")
-	var hz_cols := {"flame": Color(1.0, 0.35, 0.1), "wheel": Color(1.0, 0.8, 0.25), "press": Color(0.7, 0.72, 0.78), "seesaw": Color(0.3, 0.55, 1.0)}
-	var hz_txt := {"flame": "F", "wheel": "Q", "press": "P", "seesaw": "G"}
+	var hz_cols := {"flame": Color(1.0, 0.35, 0.1), "wheel": Color(1.0, 0.8, 0.25), "press": Color(0.7, 0.72, 0.78), "seesaw": Color(0.3, 0.55, 1.0), "roofcat": Color(0.95, 0.6, 0.3)}
+	var hz_txt := {"flame": "F", "wheel": "Q", "press": "P", "seesaw": "G", "roofcat": "C"}
 	for h in d["hazards"]:
 		_marker(map.call(pts[int(h["idx"])]), hz_cols.get(h["kind"], Color.WHITE), hz_txt.get(h["kind"], "!"))
 	# pontinho dando voltas

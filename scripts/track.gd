@@ -180,6 +180,38 @@ const TRACKS := [
 		"ground_tex": "tiles", "clouds": 0.0, "fog": 0.002, "exposure": 1.0, "cloud_color": Color(0.9, 0.95, 1.0), "scenery": "ice",
 		"enclosure": true,
 	},
+	{
+		"id": "telhados", "name": "Telhados da Vila", "music": "telhados",
+		# RF-333: corrida nos telhados à noite, lua cheia; 3 vãos entre prédios (rampinha + pulo),
+		# varais de roupa por cima, gatão patrulhando um telhado, caixas d'água e antenas em volta
+		"points": [
+			Vector2(-189, 128), Vector2(-54, 135), Vector2(81, 128), Vector2(189, 88),
+			Vector2(240, 0), Vector2(202, -88), Vector2(101, -115), Vector2(-27, -101),
+			Vector2(-115, -142), Vector2(-216, -115), Vector2(-267, -27), Vector2(-254, 65),
+		],
+		"heights": [22, 22, 21, 21, 20, 20, 19, 18, 18, 19, 20, 21],
+		"gaps": [
+			{"range": [0.06, 0.13], "len": 4},
+			{"range": [0.5, 0.58], "len": 4},
+			{"range": [0.78, 0.86], "len": 4},
+		],
+		"ramp_range": null, "buildings": true, "stands": false, "moon": true,
+		"pad_ranges": [[0.2, 0.26], [0.62, 0.7]],
+		"item_rows": [0.18, 0.4, 0.72], "cheese_rows": [[0.3, -3.5], [0.45, 3.5], [0.92, 0.0]],
+		"clotheslines": [0.24, 0.34, 0.66],
+		"hazards": [
+			{"kind": "roofcat", "at": 0.42, "amp": 6.5, "period": 5.0, "phase": 0.0},
+		],
+		"ground": Color(0.12, 0.12, 0.15), "offroad": Color(0.42, 0.24, 0.2),
+		"road": [Color(0.36, 0.36, 0.4), Color(0.39, 0.39, 0.43)],
+		"curb": [Color(0.75, 0.75, 0.78), Color(0.25, 0.25, 0.28)],
+		"wall": [Color(0.62, 0.3, 0.22), Color(0.55, 0.26, 0.19)],
+		"slab": Color(0.78, 0.68, 0.55),
+		"sky_top": Color(0.02, 0.03, 0.1), "sky_horizon": Color(0.12, 0.14, 0.3),
+		"ambient": Color(0.42, 0.46, 0.68), "sun": [0.55, -50.0, Color(0.7, 0.78, 1.0)],
+		"deco": "city", "deco_color": Color(1.0, 0.85, 0.45),
+		"ground_tex": "tiles", "clouds": 0.15, "fog": 0.0018, "exposure": 1.25, "stars": true, "cloud_color": Color(0.2, 0.22, 0.35), "scenery": "none",
+	},
 ]
 
 var def: Dictionary
@@ -209,6 +241,9 @@ const RAMP_RANGE := [0.3, 0.42]
 var pads: Array = []     # {idx, lat}
 var ramp_idx := -1
 var ramp_h := RAMP_H     # o escorregador do parquinho é mais alto (RF-302)
+var gaps: Array = []      # RF-330: {i0, len} amostras sem chão
+var gap_ramps: Array = [] # {idx, h} rampinha antes de cada vão
+const GAP_LIP := 1.2
 
 
 ## Curvatura em i: ângulo entre a tangente 10 amostras antes e 20 depois.
@@ -234,8 +269,13 @@ func _place_features() -> void:
 	var pr: Array = def.get("pad_ranges", PAD_RANGES)
 	for k in pr.size():
 		pads.append({"idx": _straightest(pr[k][0], pr[k][1]), "lat": lats[k % 2]})
-	var rr: Array = def.get("ramp_range", RAMP_RANGE)
-	ramp_idx = _straightest(rr[0], rr[1])
+	var rr = def.get("ramp_range", RAMP_RANGE)
+	ramp_idx = _straightest(rr[0], rr[1]) if rr != null else -1
+	# RF-330: vãos entre prédios, cada um com uma rampinha de beirada logo antes
+	for g in def.get("gaps", []):
+		var gi := _straightest(float(g["range"][0]), float(g["range"][1]))
+		gaps.append({"i0": gi, "len": int(g.get("len", 4))})
+		gap_ramps.append({"idx": wrapi(gi - RAMP_LEN, 0, points.size()), "h": float(g.get("lip", GAP_LIP))})
 	ramp_h = float(def.get("ramp_h", RAMP_H))
 	_find_crossings()
 	_parse_zones()
@@ -264,6 +304,8 @@ func _build_safe() -> void:
 		block.call(ramp_idx - 2, ramp_idx + RAMP_LEN + 18)  # rampa e pouso
 	for l in loops:
 		block.call(int(l["i0"]) - 6, int(l["i1"]) + 4)  # RF-321: nunca dentro do looping
+	for g in gaps:
+		block.call(int(g["i0"]) - RAMP_LEN - 4, int(g["i0"]) + int(g["len"]) + 12)  # RF-330: rampinha, vão e pouso
 	for c in crossings:
 		for ci in c:
 			block.call(int(ci) - 14, int(ci) + 14)
@@ -291,13 +333,39 @@ func on_pad(i: int, lat: float) -> bool:
 
 ## Fração (0..1) do kart ao longo da rampa, ou -1 se não está nela (RF-141).
 func ramp_frac(i: int, along: float, lat: float) -> float:
-	if ramp_idx < 0 or absf(lat) > ROAD_HALF:
+	if absf(lat) > ROAD_HALF:
 		return -1.0
-	var d := wrapi(i - ramp_idx, 0, points.size())
-	if d > RAMP_LEN + 1:
-		return -1.0
-	var f := (d + along / SPACING) / RAMP_LEN
-	return f if f >= 0.0 and f <= 1.0 else -1.0
+	for r in _all_ramps():
+		var d := wrapi(i - int(r["idx"]), 0, points.size())
+		if d > RAMP_LEN + 1:
+			continue
+		var f := (d + along / SPACING) / RAMP_LEN
+		if f >= 0.0 and f <= 1.0:
+			return f
+	return -1.0
+
+
+## Altura da rampa que contém a amostra i (a principal ou a de beirada de um vão).
+func ramp_height(i: int) -> float:
+	for r in _all_ramps():
+		if wrapi(i - int(r["idx"]), 0, points.size()) <= RAMP_LEN + 1:
+			return float(r["h"])
+	return ramp_h
+
+
+func _all_ramps() -> Array:
+	var out := gap_ramps.duplicate()
+	if ramp_idx >= 0:
+		out.push_front({"idx": ramp_idx, "h": ramp_h})
+	return out
+
+
+## RF-330: amostra sem chão (vão entre prédios)?
+func gap_at(i: int) -> bool:
+	for g in gaps:
+		if wrapi(i - int(g["i0"]), 0, points.size()) < int(g["len"]):
+			return true
+	return false
 
 
 func cheese_positions() -> Array:
@@ -574,6 +642,8 @@ func _build_visuals() -> void:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var n := points.size()
 	for i in n:
+		if not gaps.is_empty() and gap_at(i):
+			continue  # RF-330: vão = nada (lá embaixo é a rua)
 		# RF-300: no cruzamento a passada de cima fica um tiquinho mais alta e zebra,
 		# grama e muro que cairiam dentro da outra pista não são desenhados
 		var top: bool = crossing_top[i] if not crossing_top.is_empty() else false
@@ -621,6 +691,8 @@ func _build_visuals() -> void:
 	_build_belts()
 	_build_supports()
 	_build_tunnels_and_enclosure()
+	_build_rooftops()
+	_build_moon()
 	_build_hazard_bases()
 	_build_ground()
 	_build_arch()
@@ -714,8 +786,132 @@ func _build_tunnels_and_enclosure() -> void:
 	add_child(light)
 
 
+# ---------------------------------------------------------------- telhados (RF-330..333)
+
+## Prédios embaixo dos trechos de telhado (um bloco por trecho entre vãos), com janelas.
+func _build_rooftops() -> void:
+	if not def.get("buildings", false):
+		return
+	var n := points.size()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9090
+	var facades := [Color(0.78, 0.68, 0.55), Color(0.62, 0.7, 0.78), Color(0.8, 0.6, 0.55), Color(0.7, 0.75, 0.62), Color(0.85, 0.8, 0.68)]
+	var boxes: Array = []
+	var box_cols: Array = []
+	var lit: Array[Transform3D] = []
+	var dark: Array[Transform3D] = []
+	var seg := 0
+	var was_gap := false
+	for i in range(0, n, 5):
+		var g := gap_at(i) or gap_at((i + 2) % n)
+		if g:
+			was_gap = true
+			continue
+		if was_gap:
+			seg += 1
+			was_gap = false
+		var top := points[i].y - 0.9
+		var w := wall_at(i) + WALL_T
+		var yaw := Basis(Vector3.UP, heading_at(i))
+		var base := Vector3(points[i].x, 0.0, points[i].z)
+		boxes.append(Transform3D(yaw.scaled(Vector3(w * 2.0, top, 10.6)), base + Vector3.UP * top * 0.5))
+		box_cols.append(facades[seg % facades.size()])
+		for s in [1.0, -1.0]:
+			var y := 3.0
+			while y < top - 1.5:
+				for c in [-2.5, 2.5]:
+					var p: Vector3 = base + rights[i] * s * (w + 0.06) + tangents[i] * c
+					p.y = y
+					(lit if rng.randf() < 0.45 else dark).append(Transform3D(yaw, p))
+				y += 3.6
+	var cube := BoxMesh.new()
+	cube.size = Vector3.ONE
+	_multimesh_colored(cube, boxes, box_cols, _vc_mat(0.85))
+	_windows(lit, dark)
+	scenery_count += boxes.size()
+	# varais de roupa atravessando a pista (só enfeite: ficam bem acima dos karts)
+	var poles: Array[Transform3D] = []
+	var lines: Array[Transform3D] = []
+	var clothes: Array = []
+	var cloth_cols: Array = []
+	var cpal := [Color(0.95, 0.3, 0.3), Color(0.3, 0.6, 1.0), Color(1.0, 0.9, 0.3), Color(0.95, 0.95, 0.95), Color(0.5, 0.85, 0.45), Color(0.95, 0.55, 0.8)]
+	for f in def.get("clotheslines", []):
+		var i := int(n * float(f))
+		var w := wall_at(i) + 0.4
+		var yaw := Basis(Vector3.UP, heading_at(i))
+		for s in [1.0, -1.0]:
+			poles.append(Transform3D(yaw, points[i] + rights[i] * s * w + Vector3.UP * 3.5))
+		lines.append(Transform3D(yaw, points[i] + Vector3.UP * 6.8))
+		var k := 0
+		var lat := -w + 1.5
+		while lat < w - 1.5:
+			var sz := Vector3(rng.randf_range(1.2, 2.2), rng.randf_range(1.4, 2.4), 0.08)
+			clothes.append(Transform3D(yaw.scaled(sz), points[i] + rights[i] * lat + Vector3.UP * (6.7 - sz.y * 0.5)))
+			cloth_cols.append(cpal[(k + i) % cpal.size()])
+			lat += sz.x + rng.randf_range(0.4, 1.4)
+			k += 1
+	if not poles.is_empty():
+		var pole := CylinderMesh.new()
+		pole.top_radius = 0.12
+		pole.bottom_radius = 0.15
+		pole.height = 7.0
+		pole.material = _deco_mat(Color(0.35, 0.35, 0.38))
+		_multimesh(pole, poles, Vector3.ZERO)
+		var line := BoxMesh.new()
+		line.size = Vector3((ROAD_HALF + CURB + OFFROAD + 0.4) * 2.0, 0.05, 0.05)
+		line.material = _deco_mat(Color(0.9, 0.9, 0.9))
+		_multimesh(line, lines, Vector3.ZERO)
+		var cloth := BoxMesh.new()
+		cloth.size = Vector3.ONE
+		var cm := _vc_mat(0.9)
+		cm.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_multimesh_colored(cloth, clothes, cloth_cols, cm)
+		scenery_count += clothes.size()
+
+
+## Janelas: acesas (amarelo que brilha) e apagadas.
+func _windows(lit: Array[Transform3D], dark: Array[Transform3D]) -> void:
+	var win := BoxMesh.new()
+	win.size = Vector3(1.4, 1.9, 1.4)
+	var lm := StandardMaterial3D.new()
+	lm.albedo_color = Color(1.0, 0.85, 0.45)
+	lm.emission_enabled = true
+	lm.emission = Color(1.0, 0.78, 0.35)
+	lm.emission_energy_multiplier = 1.6
+	win.material = lm
+	if not lit.is_empty():
+		_multimesh(win, lit, Vector3.ZERO)
+	var dwin := BoxMesh.new()
+	dwin.size = win.size
+	dwin.material = _deco_mat(Color(0.12, 0.14, 0.22))
+	if not dark.is_empty():
+		_multimesh(dwin, dark, Vector3.ZERO)
+
+
+## Lua cheia grande no céu (não some na neblina).
+func _build_moon() -> void:
+	if not def.get("moon", false):
+		return
+	var c := (bounds_max + bounds_min) * 0.5
+	var moon := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 60.0
+	sm.height = 120.0
+	moon.mesh = sm
+	var mm := StandardMaterial3D.new()
+	mm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mm.albedo_color = Color(1.0, 0.97, 0.85)
+	mm.disable_fog = true
+	moon.material_override = mm
+	moon.position = Vector3(c.x + 700.0, 380.0, c.y - 900.0)
+	moon.name = "Moon"
+	add_child(moon)
+
+
 ## RF-320: pilares embaixo dos trechos altos (caixas de leite/potes na geladeira), fora de outras pistas.
 func _build_supports() -> void:
+	if def.get("buildings", false):
+		return  # nos telhados quem segura a pista são os prédios
 	var n := points.size()
 	var xf: Array = []
 	var cols: Array = []
@@ -948,6 +1144,69 @@ func _build_trees() -> void:
 			_multimesh(glass, bt, Vector3(0, 2.5, 0))
 			_multimesh(neck, bt, Vector3(0, 6.1, 0))
 			_multimesh(label, bt, Vector3(0, 2.6, 0))
+		"city":
+			# RF-333: a vila em volta — prédios com janelas, caixas de água e antenas nos telhados
+			var rngc := RandomNumberGenerator.new()
+			rngc.seed = 777
+			var bx: Array = []
+			var bc: Array = []
+			var lit: Array[Transform3D] = []
+			var dark: Array[Transform3D] = []
+			var tanks: Array[Transform3D] = []
+			var masts: Array[Transform3D] = []
+			var pal := [Color(0.55, 0.5, 0.48), Color(0.45, 0.5, 0.6), Color(0.6, 0.45, 0.4), Color(0.5, 0.55, 0.45), Color(0.65, 0.6, 0.52)]
+			for i in xforms.size():
+				var o := xforms[i].origin
+				if not _clear_of_track(o, 14.0):
+					continue  # prédio largo não pode invadir a pista
+				var h := rngc.randf_range(10.0, 34.0)
+				var w := rngc.randf_range(14.0, 22.0)
+				var d := rngc.randf_range(14.0, 22.0)
+				var yaw := Basis(Vector3.UP, rngc.randf() * TAU)
+				bx.append(Transform3D(yaw.scaled(Vector3(w, h, d)), o + Vector3.UP * h * 0.5))
+				bc.append((pal[i % pal.size()] as Color).darkened(rngc.randf() * 0.2))
+				for face in 4:
+					var nrm: Vector3 = yaw * [Vector3.RIGHT, Vector3.LEFT, Vector3.BACK, Vector3.FORWARD][face]
+					var half := (w if face < 2 else d) * 0.5
+					var span := (d if face < 2 else w) * 0.5 - 2.0
+					var along: Vector3 = nrm.cross(Vector3.UP).normalized()
+					var y := 3.0
+					while y < h - 2.0:
+						var x := -span
+						while x <= span:
+							if rngc.randf() < 0.3:
+								lit.append(Transform3D(yaw, o + nrm * (half + 0.05) + along * x + Vector3.UP * y))
+							x += 4.0
+						y += 3.6
+				if i % 3 == 0:
+					tanks.append(Transform3D(Basis(), o + Vector3.UP * h))
+				elif i % 3 == 1:
+					masts.append(Transform3D(Basis(), o + Vector3.UP * h))
+			var cube := BoxMesh.new()
+			cube.size = Vector3.ONE
+			_multimesh_colored(cube, bx, bc, _vc_mat(0.9))
+			_windows(lit, dark)
+			var tank := CylinderMesh.new()
+			tank.top_radius = 2.2
+			tank.bottom_radius = 2.2
+			tank.height = 3.2
+			tank.material = _deco_mat(Color(0.3, 0.42, 0.65))
+			_multimesh(tank, tanks, Vector3(0, 3.6, 0))
+			var legs := BoxMesh.new()
+			legs.size = Vector3(3.6, 2.0, 3.6)
+			legs.material = _deco_mat(Color(0.25, 0.25, 0.28))
+			_multimesh(legs, tanks, Vector3(0, 1.0, 0))
+			var mast := CylinderMesh.new()
+			mast.top_radius = 0.08
+			mast.bottom_radius = 0.12
+			mast.height = 6.0
+			mast.material = _deco_mat(Color(0.7, 0.7, 0.72))
+			_multimesh(mast, masts, Vector3(0, 3.0, 0))
+			var bar := BoxMesh.new()
+			bar.size = Vector3(3.0, 0.08, 0.08)
+			bar.material = mast.material
+			_multimesh(bar, masts, Vector3(0, 5.0, 0))
+			_multimesh(bar, masts, Vector3(0, 4.0, 0))
 		"fridge":
 			# RF-324: comida gigante de geladeira — caixas de leite, potes de iogurte, ovos e garrafas
 			var groups: Array = [[], [], [], []]
@@ -1213,14 +1472,20 @@ func _pads_and_ramp(st: SurfaceTool) -> void:
 			var tip := c + t * 0.8 + up
 			_quad(st, c - r * 1.8 - t * 0.6 + up, c - r * 1.2 - t * 0.6 + up, tip + t * 0.0, tip - t * 0.6, Color(1.0, 0.92, 0.2))
 			_quad(st, c + r * 1.2 - t * 0.6 + up, c + r * 1.8 - t * 0.6 + up, tip - t * 0.6, tip, Color(1.0, 0.92, 0.2))
-	if ramp_idx < 0:
-		return
-	var slide: bool = def.get("ramp_style", "") == "slide"
+	for r in _all_ramps():
+		_draw_ramp(st, int(r["idx"]), float(r["h"]), "slide" if int(r["idx"]) == ramp_idx and def.get("ramp_style", "") == "slide" else ("lip" if int(r["idx"]) != ramp_idx else ""))
+
+
+## Uma rampa: listrada (comum), escorregador (RF-302) ou tábua de beirada antes de um vão (RF-330).
+func _draw_ramp(st: SurfaceTool, idx: int, h: float, style: String) -> void:
+	var n := points.size()
+	var slide := style == "slide"
+	var plank := style == "lip"
 	for k in RAMP_LEN:
-		var i := (ramp_idx + k) % n
+		var i := (idx + k) % n
 		var j := (i + 1) % n
-		var y0 := ramp_h * float(k) / RAMP_LEN
-		var y1 := ramp_h * float(k + 1) / RAMP_LEN
+		var y0 := h * float(k) / RAMP_LEN
+		var y1 := h * float(k + 1) / RAMP_LEN
 		var stripes := 6
 		for s in stripes:
 			var la := -ROAD_HALF + 2.0 * ROAD_HALF * s / stripes
@@ -1228,18 +1493,21 @@ func _pads_and_ramp(st: SurfaceTool) -> void:
 			var c := Color(1.0, 0.8, 0.1) if (s + k) % 2 == 0 else Color(0.1, 0.1, 0.12)
 			if slide:  # RF-302: escorregador de plástico (vermelho com faixas amarelas)
 				c = Color(0.92, 0.22, 0.2) if s % 3 != 1 else Color(1.0, 0.82, 0.2)
+			elif plank:  # tábuas de madeira com a ponta pintada de amarelo
+				c = Color(0.55, 0.36, 0.2).darkened(0.12 * (s % 2)) if k < RAMP_LEN - 1 else Color(1.0, 0.82, 0.15)
 			_quad(st, points[i] + rights[i] * la + Vector3.UP * y0, points[i] + rights[i] * lb + Vector3.UP * y0,
 				points[j] + rights[j] * lb + Vector3.UP * y1, points[j] + rights[j] * la + Vector3.UP * y1, c)
 		# laterais (no escorregador: parede azul que sobe acima da rampa, a "borda" do brinquedo)
-		var side_c := Color(0.2, 0.5, 0.95) if slide else Color(0.25, 0.25, 0.28)
+		var side_c := Color(0.2, 0.5, 0.95) if slide else (Color(0.4, 0.26, 0.14) if plank else Color(0.25, 0.25, 0.28))
 		var lip := 0.7 if slide else 0.0
 		for side in [-ROAD_HALF, ROAD_HALF]:
 			_quad(st, points[i] + rights[i] * side, points[i] + rights[i] * side + Vector3.UP * (y0 + lip),
 				points[j] + rights[j] * side + Vector3.UP * (y1 + lip), points[j] + rights[j] * side, side_c)
-	# face de trás (queda)
-	var e := (ramp_idx + RAMP_LEN) % n
+	# face da frente (queda)
+	var e := (idx + RAMP_LEN) % n
+	var face_c := Color(0.2, 0.5, 0.95) if slide else (Color(0.4, 0.26, 0.14) if plank else Color(0.25, 0.25, 0.28))
 	_quad(st, points[e] - rights[e] * ROAD_HALF, points[e] + rights[e] * ROAD_HALF,
-		points[e] + rights[e] * ROAD_HALF + Vector3.UP * ramp_h, points[e] - rights[e] * ROAD_HALF + Vector3.UP * ramp_h, Color(0.2, 0.5, 0.95) if slide else Color(0.25, 0.25, 0.28))
+		points[e] + rights[e] * ROAD_HALF + Vector3.UP * h, points[e] - rights[e] * ROAD_HALF + Vector3.UP * h, face_c)
 
 
 # ---------------------------------------------------------------- cenário (RF-167)
@@ -1248,10 +1516,11 @@ var scenery_count := 0
 
 
 func _build_scenery() -> void:
-	_grandstand()
-	_racing_props()
-	_flags()
-	_tire_stacks()
+	if def.get("stands", true):  # nos telhados não tem arquibancada nem boxes
+		_grandstand()
+		_racing_props()
+		_flags()
+		_tire_stacks()
 	_scatter()
 
 
@@ -1447,6 +1716,8 @@ func _scatter() -> void:
 	var rocks: Array = []
 	var rock_cols: Array = []
 	var count := 260 if kind != "cheese" else 30
+	if kind == "none":
+		return
 	if kind == "ice":
 		count = 70
 	if kind == "bbq":

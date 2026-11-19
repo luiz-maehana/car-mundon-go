@@ -54,6 +54,7 @@ func _run() -> void:
 	await _test_parquinho()
 	await _test_rescue()
 	await _test_geladeira()
+	await _test_telhados()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -974,7 +975,7 @@ func _test_music() -> void:
 	var Track = load("res://scripts/track.gd")
 	var sigs := {}
 	var ok := true
-	for style in ["menu", "queijo", "deserto", "cozinha", "churrasco", "fabrica", "parquinho", "geladeira", "victory"]:
+	for style in ["menu", "queijo", "deserto", "cozinha", "churrasco", "fabrica", "parquinho", "geladeira", "telhados", "victory"]:
 		var t0 := Time.get_ticks_msec()
 		var w: AudioStream = Sfx.music(style)
 		var secs: float = w.get_length()
@@ -983,7 +984,7 @@ func _test_music() -> void:
 		if not looped or secs < 8.0:
 			ok = false
 		sigs[w.resource_name] = true
-	check(ok and sigs.size() == 9, "9 trilhas em loop, > 8 s e diferentes entre si")
+	check(ok and sigs.size() == 10, "10 trilhas em loop, > 8 s e diferentes entre si")
 	var tracks_ok := true
 	for td in Track.TRACKS:
 		if not Sfx.MUSIC_STYLES.has(td.get("music", td["id"])):
@@ -2133,5 +2134,117 @@ func _test_geladeira() -> void:
 	check(race.all_finished() and best > 30.0 and worst_l < 60.0, "volta da IA %.1f..%.1f s" % [best, worst_l])
 	check(loops_ok, "todos os karts passaram pelo looping nas 2 voltas")
 	check(resc <= 2, "IA quase nunca precisa de resgate (%d)" % resc)
+	race.queue_free()
+	await process_frame
+
+
+func _test_telhados() -> void:
+	var dt := 1.0 / 60.0
+	print("CA-80 vãos entre prédios")
+	var race = await _race_on("telhados")
+	var t = race.track
+	var n: int = t.sample_count()
+	check(t.gaps.size() == 3 and t.gap_ramps.size() == 3, "3 vãos, cada um com rampinha de beirada")
+	var ok := true
+	for g in t.gaps:
+		var gi: int = g["i0"]
+		ok = ok and t.gap_at(gi) and not t.gap_at(gi - 1) and t.ramp_frac(gi - 2, 0.0, 0.0) > 0.0
+		ok = ok and t.safe[gi] == 0 and t.safe[gi - 2] == 0 and t.safe[gi + int(g["len"]) + 2] == 0
+	check(ok, "rampinha logo antes do vão; resgate nunca devolve na rampinha, no vão ou no pouso")
+	var ymin := INF
+	for p in t.points:
+		ymin = minf(ymin, p.y)
+	check(ymin > 15.0 and t.get_node_or_null("Moon") != null, "tudo lá no alto (%.0f m) e com lua" % ymin)
+
+	print("CA-81 pulo do vão")
+	var k = race.player
+	var g0: Dictionary = t.gaps[0]
+	var gi0: int = g0["i0"]
+	_put(k, gi0 - 12, 0.0, 25.0)
+	Input.action_press("p1_accelerate")
+	var flew := false
+	for s in 120:
+		k.step(dt, true)
+		if t.gap_at(k.track_idx) and k.airborne:
+			flew = true
+	Input.action_release("p1_accelerate")
+	var past := wrapi(k.track_idx - (gi0 + int(g0["len"])), 0, n)
+	check(flew and k.rescues == 0 and past > 0 and past < 120 and not k.airborne and absf(k.position.y - k.ground) < 0.1, "rápido: voa por cima do vão e pousa no outro prédio (+%d)" % past)
+
+	print("CA-82 caiu no vão")
+	_put(k, gi0 - 6, 0.0, 7.0)
+	k.cheese = 4
+	var secs := 0.0
+	while k.rescues == 1 - 1 and secs < 5.0:
+		k.speed = 7.0
+		k.step(dt, true)
+		secs += dt
+	check(k.rescues == 1 and k.cheese == 1, "devagar: cai no vão, balões e -3 queijinhos")
+	while k.rescue_time > 0.0:
+		k.step(dt, true)
+	check(wrapi(gi0 - k.track_idx, 0, n) > 0 and wrapi(gi0 - k.track_idx, 0, n) < 40 and absf(k.position.y - t.points[k.track_idx].y) < 0.1, "volta no telhado antes do vão (%d amostras antes)" % wrapi(gi0 - k.track_idx, 0, n))
+	# pulo curto: bate na parede do prédio da frente
+	_put(k, gi0 + int(g0["len"]) - 1, 0.0, 15.0)
+	k.airborne = true
+	k.position.y = t.points[gi0].y - 1.6
+	k.vy = 0.0
+	var r0: int = k.rescues
+	for s in 30:
+		k.step(dt, true)
+		if k.rescues > r0:
+			break
+	check(k.rescues == r0 + 1, "pulo curto bate na parede do prédio e chama os balões")
+	race.queue_free()
+	await process_frame
+
+	print("CA-83 gatão no telhado")
+	race = await _race_on("telhados")
+	t = race.track
+	k = race.player
+	var cat: Dictionary = {}
+	for h in race.track_hazards:
+		if h["spec"]["kind"] == "roofcat":
+			cat = h
+	race._update_track_hazards(0.0, false)
+	var cp: Vector3 = cat["node"].position
+	var ci: int = cat["spec"]["idx"]
+	k.place(ci, t.lateral_of(cp, ci))
+	k.spin_time = 0.0
+	race._update_track_hazards(0.0, true)
+	check(k.spin_time > 0.0, "gato derruba quem encosta")
+	var out: Array = []
+	k.track_idx = wrapi(ci - 15, 0, t.sample_count())
+	race._track_hazards_ahead(k, 40, out)
+	check(out.any(func(o): return absf(float(o["lat"]) - float(cat["lat"])) < 0.01), "IA vê o gato à frente")
+	var lat0: float = cat["lat"]
+	race._update_track_hazards(1.0, false)
+	check(absf(float(cat["lat"]) - lat0) > 0.5, "gato anda de um lado pro outro")
+	race.queue_free()
+	await process_frame
+
+	print("CA-84 IA nos Telhados")
+	race = load("res://scripts/race.gd").new()
+	race.use_game_settings = false
+	race.autopilot_player = true
+	race.player_chars = ["nanni"]
+	race.track_id = "telhados"
+	race.laps = 2
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	var tt := 0.0
+	while tt < 200.0 and not race.all_finished():
+		race.step(dt)
+		tt += dt
+	var best := INF
+	var worst := 0.0
+	var resc := 0
+	for kk in race.karts:
+		if kk.finished:
+			best = minf(best, kk.finish_time / 2.0)
+			worst = maxf(worst, kk.finish_time / 2.0)
+		resc += kk.rescues
+	check(race.all_finished() and best > 30.0 and worst < 60.0, "volta da IA %.1f..%.1f s" % [best, worst])
+	check(resc <= 4, "IA quase sempre acerta os pulos (%d quedas em 16 voltas)" % resc)
 	race.queue_free()
 	await process_frame

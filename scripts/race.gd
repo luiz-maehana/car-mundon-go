@@ -1231,6 +1231,8 @@ const PRESS_UP_Y := 7.0
 const PRESS_DOWN_Y := 0.75
 const WHEEL_R := 1.8
 const SEESAW_HALF := 3.5     # meia tábua (m)
+const ROOFCAT_SCALE := 2.6
+const ROOFCAT_R := 2.6
 const SEESAW_PIVOT_Y := 0.8
 const SEESAW_TILT := 0.23     # ponta encosta no chão
 const SEESAW_RAMP_Y := 0.45   # ponta de trás abaixo disso = rampa
@@ -1355,6 +1357,13 @@ func _spawn_track_hazards() -> void:
 				h["mid"] = (float(lat[0]) + float(lat[1])) * 0.5
 				h["half"] = wdt * 0.5
 				h["y"] = PRESS_UP_Y
+			"roofcat":
+				# RF-332: gatão de verdade patrulhando o telhado (anda de um lado pro outro)
+				var cat: Node3D = HazardModels.cat()
+				cat.scale = Vector3.ONE * ROOFCAT_SCALE
+				add_child(cat)
+				h["node"] = cat
+				h["lat"] = 0.0
 			"seesaw":
 				# RF-303: gangorra numa metade da pista; o pivô fica no meio da tábua
 				var lat: Array = s["lat"]
@@ -1493,6 +1502,22 @@ func _update_track_hazards(delta: float, can_drive: bool) -> void:
 						if near_idx and absf(k.lateral - float(h["mid"])) < float(h["half"]) + 0.6 and absf(along) < 2.4 and k.spin_time <= 0.0:
 							k.hit(1.4)
 							shake(k, 0.6)
+			"roofcat":
+				var amp: float = s.get("amp", 6.0)
+				var ph := TAU * (hazard_clock + phase) / period
+				var lat := amp * sin(ph)
+				h["lat"] = lat
+				h["state"] = "on"
+				var cat: Node3D = h["node"]
+				var dir: Vector3 = track.rights[i] * signf(cos(ph) + 0.0001)
+				cat.position = track.points[i] + track.rights[i] * lat + Vector3.UP * absf(sin(hazard_clock * 9.0)) * 0.3
+				cat.rotation.y = atan2(-dir.x, -dir.z)
+				if can_drive:
+					for k in karts:
+						if Vector2(k.position.x - cat.position.x, k.position.z - cat.position.z).length() < ROOFCAT_R and absf(k.position.y - track.points[i].y) < 2.5:
+							k.hit(1.0)
+							if k.is_player:
+								sfx("meow")
 			"seesaw":
 				# RF-303: descansa num lado e no outro. Ponta de trás no chão = rampa (lança o kart);
 				# ponta de trás no alto = parede (bate e roda). Anda sempre; só pega depois do VAI!
@@ -1541,7 +1566,7 @@ func _track_hazards_ahead(k: Node3D, samples: int, out: Array) -> void:
 				if h["state"] != "off":
 					for j in s["lats"].size():
 						out.append({"id": 1000000 + hi * 100 + j, "lat": float(s["lats"][j])})
-			"wheel":
+			"wheel", "roofcat":
 				out.append({"id": 1000000 + hi * 100, "lat": float(h["lat"])})
 			"press":
 				if h["state"] != "up":

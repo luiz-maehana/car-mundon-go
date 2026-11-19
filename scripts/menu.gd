@@ -36,6 +36,7 @@ const TRACK_DESC := {
 	"fabrica": "Linha de produção: esteiras, rodas de queijo rolando e prensas.",
 	"parquinho": "Pista em 8 na praça: cruzamento no meio, escorregador gigante, caixa de areia e gangorras.",
 	"geladeira": "Dentro da geladeira: 3 andares, looping na prateleira, viaduto, gelo no congelador e túnel de caixa de leite.",
+	"telhados": "De noite, nos telhados da vila: pule os vãos entre os prédios, passe por baixo dos varais e cuidado com o gatão.",
 }
 
 var step := STEP_MODE
@@ -969,7 +970,7 @@ func _refresh_track() -> void:
 		if e != "" and not uniq.has(e):
 			uniq.append(e)
 	for h in d["hazards"]:
-		var e: String = {"flame": "labaredas", "wheel": "rodas de queijo", "press": "prensas", "seesaw": "gangorras"}.get(h["kind"], "")
+		var e: String = {"flame": "labaredas", "wheel": "rodas de queijo", "press": "prensas", "seesaw": "gangorras", "roofcat": "gato no telhado"}.get(h["kind"], "")
 		if e != "" and not uniq.has(e):
 			uniq.append(e)
 	if not d.get("crossings", []).is_empty():
@@ -978,6 +979,8 @@ func _refresh_track() -> void:
 		uniq.append("looping")
 	if not d.get("overpasses", []).is_empty():
 		uniq.append("viaduto")
+	if not d.get("gaps", []).is_empty():
+		uniq.append("%d vãos pra pular" % d["gaps"].size())
 	track_info.text = "%.1f km · %s%s" % [float(d["length"]) / 1000.0, rec_txt, (" · " + ", ".join(uniq)) if not uniq.is_empty() else ""]
 
 

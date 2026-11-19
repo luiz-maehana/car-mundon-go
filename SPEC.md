@@ -281,6 +281,12 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-323** **Gelo** (zona `ice`): o kart escorrega (aderência baixa, ainda mais no drift) e anda 5% mais rápido.
 - [x] **RF-324** **Geladeira Polar** (1,35 km): fundo da geladeira (0 m) → subida → prateleira (8 m) com looping → congelador (16 m) com gelo e seta de turbo no gelo → ponte estreita por cima da reta de largada → descida com rampa. Túnel de caixa de leite, comida gigante (caixas de leite, iogurtes, ovos, garrafas), cubos de gelo, paredes da geladeira com lâmpada no teto. O trajeto no menu fica mais claro onde é mais alto e marca o looping (L) e o viaduto (V). Música CC0.
 
+### Telhados da Vila: vãos entre prédios (v0.27)
+- [x] **RF-330** **Vãos** (`gaps: [{range, len}]`): trechos sem chão; cada um ganha uma **rampinha de beirada** (tábua com a ponta amarela) logo antes. Rápido, o kart voa por cima e pousa no outro prédio; devagar, cai e os balões trazem de volta (−3 queijinhos); pulo curto que bate na parede do prédio da frente também cai. O resgate nunca devolve na rampinha, no vão ou no pouso. A pista pode ter várias rampas (cada uma com sua altura) e nenhuma rampa principal (`ramp_range: null`).
+- [x] **RF-331** **Prédios** embaixo dos telhados (`buildings`): um bloco por trecho entre vãos, cores de fachada e janelas acesas/apagadas; sem arquibancada nem boxes (`stands: false`).
+- [x] **RF-332** **Gatão** (perigo `roofcat`) patrulhando um telhado de um lado pro outro; quem encosta roda (miau). A IA desvia.
+- [x] **RF-333** **Telhados da Vila** (1,3 km, 18–22 m de altura): noite com lua cheia e estrelas, 3 vãos, varais de roupa atravessando a pista, cidade em volta com janelas, caixas d'água e antenas. O trajeto no menu marca os vãos (S) e o gato (C). Música CC0.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -415,6 +421,11 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-77** No gelo o kart derrapa mais que o dobro do asfalto.
 - [x] **CA-78** Viaduto: karts de andares diferentes não batem, queijinho de baixo não é pego por quem passa em cima, resgate no alto pousa no alto.
 - [x] **CA-79** IA na Geladeira: volta entre 30 e 60 s, todos passam pelo looping, quase nunca precisam de resgate.
+- [x] **CA-80** Telhados: 3 vãos com rampinha logo antes; nenhum ponto de resgate na rampinha, vão ou pouso; tudo no alto e com lua.
+- [x] **CA-81** Rápido: o kart voa por cima do vão e pousa no outro prédio sem resgate.
+- [x] **CA-82** Devagar: cai no vão, balões, −3 queijinhos e volta no telhado antes do vão; pulo curto que bate na parede também cai.
+- [x] **CA-83** Gatão derruba quem encosta, anda de um lado pro outro e a IA vê.
+- [x] **CA-84** IA nos Telhados: volta entre 30 e 60 s e quase nunca cai.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
@@ -431,7 +442,7 @@ Teste manual (checklist por release):
 7. **Export web** (GitHub Pages) pra turma jogar no navegador.
 8. **Multiplayer online.**
 
-## 10. Plano: pistas novas (P1, P2, P3 e P4 feitas — v0.21, v0.24 e v0.26)
+## 10. Plano: pistas novas (P1 a P5 feitas — v0.21, v0.24, v0.26 e v0.27)
 
 Ideia geral: o mundo é **visto do tamanho de um camundongo** — cada pista é um lugar comum da casa/cidade em escala gigante, com um "truque" que muda o jeito de pilotar. Uma segunda copa (**Copa Farofa**, 4 pistas) entra no Grand Prix junto da atual (**Copa Queijo**). Tudo original; assets só CC0.
 
@@ -443,7 +454,7 @@ Ideia geral: o mundo é **visto do tamanho de um camundongo** — cada pista é 
 | P2 ✅ | **Parquinho em Oito** | parquinho da praça à tarde | traçado em **8 com cruzamento no mesmo nível** (dá pra bater de lado em quem cruza); **escorregador** vira rampa gigante; **caixa de areia** como atalho lento; gangorra que sobe e desce | T5 cruzamento, T4 gangorra |
 | P3 | **Fábrica de Queijo** | linha de produção | **esteiras** que empurram pra frente (rápido) ou pro lado; **rodas de queijo rolando** pela pista como obstáculo; prensas que descem; queijinhos em dobro | T1 esteira, T4 obstáculos móveis |
 | P4 ✅ | **Geladeira Polar** | dentro da geladeira aberta, luz azul | **prateleiras em andares** ligadas por rampas (pista sobe e desce); **gelo** que escorrega no congelador; potes de iogurte e caixa de leite como túnel | T3 elevação, T1 gelo |
-| P5 | **Telhados da Vila** | telhados à noite, lua cheia | **pulos entre prédios** (cair = volta pro último ponto); varal de roupa como teto; **gato de verdade patrulhando** um telhado; antenas e caixas d'água | T3 elevação, T6 vãos + respawn, T4 gato |
+| P5 ✅ | **Telhados da Vila** | telhados à noite, lua cheia | **pulos entre prédios** (cair = volta pro último ponto); varal de roupa como teto; **gato de verdade patrulhando** um telhado; antenas e caixas d'água | T3 elevação, T6 vãos + respawn, T4 gato |
 | P6 | **Feira Livre** | rua de feira de manhã | pista que **afunila** entre as barracas e abre na rua; caixotes, pastel, caldo de cana; um atalho por baixo das barracas | T2 largura variável, T5 atalho |
 
 ### Tecnologia, em ordem de custo

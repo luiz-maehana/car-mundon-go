@@ -40,6 +40,8 @@ func _run() -> void:
 	for o in t.overpasses:
 		spots["over_low"] = wrapi(int(o[0]) - 12, 0, n)
 		spots["over_high"] = wrapi(int(o[1]) - 12, 0, n)
+	for gi in t.gaps.size():
+		spots["gap%d" % gi] = wrapi(int(t.gaps[gi]["i0"]) - 12, 0, n)
 	for tn in t.def.get("tunnels", []):
 		spots["tunnel"] = int(n * float(tn[0])) - 4
 	for name in spots:
