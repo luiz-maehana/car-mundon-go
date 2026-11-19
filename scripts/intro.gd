@@ -35,7 +35,7 @@ func _ready() -> void:
 	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(band)
 	prompt = Label.new()
-	prompt.text = "APERTE ENTER PARA COMEÇAR"
+	prompt.text = "TOQUE PARA COMEÇAR" if (gm and gm.touch_on()) else "APERTE ENTER PARA COMEÇAR"  # RF-472
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt.add_theme_font_size_override("font_size", 34)
 	prompt.add_theme_color_override("font_color", Color(1.0, 0.92, 0.5))
@@ -49,6 +49,20 @@ func _ready() -> void:
 	prompt.offset_bottom = -20
 	prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(prompt)
+	# RF-473: tela cheia no navegador / celular (o navegador só deixa a partir de um toque)
+	if OS.has_feature("web") or (gm and gm.touch_on()):
+		var fs := Button.new()
+		fs.text = "TELA CHEIA"
+		fs.add_theme_font_size_override("font_size", 18)
+		fs.anchor_left = 1.0
+		fs.anchor_right = 1.0
+		fs.offset_left = -200
+		fs.offset_right = -20
+		fs.offset_top = 20
+		fs.offset_bottom = 68
+		fs.name = "Fullscreen"
+		fs.pressed.connect(func(): if gm: gm.toggle_fullscreen())
+		add_child(fs)
 
 
 func _load_art() -> Texture2D:
@@ -72,6 +86,17 @@ func _process(delta: float) -> void:
 	prompt.modulate.a = 0.35 + 0.65 * (0.5 + 0.5 * sin(t * 4.0)) if t > 0.6 else 0.0
 
 
+func _input(event: InputEvent) -> void:
+	# RF-472: no navegador o clique emulado do toque nem sempre chega (e a interface pode ficar com
+	# ele); o próprio toque vale, menos em cima do botão TELA CHEIA (que tem o seu)
+	if leaving or not (event is InputEventScreenTouch) or event.pressed:
+		return
+	var fs := get_node_or_null("Fullscreen") as Control
+	if fs == null or not fs.get_global_rect().has_point(event.position):
+		get_viewport().set_input_as_handled()
+		go()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if leaving:
 		return
@@ -83,7 +108,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return  # M é o mute global
 		go()
 	elif (event is InputEventMouseButton or event is InputEventJoypadButton) and event.pressed:
-		go()
+		go()  # RF-472: o toque chega como clique (emulado) — e o botão TELA CHEIA consome o dele
 
 
 func go() -> void:

@@ -141,6 +141,7 @@ func _build_model() -> void:
 			sm.shader = RecolorShader
 			if src is BaseMaterial3D:
 				sm.set_shader_parameter("tex", (src as BaseMaterial3D).albedo_texture)
+			sm.set_shader_parameter("mask", RecolorMask)
 			sm.set_shader_parameter("tint", color)
 			mi.material_override = sm
 			kart_body = mi

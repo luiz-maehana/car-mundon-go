@@ -647,7 +647,7 @@ func apply_settings() -> void:
 	if minimap:
 		minimap.visible = Gfx.setting("show_minimap", true)
 	if ranking_box:
-		ranking_box.visible = Gfx.setting("show_ranking", true) and not race.time_trial
+		ranking_box.visible = Gfx.setting("show_ranking", true) and not race.time_trial and not touch_layout
 
 
 # ---------------------------------------------------------------- contra o relógio (RF-232/234)
@@ -717,7 +717,7 @@ func _show_tt_results() -> void:
 		var row := _label(26, vb)
 		row.text = "Volta %d   %s" % [i + 1, fmt_time(lt)]
 		if is_equal_approx(lt, best):
-			row.text += "   ★ melhor"
+			row.text += "   · melhor volta"
 			row.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
 	var lap_rec := _label(22, vb)
 	if got.get("lap", false):
@@ -750,6 +750,9 @@ func refresh_hint() -> void:
 	if lbl_hint == null:
 		return
 	var game := get_node_or_null("/root/Game")
+	if game and game.touch_on():
+		lbl_hint.text = ""  # RF-470: no toque os controles já estão na tela
+		return
 	lbl_hint.text = game.hint(game.race_hint_kbd(), game.race_hint_pad()) if game else HINT_KBD
 
 
@@ -765,7 +768,7 @@ func _update_power_label(p: Node3D) -> void:
 	if lbl_power == null or not p.has_method("power_state"):
 		return
 	var game := get_node_or_null("/root/Game")
-	var key: String = game.hint(game.key_label(0, "power").split(" / ")[0], game.pad_label("power")) if game else "Q"
+	var key: String = game.hint(game.key_label(0, "power").split(" / ")[0], game.pad_label("power"), "botão PODER") if game else "Q"
 	var nm: String = p.power_name().to_upper()
 	match p.power_state():
 		"charge":
@@ -790,3 +793,37 @@ func _on_power_used(k: Node3D, _power: String, msg: String) -> void:
 	if k == kart:
 		_flash(msg, 1.4)
 		lbl_msg.add_theme_color_override("font_color", Color(0.45, 1.0, 0.55))
+
+
+## RF-471: no toque os controles ocupam os cantos de baixo — velocímetro e barra do drift vão pro
+## centro de baixo, o minimapa encolhe pro alto à esquerda e a lista de posições some (a posição
+## grande continua no canto).
+var touch_layout := false
+
+
+func apply_touch_layout() -> void:
+	if touch_layout:
+		return
+	touch_layout = true
+	for c in [lbl_speed, lbl_unit, drift_bar_bg]:
+		if c:
+			c.anchor_left = 0.5
+			c.anchor_right = 0.5
+	if lbl_speed:
+		lbl_speed.offset_left = -170
+		lbl_speed.offset_right = -6
+	if lbl_unit:
+		lbl_unit.offset_left = 4
+		lbl_unit.offset_right = 90
+	if drift_bar_bg:
+		drift_bar_bg.offset_left = -110
+		drift_bar_bg.offset_right = 110
+	if minimap:
+		minimap.anchor_top = 0.0
+		minimap.anchor_bottom = 0.0
+		minimap.offset_left = 16
+		minimap.offset_right = 186
+		minimap.offset_top = 132
+		minimap.offset_bottom = 302
+	if ranking_box:
+		ranking_box.visible = false

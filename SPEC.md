@@ -155,7 +155,7 @@ Conversão de stat para física (em `kart.gd`):
 - [x] **RF-151** Dificuldade da IA no menu (`IA: FÁCIL / NORMAL / DIFÍCIL`): habilidade 0.84–0.90 / 0.90–0.97 / 0.97–1.02 e *rubber band* mais forte no difícil.
 
 ### Gráficos (v0.9)
-- [x] **RF-160** Renderer **Forward+** no PC (a versão web, quando existir, usa Compatibility). Ambiente com tonemap ACES, bloom (glow), SSAO, neblina leve na cor do horizonte, saturação +10% e MSAA 4x.
+- [x] **RF-160** Renderer **Forward+** no PC (a versão web usa Compatibility: sem SSAO/SSR, ver RF-475). Ambiente com tonemap ACES, bloom (glow), SSAO, neblina leve na cor do horizonte, saturação +10% e MSAA 4x.
 - [x] **RF-161** (substituído pelo RF-182) Opção `GRÁFICOS: ALTO / BAIXO` no menu (salva no `Game`). BAIXO desliga SSAO, bloom, sombras suaves e MSAA e reduz as partículas pela metade.
 - [x] **RF-162** Texturas procedurais em projeção triplanar (sem UV): asfalto granulado com relevo, grama com variação, areia, e piso de azulejo xadrez na cozinha.
 - [x] **RF-163** Céu em shader: gradiente, sol com halo, nuvens animadas; na pista noturna, estrelas e lua.
@@ -353,6 +353,16 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-460** O pórtico da largada tem um semáforo de 3 lâmpadas que acompanha a contagem: no 3 acende a 1ª vermelha, no 2 a 2ª, no 1 a 3ª; no VAI! as três ficam verdes por 2 s e apagam. (As lâmpadas do modelo, que eram uma peça só, ficam apagadas por baixo.)
 - [x] **RF-461** Nas pistas noturnas (`night`: Cozinha, Telhados, Fábrica) cada kart tem farol de verdade (luz que ilumina a pista à frente), os dois faróis acesos no bico e a lanterna vermelha atrás. No gráfico BAIXO só os karts dos jogadores ganham a luz (os faróis e lanternas continuam acesos em todos).
 
+### Navegador e celular (v0.41)
+- [x] **RF-470** Controles na tela de toque (estilo jogo mobile), só com 1 jogador: direcional analógico que nasce onde o dedo encosta na metade esquerda de baixo (vira proporcional ao arrasto); à direita DRIFT (segurar), ITEM, PODER (pisca quando pronto, apagado na recarga) e FREIO; pausa à esquerda. Vários dedos ao mesmo tempo. Os botões apertam as mesmas ações do teclado (`p1_*`). Acelerador automático (liga no fim da contagem, dá largada turbo; solta no freio); desligado, aparece o botão ACELERA. Somem (e soltam tudo) na pausa e no resultado.
+- [x] **RF-471** Com os controles de toque o HUD se arruma pra não ficar embaixo dos dedos: velocidade e barra do drift no centro de baixo, minimapa pequeno em cima à esquerda, sem a lista de posições nem a linha de dicas do teclado.
+- [x] **RF-472** Abertura no toque: "TOQUE PARA COMEÇAR"; tocar em qualquer lugar (menos no botão TELA CHEIA) vai pro menu, mesmo que o navegador não mande o clique emulado. No toque, as dicas do menu e do poder falam de tocar (e não de teclas).
+- [x] **RF-473** Botão TELA CHEIA na abertura (no navegador e no toque).
+- [x] **RF-474** Configurações → Jogo: "Controles na tela (toque)" AUTOMÁTICO (celular ou último toque) / SEMPRE / NUNCA e "Acelerar sozinho no toque". Na versão web, a 1ª vez abre no gráfico BAIXO (e 75% de resolução no celular); celular em pé mostra "VIRE O CELULAR DE LADO".
+- [x] **RF-475** O kart tem a mesma cor no navegador (renderizador Compatibility) e no PC: quais partes da paleta pintar vem de uma máscara pronta (`colormap_mask.png`, gerada por `tools/make_kart_mask.gd`). A conta de saturação no shader só achava a carroceria lilás-clara no espaço linear do Forward+ e o kart saía branco na web.
+- [x] **RF-476** Só aparecem símbolos que a fonte do jogo tem (no navegador não há fonte reserva): setas viram "Seta cima/esq./baixo/dir." (e "setas" nas dicas), ★ e → saíram dos textos.
+- [x] **RF-477** Versão web publicada pelo GitHub Actions no GitHub Pages: testes → `tools/check_publish.sh` → export "Web" (sem threads, Compatibility, texturas ETC2/ASTC pro celular) → teste no navegador (`tests/web_smoke.js`, PC e celular deitado com toque) → publica. Ações fixadas por SHA, binários do Godot conferidos por SHA-512, permissões mínimas.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -374,6 +384,7 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 | Som liga/desliga | M | M | — |
 
 Jogadores 3 e 4 só por controle. Com 1 jogador, as teclas do J2 também valem para o J1.
+No celular (ou qualquer tela de toque) os controles aparecem na tela: ver RF-470.
 
 ## 6. Requisitos não funcionais
 - **RNF-01** 60 ticks de física fixos com *physics interpolation* (suave em monitores 144 Hz).
@@ -409,7 +420,12 @@ scripts/ids.gd                                 nomes de perigos, zonas, poderes 
 scripts/safe_cfg.gd                            leitura segura dos arquivos do jogador (RF-440)
 scripts/records.gd                             recordes e fantasma (user://records.cfg, seção por versão do traçado)
 scripts/hud.gd, scripts/minimap.gd, scripts/track_map.gd   interface
+scripts/touch_controls.gd                      controles na tela de toque (RF-470)
 tests/run_tests.gd + tests/suites/*.gd         testes headless (base de ajudantes + 5 grupos por assunto)
+tests/web_smoke.js                             versão web no navegador (Playwright, roda no CI)
+.github/workflows/build.yml                   CI: testes → check_publish → export web → web_smoke → GitHub Pages
+tools/check_publish.sh                         varredura antes de publicar (arquivos proibidos, segredos, e-mails, licenças)
+tools/make_kart_mask.gd                        gera a máscara de cor do kart (RF-475)
 tools/split_gd.pl                              refatoração mecânica: move funções inteiras pra camadas
 tools/probe_track.gd, probe_all.gd, ai_report.gd   medir pista e IA (extensão, alturas, quedas por trecho)
 tools/screenshot*.gd                           prints pra revisão visual
@@ -529,6 +545,9 @@ tools/screenshot*.gd                           prints pra revisão visual
 - [x] **CA-109** settings.cfg e records.cfg com script embutido não rodam código (o arquivo vira .bloqueado e o jogo usa o padrão); números fora da faixa são corrigidos; teclas e campos de recorde inválidos são ignorados.
 - [x] **CA-110** Semáforo com 3 lâmpadas: acende 1, 2, 3 vermelhas na contagem, verde no VAI! e apaga depois de 2 s.
 - [x] **CA-111** Farol aceso nas pistas noturnas (Cozinha, Telhados, Fábrica) e nenhum nas de dia.
+- [x] **CA-112** Toque: controles só com 1 jogador e toque ligado; direcional proporcional junto com drift (vários dedos); soltar para tudo; acelerador automático no fim da contagem e solto no freio; pausa esconde e solta tudo; HUD rearrumado; abertura começa no toque (não no TELA CHEIA); "setas" no lugar dos símbolos.
+- [x] **CA-113** A carroceria usa a máscara pronta (que pinta a paleta) e a cor do piloto.
+- [x] **CA-114** Versão web (CI, `tests/web_smoke.js`): abre, menu, corrida no PC e abertura → menu no celular deitado com toque, sem erro do motor no console.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
@@ -542,7 +561,7 @@ Teste manual (checklist por release):
 4. ~~**Mais pistas**~~ → §4 RF-120..122; ~~Grand Prix~~ → RF-190..195. Falta: elevação e atalhos.
 5. ~~**Mais itens**~~ → RF-200..205 (gato, ratoeira, escudo, triplo). Falta: item "assinatura" por piloto.
 6. ~~**Largada turbo**~~ → §4 RF-85..87.
-7. **Export web** (GitHub Pages) pra turma jogar no navegador.
+7. ~~**Export web** (GitHub Pages) pra turma jogar no navegador.~~ → RF-470..477.
 8. **Multiplayer online.**
 
 ## 10. Plano: pistas novas (todas feitas — v0.21, v0.24, v0.26, v0.27 e v0.31)

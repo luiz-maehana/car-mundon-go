@@ -201,7 +201,7 @@ func _refresh_track() -> void:
 		for id in cup:
 			names.append(TrackScript.find(id)["name"])
 		track_title.text = String(_cups()[cup_i]["name"]).to_upper()
-		track_desc.text = "Corridas em sequência: " + " → ".join(names) + "."
+		track_desc.text = "Corridas em sequência: " + " > ".join(names) + "."
 		track_info.text = "Pontos: 15, 12, 10, 8, 6, 4, 2, 1. O trajeto mostrado é o da 1ª pista."
 		return
 	track_title.text = td["name"]

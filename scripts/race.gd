@@ -55,6 +55,7 @@ func _exit_tree() -> void:
 
 ## RF-81: o loop do motor (55 Hz) sobe de tom com a velocidade; volume segue o acelerador.
 func _process(delta: float) -> void:
+	_ensure_touch()  # RF-470
 	for e in engines:
 		var ap: AudioStreamPlayer = e["player"]
 		var k: Node3D = e["kart"]
@@ -303,3 +304,27 @@ func step(delta: float) -> void:
 		h.update_hud(delta)
 	if results_shown and results_hud:
 		results_hud.refresh_results()  # RF-360: quem termina depois entra no placar
+
+
+# ---------------------------------------------------------------- controles de toque (RF-470)
+
+const TouchControls = preload("res://scripts/touch_controls.gd")
+var touch_layer: CanvasLayer
+
+
+## Cria os controles na tela pro J1 quando o toque está ativo (celular, ou alguém tocou na tela).
+func _ensure_touch() -> void:
+	if touch_layer != null or players.size() != 1 or not use_game_settings:
+		return
+	var game := get_node_or_null("/root/Game")
+	if game == null or not game.touch_on():
+		return
+	touch_layer = TouchControls.new()
+	touch_layer.name = "TouchControls"
+	add_child(touch_layer)
+	touch_layer.setup(self)
+	for h in huds:
+		if h.has_method("refresh_hint"):
+			h.refresh_hint()
+		if h.has_method("apply_touch_layout"):
+			h.apply_touch_layout()

@@ -127,6 +127,8 @@ func _build_game(p: VBoxContainer) -> void:
 	_toggle(p, "Minimapa", "show_minimap")
 	_toggle(p, "Lista de posições", "show_ranking")
 	_options(p, "Velocidade em", "speed_unit", [["KM/H", "kmh"], ["MPH", "mph"]])
+	_options(p, "Controles na tela (toque)", "touch_controls", [["AUTOMÁTICO", "auto"], ["SEMPRE", "on"], ["NUNCA", "off"]])  # RF-470
+	_toggle(p, "Acelerar sozinho no toque", "touch_auto_gas")
 	_note(p, "Partículas valem a partir da próxima corrida.")
 
 

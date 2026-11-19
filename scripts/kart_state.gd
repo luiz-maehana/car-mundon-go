@@ -14,6 +14,7 @@ const PowerRegistry = preload("res://scripts/powers/registry.gd")
 const Ids = preload("res://scripts/ids.gd")
 const KenneyKart = preload("res://assets/kenney/karts/kart-oopi.glb")
 const RecolorShader = preload("res://shaders/kart_recolor.gdshader")
+const RecolorMask = preload("res://assets/kenney/karts/Textures/colormap_mask.png")  # RF-475
 const KART_SCALE := 2.3
 const ShieldShader = preload("res://shaders/shield.gdshader")
 const LABEL_LAYER_BASE := 10  # camada do nome do jogador N = 10+N (escondida na câmera dele)

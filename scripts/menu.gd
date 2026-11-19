@@ -367,15 +367,16 @@ func _refresh_help() -> void:
 	var game := get_node_or_null("/root/Game")
 	var kbd := "Setas: navegar · Enter: confirmar · Esc/Backspace: voltar · J1 = %s/controle 1 · J2 = %s/controle 2 · M: som"
 	var pad := "Direcional: navegar · A: confirmar · B: voltar · cada jogador usa o seu controle (1 a 4)"
+	var touch := "Toque para escolher · VOLTAR volta uma etapa"
 	if step == STEP_SETUP:
 		kbd = "Setas para os lados: mudar o valor · para cima/baixo: navegar · Enter: confirmar · Esc: voltar"
 		pad = "Direcional para os lados: mudar o valor · para cima/baixo: navegar · A: confirmar · B: voltar"
-		help.text = game.hint(kbd, pad) if game else kbd
+		help.text = game.hint(kbd, pad, "Toque nas opções para mudar · CORRER! para começar") if game else kbd
 		return
 	if game == null:
 		help.text = kbd % ["WASD", "setas"]
 		return
-	help.text = game.hint(kbd % [game.move_keys(0), game.move_keys(1)], pad)
+	help.text = game.hint(kbd % [game.move_keys(0), game.move_keys(1)], pad, touch)
 
 
 # ---------------------------------------------------------------- animação contínua

@@ -505,3 +505,92 @@ func _test_stick_menu() -> void:
 	await process_frame
 	menu.queue_free()
 	await process_frame
+
+
+func _touch(idx: int, pos: Vector2, pressed: bool) -> InputEventScreenTouch:
+	var e := InputEventScreenTouch.new()
+	e.index = idx
+	e.position = pos
+	e.pressed = pressed
+	return e
+
+
+func _drag(idx: int, pos: Vector2) -> InputEventScreenDrag:
+	var e := InputEventScreenDrag.new()
+	e.index = idx
+	e.position = pos
+	return e
+
+
+func _test_touch() -> void:
+	print("CA-112 controles de toque (celular)")
+	var game = root.get_node_or_null("Game")
+	game.settings["touch_controls"] = "on"
+	game.settings["touch_auto_gas"] = true
+	game.num_players = 1
+	game.mode = "race"
+	game.track_id = "queijo"
+	game.selected_chars = ["nanni"]
+	var race = load("res://scenes/race.tscn").instantiate()
+	root.add_child(race)
+	await process_frame
+	race._process(0.016)
+	var tl = race.touch_layer
+	check(tl != null and tl.visible, "controles aparecem na corrida")
+	check(race.huds[0].lbl_hint == null or race.huds[0].lbl_hint.text == "", "sem dicas de teclado no toque")
+	var sz: Vector2 = tl.root.size
+	var drift_c: Vector2 = tl._center(tl.buttons.filter(func(b): return b["id"] == "drift")[0])
+	var home: Vector2 = tl._stick_home()
+	# dois dedos: um no direcional arrastando pra direita, outro segurando o drift
+	tl._input(_touch(0, home, true))
+	tl._input(_drag(0, home + Vector2(tl.STICK_RANGE * tl._scale() * 0.6, 0)))
+	tl._input(_touch(1, drift_c, true))
+	var sr := Input.get_action_strength("p1_steer_right")
+	check(sr > 0.4 and sr < 0.8 and Input.is_action_pressed("p1_drift"), "vira proporcional (%.2f) e segura o drift ao mesmo tempo" % sr)
+	tl._input(_touch(0, home, false))
+	tl._input(_touch(1, drift_c, false))
+	check(Input.get_action_strength("p1_steer_right") == 0.0 and not Input.is_action_pressed("p1_drift"), "soltou: para de virar e de driftar")
+	# acelerador automático: no começo da contagem não (queimaria a largada), no fim sim
+	race.countdown = 2.5
+	tl._process(0.016)
+	var early := Input.is_action_pressed("p1_accelerate")
+	race.countdown = 1.0
+	tl._process(0.016)
+	check(not early and Input.is_action_pressed("p1_accelerate"), "acelera sozinho no fim da contagem (largada turbo)")
+	var brake_c: Vector2 = tl._center(tl.buttons.filter(func(b): return b["id"] == "brake")[0])
+	tl._input(_touch(2, brake_c, true))
+	tl._process(0.016)
+	check(Input.is_action_pressed("p1_brake") and not Input.is_action_pressed("p1_accelerate"), "freio solta o acelerador")
+	tl._input(_touch(2, brake_c, false))
+	var pause_c: Vector2 = tl._center(tl.buttons.filter(func(b): return b["id"] == "pause")[0])
+	tl._input(_touch(3, pause_c, true))
+	tl._input(_touch(3, pause_c, false))
+	tl._process(0.016)
+	check(race.paused and not tl.visible and not Input.is_action_pressed("p1_accelerate"), "botão de pausa pausa e esconde os controles (soltando tudo)")
+	race.toggle_pause()
+	race.queue_free()
+	await process_frame
+	# abertura no toque
+	var intro = load("res://scenes/intro.tscn").instantiate()
+	root.add_child(intro)
+	await process_frame
+	check("TOQUE" in intro.prompt.text and intro.get_node_or_null("Fullscreen") != null, "abertura: TOQUE PARA COMEÇAR e botão de tela cheia")
+	var fs: Control = intro.get_node("Fullscreen")
+	intro._input(_touch(0, fs.get_global_rect().get_center(), false))
+	check(not intro.leaving, "toque no TELA CHEIA não começa o jogo")
+	intro._input(_touch(0, Vector2(400, 400), false))
+	check(intro.leaving, "toque na tela começa (mesmo sem o clique emulado do navegador)")
+	await process_frame
+	await process_frame
+	if current_scene:
+		current_scene.queue_free()
+	if is_instance_valid(intro):
+		intro.queue_free()
+	await process_frame
+	check(game.move_keys(1) == "setas", "J2 nas setas aparece como \"setas\" (a fonte não tem os símbolos de seta)")
+	var dev_was: String = game.last_device
+	game.last_device = "touch"
+	check(game.hint("k", "p", "t") == "t" and game.hint("k", "p") == "k", "dicas de toque no toque (e a do teclado quando não há texto de toque)")
+	game.last_device = dev_was
+	game.settings["touch_controls"] = "auto"
+	game.load_settings()

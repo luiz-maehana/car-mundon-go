@@ -497,6 +497,16 @@ func _test_assets() -> void:
 	check(ok, "8 karts com GLB do Car Kit, piloto original escondido, 4 rodas (2 dianteiras)")
 	var sm = race.karts[0].kart_body.material_override
 	check(sm is ShaderMaterial and sm.get_shader_parameter("tint") == race.karts[0].color, "carroceria recolorida na cor do piloto")
+	# RF-475: a máscara vem pronta (no Compatibility/navegador a conta de saturação dava kart branco)
+	var mk: Texture2D = sm.get_shader_parameter("mask") if sm is ShaderMaterial else null
+	var painted := 0
+	if mk:
+		var mimg := mk.get_image()
+		for y in range(0, mimg.get_height(), 4):
+			for x in range(0, mimg.get_width(), 4):
+				if mimg.get_pixel(x, y).r > 0.5:
+					painted += 1
+	check(painted > 300, "máscara da carroceria pronta e pintando a paleta (%d amostras)" % painted)
 
 	print("CA-27 visual de cada amigo")
 	var Chars = load("res://scripts/characters.gd")

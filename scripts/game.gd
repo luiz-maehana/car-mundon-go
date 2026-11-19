@@ -38,6 +38,7 @@ const DEFAULTS := {
 	"fullscreen": false, "vsync": true, "max_fps": 0, "quality": 2, "render_scale": 1.0, "fov": 72.0, "show_fps": false,
 	"shake": 1.0, "speed_lines": true, "particles_full": true, "show_names": true, "show_minimap": true,
 	"show_ranking": true, "speed_unit": "kmh", "deadzone": 0.25,
+	"touch_controls": "auto", "touch_auto_gas": true,  # RF-470
 }
 
 var settings: Dictionary = DEFAULTS.duplicate()
@@ -88,7 +89,9 @@ func _input(event: InputEvent) -> void:
 
 func note_device(event: InputEvent) -> void:
 	var dev := ""
-	if event is InputEventKey and event.pressed:
+	if event is InputEventScreenTouch and event.pressed:
+		dev = "touch"  # RF-470
+	elif event is InputEventKey and event.pressed:
 		dev = "kbd"
 	elif (event is InputEventJoypadButton and event.pressed) or (event is InputEventJoypadMotion and absf(event.axis_value) > 0.5):
 		dev = "pad"
@@ -114,7 +117,10 @@ static func is_accept(event: InputEvent) -> bool:
 
 
 ## RF-242: texto de dica conforme o dispositivo.
-func hint(kbd: String, pad: String) -> String:
+## Dica pro aparelho em uso (RF-254; no toque, RF-470, usa o texto de toque quando houver).
+func hint(kbd: String, pad: String, touch: String = "") -> String:
+	if last_device == "touch" and touch != "":
+		return touch
 	return pad if last_device == "pad" else kbd
 
 
@@ -331,6 +337,10 @@ func _setup_buses() -> void:
 func load_settings() -> void:
 	settings = DEFAULTS.duplicate()
 	var cfg: ConfigFile = SafeCfg.load_file(settings_path)  # RF-440: nada de objeto/script vindo do arquivo
+	if not FileAccess.file_exists(settings_path) and OS.has_feature("web"):
+		settings["quality"] = 0  # RF-474: no navegador começa no gráfico Baixo (dá pra subir)
+		if is_mobile():
+			settings["render_scale"] = 0.75
 	if cfg.has_section("settings"):
 		for k in DEFAULTS:
 			var v = cfg.get_value("settings", k, DEFAULTS[k])
@@ -342,6 +352,8 @@ func load_settings() -> void:
 				settings[k] = int(x) if typeof(DEFAULTS[k]) == TYPE_INT else x
 		if not String(settings["speed_unit"]) in ["kmh", "mph"]:
 			settings["speed_unit"] = DEFAULTS["speed_unit"]
+		if not String(settings["touch_controls"]) in ["auto", "on", "off"]:
+			settings["touch_controls"] = DEFAULTS["touch_controls"]
 	# RF-253: teclas e botões trocados
 	key_binds.clear()
 	pad_binds.clear()
@@ -435,6 +447,7 @@ func apply_settings() -> void:
 
 func _process(_delta: float) -> void:
 	_stick_repeat(_delta)
+	_update_portrait_hint()  # RF-474
 	if loading and loading.visible and loading_spin:
 		loading_spin.rotation += _delta * 7.0
 	if fps_label and fps_label.visible:
@@ -559,15 +572,15 @@ const ACTION_NAMES := {
 	"steer_right": "Virar à direita", "drift": "Drift (no ar: manobra)", "use_item": "Usar item", "power": "Poder (10 queijinhos)",
 }
 const KEY_NAMES := {
-	KEY_SPACE: "Espaço", KEY_UP: "↑", KEY_DOWN: "↓", KEY_LEFT: "←", KEY_RIGHT: "→",
+	KEY_SPACE: "Espaço", KEY_UP: "Seta cima", KEY_DOWN: "Seta baixo", KEY_LEFT: "Seta esq.", KEY_RIGHT: "Seta dir.",
 	KEY_ENTER: "Enter", KEY_KP_ENTER: "Enter num.", KEY_KP_0: "Num 0", KEY_SHIFT: "Shift",
 	KEY_CTRL: "Ctrl", KEY_ALT: "Alt", KEY_TAB: "Tab", KEY_BACKSPACE: "Backspace",
 }
 const PAD_NAMES := {
 	JOY_BUTTON_A: "A", JOY_BUTTON_B: "B", JOY_BUTTON_X: "X", JOY_BUTTON_Y: "Y",
 	JOY_BUTTON_LEFT_SHOULDER: "LB", JOY_BUTTON_RIGHT_SHOULDER: "RB", JOY_BUTTON_BACK: "Back",
-	JOY_BUTTON_LEFT_STICK: "L3", JOY_BUTTON_RIGHT_STICK: "R3", JOY_BUTTON_DPAD_UP: "Direcional ↑",
-	JOY_BUTTON_DPAD_DOWN: "Direcional ↓", JOY_BUTTON_DPAD_LEFT: "Direcional ←", JOY_BUTTON_DPAD_RIGHT: "Direcional →",
+	JOY_BUTTON_LEFT_STICK: "L3", JOY_BUTTON_RIGHT_STICK: "R3", JOY_BUTTON_DPAD_UP: "Direcional cima",
+	JOY_BUTTON_DPAD_DOWN: "Direcional baixo", JOY_BUTTON_DPAD_LEFT: "Direcional esq.", JOY_BUTTON_DPAD_RIGHT: "Direcional dir.",
 }
 
 var key_binds := {}  # "p1_drift" -> [[physical_keycode, location], ...] (só as ações mexidas)
@@ -740,6 +753,8 @@ func move_keys(player: int) -> String:
 	var ks := []
 	for a in ["accelerate", "steer_left", "brake", "steer_right"]:
 		ks.append(key_label(player, a).split(" / ")[0])
+	if ks == ["Seta cima", "Seta esq.", "Seta baixo", "Seta dir."]:
+		return "setas"  # a fonte não tem ↑←↓→ (no navegador não há fonte reserva)
 	var short := ks.all(func(s): return s.length() == 1)
 	return "".join(ks) if short else " ".join(ks)
 
@@ -918,3 +933,57 @@ func _stick_repeat(delta: float) -> void:
 			t -= STICK_REPEAT
 			_stick_step(axis, dir)
 		stick_hold[axis] = t
+
+
+# ---------------------------------------------------------------- toque e navegador (RF-470..474)
+
+## Celular/tablet (app ou navegador).
+static func is_mobile() -> bool:
+	return OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios")
+
+
+## Mostrar os controles na tela? (auto: no celular ou depois que alguém tocou na tela)
+func touch_on() -> bool:
+	match String(settings.get("touch_controls", "auto")):
+		"on":
+			return true
+		"off":
+			return false
+	return is_mobile() or last_device == "touch"
+
+
+## RF-473: tela cheia a partir de um toque/clique (o navegador só deixa dentro de um gesto).
+func toggle_fullscreen() -> void:
+	var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+
+## RF-474: no celular em pé, um aviso pra virar de lado (o jogo é na horizontal).
+var portrait_layer: CanvasLayer
+
+
+func _update_portrait_hint() -> void:
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var s := vp.get_visible_rect().size
+	var need := touch_on() and s.y > s.x * 1.05
+	if need and portrait_layer == null:
+		portrait_layer = CanvasLayer.new()
+		portrait_layer.layer = 120
+		var bg := ColorRect.new()
+		bg.color = Color(0.03, 0.04, 0.1, 0.92)
+		bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		portrait_layer.add_child(bg)
+		var l := Label.new()
+		l.text = "VIRE O CELULAR DE LADO\npra jogar na horizontal"
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.add_theme_font_size_override("font_size", 34)
+		l.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+		l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		portrait_layer.add_child(l)
+		add_child(portrait_layer)
+	if portrait_layer:
+		portrait_layer.visible = need
