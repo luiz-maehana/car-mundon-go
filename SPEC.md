@@ -274,6 +274,13 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-312** Depois de pousar o kart **pisca 1,2 s** e nada acerta (itens, perigos, ratoeira). Pendurado nos balões não bate em ninguém.
 - [x] **RF-313** **CONTRAMÃO!** pisca no HUD depois de 1 s andando contra o sentido da pista (antes só aparecia depois da chegada, por engano).
 
+### Geladeira Polar: andares, looping e gelo (v0.26)
+- [x] **RF-320** **Altura**: a pista pode ter altura por ponto de controle (`heights`); a linha central é 3D (Hermite), o kart acompanha o chão (sobe, desce, empina o bico) e pousa de pulos na altura certa. Trecho no alto ganha laje por baixo e pilares que nunca caem em cima de outra pista. Muro por amostra: estreito (colado na zebra) no looping e em pontes (`narrow`). Cenário calculado no plano (nada flutua nem nasce embaixo de trecho alto).
+- [x] **RF-321** **Looping** (`loops: [{cp, r, w}]`): volta vertical inteira com deslocamento lateral (a saída passa do lado da entrada). Dentro dele o kart vai no **trilho** (grudado, velocidade mínima 20 m/s, direcional troca de faixa), de cabeça pra baixo no alto; a câmera gira junto. A IA mira a entrada e passa sempre. O resgate nunca devolve dentro do looping.
+- [x] **RF-322** **Andares e viaduto**: trechos com mais de 3,5 m de diferença são andares; um passa por cima do outro sem recortar muro, karts de andares diferentes não batem, e itens/queijinhos/perigos só pegam quem está na mesma altura.
+- [x] **RF-323** **Gelo** (zona `ice`): o kart escorrega (aderência baixa, ainda mais no drift) e anda 5% mais rápido.
+- [x] **RF-324** **Geladeira Polar** (1,35 km): fundo da geladeira (0 m) → subida → prateleira (8 m) com looping → congelador (16 m) com gelo e seta de turbo no gelo → ponte estreita por cima da reta de largada → descida com rampa. Túnel de caixa de leite, comida gigante (caixas de leite, iogurtes, ovos, garrafas), cubos de gelo, paredes da geladeira com lâmpada no teto. O trajeto no menu fica mais claro onde é mais alto e marca o looping (L) e o viaduto (V). Música CC0.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -402,6 +409,12 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-71** Pontos seguros: nunca em fogo, farofa, grelha, rampa ou no meio do cruzamento; da grelha volta pra antes dela; a maior parte da pista é segura.
 - [x] **CA-72** Andando ao contrário aparece CONTRAMÃO!; virando, some.
 - [x] **CA-73** IA parada também é resgatada pelos balões.
+- [x] **CA-74** Geladeira: de 0 m a mais de 15 m sem afundar no chão; um viaduto com vão > 6 m e ponte estreita; um looping de cabeça pra baixo no alto, muro estreito na entrada e saída, sem ponto de resgate dentro.
+- [x] **CA-75** Na subida o kart fica colado no chão (erro < 5 cm) e empina o bico.
+- [x] **CA-76** Looping: entra no trilho, dá a volta inteira de cabeça pra baixo, sai no chão alinhado; devagar também passa; direcional troca de faixa; câmera gira junto.
+- [x] **CA-77** No gelo o kart derrapa mais que o dobro do asfalto.
+- [x] **CA-78** Viaduto: karts de andares diferentes não batem, queijinho de baixo não é pego por quem passa em cima, resgate no alto pousa no alto.
+- [x] **CA-79** IA na Geladeira: volta entre 30 e 60 s, todos passam pelo looping, quase nunca precisam de resgate.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
@@ -418,7 +431,7 @@ Teste manual (checklist por release):
 7. **Export web** (GitHub Pages) pra turma jogar no navegador.
 8. **Multiplayer online.**
 
-## 10. Plano: pistas novas (P1, P2 e P3 feitas — v0.21 e v0.24)
+## 10. Plano: pistas novas (P1, P2, P3 e P4 feitas — v0.21, v0.24 e v0.26)
 
 Ideia geral: o mundo é **visto do tamanho de um camundongo** — cada pista é um lugar comum da casa/cidade em escala gigante, com um "truque" que muda o jeito de pilotar. Uma segunda copa (**Copa Farofa**, 4 pistas) entra no Grand Prix junto da atual (**Copa Queijo**). Tudo original; assets só CC0.
 
@@ -429,7 +442,7 @@ Ideia geral: o mundo é **visto do tamanho de um camundongo** — cada pista é 
 | P1 | **Churrascada de Domingo** | em cima de uma mesa de churrasco | trecho sobre a **grelha** com labaredas que sobem em ritmo (acertam quem passa na hora errada); **farofa** espalhada = areia que segura o kart; espetos e vinagrete de cenário; pulo da tábua de carne pro prato | T1 superfícies, T4 perigos com tempo |
 | P2 ✅ | **Parquinho em Oito** | parquinho da praça à tarde | traçado em **8 com cruzamento no mesmo nível** (dá pra bater de lado em quem cruza); **escorregador** vira rampa gigante; **caixa de areia** como atalho lento; gangorra que sobe e desce | T5 cruzamento, T4 gangorra |
 | P3 | **Fábrica de Queijo** | linha de produção | **esteiras** que empurram pra frente (rápido) ou pro lado; **rodas de queijo rolando** pela pista como obstáculo; prensas que descem; queijinhos em dobro | T1 esteira, T4 obstáculos móveis |
-| P4 | **Geladeira Polar** | dentro da geladeira aberta, luz azul | **prateleiras em andares** ligadas por rampas (pista sobe e desce); **gelo** que escorrega no congelador; potes de iogurte e caixa de leite como túnel | T3 elevação, T1 gelo |
+| P4 ✅ | **Geladeira Polar** | dentro da geladeira aberta, luz azul | **prateleiras em andares** ligadas por rampas (pista sobe e desce); **gelo** que escorrega no congelador; potes de iogurte e caixa de leite como túnel | T3 elevação, T1 gelo |
 | P5 | **Telhados da Vila** | telhados à noite, lua cheia | **pulos entre prédios** (cair = volta pro último ponto); varal de roupa como teto; **gato de verdade patrulhando** um telhado; antenas e caixas d'água | T3 elevação, T6 vãos + respawn, T4 gato |
 | P6 | **Feira Livre** | rua de feira de manhã | pista que **afunila** entre as barracas e abre na rua; caixotes, pastel, caldo de cana; um atalho por baixo das barracas | T2 largura variável, T5 atalho |
 

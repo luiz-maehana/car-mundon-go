@@ -619,6 +619,8 @@ func _kart_collisions() -> void:
 			var b: Node3D = karts[j]
 			if a.rescue_time > 0.0 or b.rescue_time > 0.0:  # RF-310: pendurado nos balões
 				continue
+			if absf(a.position.y - b.position.y) > 2.0:  # RF-320: andares diferentes (ou um no looping)
+				continue
 			var dv := b.position - a.position
 			dv.y = 0.0
 			var d := dv.length()
@@ -696,7 +698,7 @@ func _update_cheese(delta: float) -> void:
 		var cp: Vector3 = c["pos"]
 		for k in karts:
 			var kp: Vector3 = k.position
-			if Vector2(cp.x - kp.x, cp.z - kp.z).length() < 1.8 and k.position.y < 2.0:
+			if Vector2(cp.x - kp.x, cp.z - kp.z).length() < 1.8 and absf(kp.y - cp.y) < 2.0:
 				if k.cheese < KartScript.MAX_CHEESE:
 					k.cheese += 1
 					if k.is_player:
@@ -827,14 +829,14 @@ func _spawn_hazard(type: String, pos: Vector3, v: Vector3, life: float, owner_ka
 			# RF-172: banana do Food Kit (Kenney), deitada no chão
 			mi = Gfx.prop(BANANA_MODEL, 1.5)
 			mi.rotation.y = randf() * TAU
-			pos.y = 0.0
+			pos.y = track.points[owner_kart.track_idx].y
 		"ratoeira":
 			mi = HazardModels.mousetrap()
 			mi.rotation.y = randf() * TAU
-			pos.y = 0.0
+			pos.y = track.points[owner_kart.track_idx].y
 		"gato":
 			mi = HazardModels.cat()
-			pos.y = 0.0
+			pos.y = track.points[owner_kart.track_idx].y
 		_:
 			mi = HazardModels.bomb()
 	mi.position = pos
@@ -884,7 +886,7 @@ func _update_hazards(delta: float) -> void:
 				continue
 			var p: Vector3 = h["pos"]
 			var kp: Vector3 = k.position
-			if Vector2(p.x - kp.x, p.z - kp.z).length() < radius and kp.y < 1.5:
+			if Vector2(p.x - kp.x, p.z - kp.z).length() < radius and absf(kp.y - p.y) < 1.5:
 				if h["type"] == "ratoeira":
 					k.trap()
 				else:
@@ -907,7 +909,7 @@ func _move_gato(h: Dictionary, delta: float) -> bool:
 	var tp: Vector3 = target.position
 	var pos: Vector3 = h["pos"]
 	if Vector2(tp.x - pos.x, tp.z - pos.z).length() < 18.0:
-		pos = pos.move_toward(Vector3(tp.x, 0.0, tp.z), GATO_SPEED * 1.2 * delta)
+		pos = pos.move_toward(Vector3(tp.x, tp.y, tp.z), GATO_SPEED * 1.2 * delta)
 	else:
 		h["prog"] = float(h["prog"]) + GATO_SPEED * delta / TrackScript.SPACING
 		h["lat"] = lerpf(float(h["lat"]), target.lateral, 1.0 - exp(-1.5 * delta))
@@ -975,8 +977,10 @@ func _update_cameras(delta: float, snap: bool) -> void:
 	for i in cameras.size():
 		var cam: Camera3D = cameras[i]
 		var p: Node3D = players[i]
-		var f: Vector3 = p.forward()
-		var desired: Vector3 = p.position - f * 8.0 + Vector3.UP * 4.1
+		var fr: Array = p.cam_frame()  # RF-321: no looping a câmera gira junto
+		var f: Vector3 = fr[0]
+		var up: Vector3 = fr[1]
+		var desired: Vector3 = p.position - f * 8.0 + up * 4.1
 		# outro kart colado na câmera: sobe um pouco pra ele não tapar a visão
 		var near := 99.0
 		for o in karts:
@@ -988,7 +992,7 @@ func _update_cameras(delta: float, snap: bool) -> void:
 			cam.position = desired
 		else:
 			cam.position = cam.position.lerp(desired, 1.0 - exp(-8.0 * delta))
-		cam.look_at(p.position + f * 9.0 + Vector3.UP * 1.0)
+		cam.look_at(p.position + f * 9.0 + up * 1.0, up)
 		var target_fov := base_fov + 10.0 if p.boost_time > 0.0 else base_fov
 		cam.fov = lerpf(cam.fov, target_fov, 1.0 - exp(-5.0 * delta))
 		# RF-166: tremida (h/v_offset não atrapalha a suavização da posição)
@@ -1431,7 +1435,7 @@ func _update_track_hazards(delta: float, can_drive: bool) -> void:
 					for fl in h["flames"]:
 						for k in karts:
 							var d := Vector2(k.position.x - fl.position.x, k.position.z - fl.position.z).length()
-							if d < 1.9 and k.position.y < 2.5:
+							if d < 1.9 and k.position.y - fl.position.y < 2.5:
 								k.hit(1.0)
 			"wheel":
 				var amp: float = s.get("amp", 10.0)
@@ -1448,7 +1452,7 @@ func _update_track_hazards(delta: float, can_drive: bool) -> void:
 				w.position = track.points[i] + track.rights[i] * lat + Vector3.UP * WHEEL_R
 				if can_drive:
 					for k in karts:
-						if Vector2(k.position.x - w.position.x, k.position.z - w.position.z).length() < WHEEL_R + 0.7 and k.position.y < 3.0:
+						if Vector2(k.position.x - w.position.x, k.position.z - w.position.z).length() < WHEEL_R + 0.7 and k.position.y - (w.position.y - WHEEL_R) < 3.0:
 							k.hit(1.0)
 			"press":
 				var hold: float = s.get("down", 0.8)
@@ -1511,7 +1515,7 @@ func _update_track_hazards(delta: float, can_drive: bool) -> void:
 							if k.speed > 6.0:
 								k.airborne = true
 								k.on_ramp = false
-								k.position.y = 0.4
+								k.position.y = k.ground + 0.4
 								k.vy = 7.0 + k.speed * 0.12
 								k.air_time = 0.0
 								k.trick = false

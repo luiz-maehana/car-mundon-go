@@ -35,6 +35,7 @@ const TRACK_DESC := {
 	"churrasco": "Em cima da mesa do churrasco: farofa que segura e grelha com labaredas.",
 	"fabrica": "Linha de produção: esteiras, rodas de queijo rolando e prensas.",
 	"parquinho": "Pista em 8 na praça: cruzamento no meio, escorregador gigante, caixa de areia e gangorras.",
+	"geladeira": "Dentro da geladeira: 3 andares, looping na prateleira, viaduto, gelo no congelador e túnel de caixa de leite.",
 }
 
 var step := STEP_MODE
@@ -964,7 +965,7 @@ func _refresh_track() -> void:
 		rec_txt = "recorde %d:%05.2f (%s)" % [int(secs / 60.0), fmod(secs, 60.0), Chars.find(String(rec.get("race_char", ""))).get("name", "?")]
 	var uniq := []
 	for z in d["zones"]:
-		var e: String = {"farofa": "farofa", "belt": "esteira", "belt_side": "esteira lateral", "grill": "grelha", "sand": "caixa de areia"}.get(z["kind"], "")
+		var e: String = {"farofa": "farofa", "belt": "esteira", "belt_side": "esteira lateral", "grill": "grelha", "sand": "caixa de areia", "ice": "gelo"}.get(z["kind"], "")
 		if e != "" and not uniq.has(e):
 			uniq.append(e)
 	for h in d["hazards"]:
@@ -973,6 +974,10 @@ func _refresh_track() -> void:
 			uniq.append(e)
 	if not d.get("crossings", []).is_empty():
 		uniq.append("cruzamento")
+	if not d.get("loops", []).is_empty():
+		uniq.append("looping")
+	if not d.get("overpasses", []).is_empty():
+		uniq.append("viaduto")
 	track_info.text = "%.1f km · %s%s" % [float(d["length"]) / 1000.0, rec_txt, (" · " + ", ".join(uniq)) if not uniq.is_empty() else ""]
 
 

@@ -15,6 +15,13 @@ var line_color := Color(1.0, 0.85, 0.3)
 
 
 ## Dados 2D da pista (gerados uma vez; a pista é criada só pra calcular e logo liberada).
+static func _ys(t) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for p in t.points:
+		out.append(p.y)
+	return out
+
+
 static func data(id: String) -> Dictionary:
 	if _cache.has(id):
 		return _cache[id]
@@ -31,7 +38,7 @@ static func data(id: String) -> Dictionary:
 	var pads := []
 	for p in t.pads:
 		pads.append(int(p["idx"]))
-	var d := {"pts": pts, "pads": pads, "ramp": t.ramp_idx, "zones": zones, "hazards": hazards, "length": t.length, "crossings": t.crossings.duplicate()}
+	var d := {"pts": pts, "pads": pads, "ramp": t.ramp_idx, "zones": zones, "hazards": hazards, "length": t.length, "crossings": t.crossings.duplicate(), "overpasses": t.overpasses.duplicate(), "loops": t.loops.map(func(l): return int(l["i0"])), "ys": _ys(t)}
 	t.free()
 	_cache[id] = d
 	return d
@@ -80,9 +87,21 @@ func _draw() -> void:
 		poly.append(map.call(pts[i % n]))
 	if poly.size() >= 2:
 		draw_polyline(poly, Color(0, 0, 0, 0.6), 16.0, true)
-		draw_polyline(poly, Color(0.85, 0.87, 0.92), 11.0, true)
+		# RF-324: quanto mais alto o trecho, mais claro (andares)
+		var ys: PackedFloat32Array = d.get("ys", PackedFloat32Array())
+		var ymax := 1.0
+		for y in ys:
+			ymax = maxf(ymax, y)
+		if ys.is_empty() or ymax <= 1.0:
+			draw_polyline(poly, Color(0.85, 0.87, 0.92), 11.0, true)
+		else:
+			var cols := PackedColorArray()
+			for q in poly.size():
+				var f := ys[q % n] / ymax
+				cols.append(Color(0.55, 0.6, 0.72).lerp(Color(0.95, 0.98, 1.0), f))
+			draw_polyline_colors(poly, cols, 11.0, true)
 	# zonas por cima do traço
-	var zone_cols := {"farofa": Color(0.9, 0.7, 0.35), "belt": Color(0.35, 0.8, 1.0), "belt_side": Color(0.6, 0.5, 1.0), "grill": Color(1.0, 0.35, 0.1), "sand": Color(1.0, 0.92, 0.7)}
+	var zone_cols := {"farofa": Color(0.9, 0.7, 0.35), "belt": Color(0.35, 0.8, 1.0), "belt_side": Color(0.6, 0.5, 1.0), "grill": Color(1.0, 0.35, 0.1), "sand": Color(1.0, 0.92, 0.7), "ice": Color(0.6, 0.9, 1.0)}
 	for z in d["zones"]:
 		var seg := PackedVector2Array()
 		for k in int(z["len"]) + 1:
@@ -106,6 +125,10 @@ func _draw() -> void:
 		draw_circle(cp, 12.0, Color(0, 0, 0, 0.7))
 		draw_line(cp + Vector2(-6, -6), cp + Vector2(6, 6), Color.WHITE, 3.0, true)
 		draw_line(cp + Vector2(-6, 6), cp + Vector2(6, -6), Color.WHITE, 3.0, true)
+	for oi in d.get("overpasses", []):  # viaduto: o trecho de cima por cima do de baixo
+		_marker(map.call(pts[int(oi[1])]), Color(0.75, 0.85, 1.0), "V")
+	for li in d.get("loops", []):
+		_marker(map.call(pts[int(li)]), Color(1.0, 0.45, 0.85), "L")
 	for pi in d["pads"]:
 		_marker(map.call(pts[pi]), Color(1.0, 0.55, 0.1), "T")
 	if int(d["ramp"]) >= 0:

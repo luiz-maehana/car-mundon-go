@@ -37,5 +37,6 @@ Baixados do OpenGameArt; licença conferida na página de cada um em 2026-11-18.
 | music/churrasco | [Bossa Nova (8bit Bossa)](https://opengameart.org/content/bossa-nova) | Joth |
 | music/fabrica | [Empacotatron](https://opengameart.org/content/empacotatron) (loop) | Fupi |
 | music/parquinho | [Loop Town](https://opengameart.org/content/loop-town) | Fupi |
+| music/geladeira | [Happy synths loop with slight Christmas feeling](https://opengameart.org/content/happy-synths-loop-with-slight-christmas-feeling) | 3xBlast |
 
 Se faltar algum arquivo, o jogo usa a versão sintetizada em código (scripts/sfx.gd).

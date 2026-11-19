@@ -105,6 +105,16 @@ var wrong_way_time := 0.0
 var last_pos := Vector3.ZERO
 var balloons: Node3D
 
+# RF-320..323: altura, looping (trilho) e gelo
+const LOOP_MIN_SPEED := 20.0   # no looping o kart vai grudado e nunca para
+const LOOP_STEER := 7.0        # m/s de troca de faixa dentro do looping
+const ICE_GRIP := 1.6
+var ground := 0.0              # altura do chão da pista embaixo do kart
+var on_loop := false
+var loop_s := 0.0              # posição no looping em amostras (com fração)
+var loops_done := 0
+var pitch := 0.0
+
 # v0.8: ar/rampa, manobra, queijinhos, vácuo, roleta
 var vy := 0.0
 var airborne := false
@@ -198,6 +208,8 @@ func place(idx: int, lat: float) -> void:
 	progress = float(idx - n) if idx > n / 2 else float(idx)
 	safe_idx = idx
 	last_pos = position
+	on_loop = false
+	ground = position.y
 	wrong_way_time = 0.0
 	stuck_time = 0.0
 	speed = 0.0
@@ -332,6 +344,9 @@ func step(delta: float, can_drive: bool) -> void:
 # ---------------------------------------------------------------- movimento
 
 func _move(delta: float) -> void:
+	if on_loop:
+		_move_loop(delta)
+		return
 	var throttle := in_throttle
 	var steer := in_steer
 	if spin_time > 0.0:
@@ -367,6 +382,8 @@ func _move(delta: float) -> void:
 		top *= TrackScript.SAND_MULT
 	elif zone_kind == "belt":
 		top *= 1.15
+	elif zone_kind == "ice":
+		top *= 1.05
 	if boost_time > 0.0:
 		boost_time -= delta
 		top *= BOOST_MULT
@@ -418,6 +435,8 @@ func _move(delta: float) -> void:
 		heading -= steer * turn_rate * speed_factor * high_speed_damp * air_damp * delta
 
 	var grip := DRIFT_GRIP if drifting else (1.5 if airborne else 9.0)  # RF-280: no drift a direção segue o bico; o "de lado" é só no modelo
+	if zone_kind == "ice" and not airborne:  # RF-323: gelo escorrega (a direção demora a obedecer)
+		grip = ICE_GRIP * (0.75 if drifting else 1.0)
 	vel = vel.lerp(forward() * speed, 1.0 - exp(-grip * delta))
 	position += vel * delta
 	# esteiras carregam o kart (mesmo parado)
@@ -427,13 +446,54 @@ func _move(delta: float) -> void:
 		position += track.rights[track_idx] * TrackScript.BELT_SIDE_SPEED * float(zone["dir"]) * delta
 
 
+## RF-321: dentro do looping o kart anda no trilho (grudado, como pista de carrinho):
+## acelera/freia sem parar abaixo de LOOP_MIN_SPEED e troca de faixa com o direcional.
+func _move_loop(delta: float) -> void:
+	var n: int = track.sample_count()
+	if spin_time > 0.0:
+		spin_time -= delta
+	var top := maxf(top_speed(), LOOP_MIN_SPEED)
+	if boost_time > 0.0:
+		boost_time -= delta
+		top *= BOOST_MULT
+		speed = move_toward(speed, top, 60.0 * delta)
+	speed = clampf(speed + accel * maxf(in_throttle, 0.0) * delta, LOOP_MIN_SPEED, maxf(top, speed - 25.0 * delta))
+	var steer := in_steer if not autopilot else clampf((ai_lane - lateral) * 0.4, -1.0, 1.0)
+	var m := TrackScript.ROAD_HALF - 1.0
+	lateral = clampf(lateral + steer * LOOP_STEER * delta, -m, m)
+	loop_s += speed * delta / TrackScript.SPACING
+	var i := int(loop_s)
+	var f := loop_s - float(i)
+	i = i % n
+	if not track.in_loop(i):
+		# saiu: volta pro chão alinhado com a pista
+		on_loop = false
+		loops_done += 1
+		heading = track.heading_at(i)
+		position = track.points[i] + track.rights[i] * lateral
+		ground = position.y
+		vel = forward() * speed
+		return
+	var k := (i + 1) % n
+	position = track.points[i].lerp(track.points[k], f) + track.rights[i].lerp(track.rights[k], f) * lateral
+	vel = track.tangents[i] * speed
+
+
+## Frente e "pra cima" do kart (no looping seguem a pista; fora, o plano). A câmera usa.
+func cam_frame() -> Array:
+	if on_loop:
+		var i: int = track_idx
+		return [track.tangents[i], track.ups[i]]
+	return [forward(), Vector3.UP]
+
+
 ## RF-141: sobe a rampa, decola, gravidade, manobra no ar e pouso.
 func _update_air(delta: float) -> void:
 	if not airborne:
 		var f: float = track.ramp_frac(track_idx, track.along_of(position, track_idx), lateral)
 		if f >= 0.0:
 			on_ramp = true
-			position.y = f * track.ramp_h
+			position.y = ground + f * track.ramp_h
 		elif on_ramp:
 			on_ramp = false
 			if speed > 8.0:
@@ -444,16 +504,18 @@ func _update_air(delta: float) -> void:
 				if autopilot and randf() < ai_trick_chance:
 					_start_trick()
 			else:
-				position.y = 0.0
+				position.y = ground
+		elif not on_loop:
+			position.y = ground  # RF-320: acompanha a subida e a descida da pista
 		return
 	air_time += delta
 	if not trick and not autopilot and in_drift and not prev_drift and air_time > 0.05:
 		_start_trick()
 	vy -= GRAVITY * delta
 	position.y += vy * delta
-	max_height = maxf(max_height, position.y)
-	if position.y <= 0.0:
-		position.y = 0.0
+	max_height = maxf(max_height, position.y - ground)
+	if position.y <= ground:
+		position.y = ground
 		vy = 0.0
 		airborne = false
 		if air_time > 0.3:
@@ -485,9 +547,15 @@ func _update_track(delta: float) -> void:
 	progress += d
 	track_idx = ni
 	lateral = track.lateral_of(position, ni)
+	ground = track.ground_y(ni, track.along_of(position, ni))
+	# RF-321: entrou no looping andando pra frente = vai no trilho até sair
+	if not on_loop and not airborne and track.in_loop(ni) and vel.dot(track.tangents[ni]) > 0.0:
+		on_loop = true
+		loop_s = float(ni) + clampf(track.along_of(position, ni) / TrackScript.SPACING, 0.0, 0.99)
+		drifting = false
 
 	# muro (RF-12)
-	var lim := TrackScript.WALL - RADIUS
+	var lim: float = track.wall_at(ni) - RADIUS
 	if absf(lateral) > lim:
 		var s := signf(lateral)
 		var r: Vector3 = track.rights[ni]
@@ -506,7 +574,7 @@ func _update_track(delta: float) -> void:
 
 	# RF-311: último ponto seguro (no chão, na pista, andando pra frente num trecho sem perigo)
 	var tan: Vector3 = track.tangents[ni]
-	if not airborne and not on_ramp and absf(position.y) < 0.3 and absf(lateral) < TrackScript.ROAD_HALF - 1.0 and vel.dot(tan) > 2.0 and (track.safe.is_empty() or track.safe[ni] == 1):
+	if not airborne and not on_ramp and not on_loop and absf(position.y - ground) < 0.3 and absf(lateral) < TrackScript.ROAD_HALF - 1.0 and vel.dot(tan) > 2.0 and (track.safe.is_empty() or track.safe[ni] == 1):
 		safe_idx = ni
 	# RF-313: contramão (andando contra o sentido da pista)
 	if not airborne and vel.dot(tan) < -3.0:
@@ -516,12 +584,12 @@ func _update_track(delta: float) -> void:
 	# RF-310 (antes RF-16): preso = quer andar e não sai do lugar; caiu = abaixo do chão
 	var moved := Vector2(position.x - last_pos.x, position.z - last_pos.z).length() / maxf(delta, 0.0001)
 	last_pos = position
-	var wants := autopilot or absf(in_throttle) > 0.5
+	var wants := (autopilot or absf(in_throttle) > 0.5) and not on_loop
 	if wants and moved < STUCK_MOVE and spin_time <= 0.0 and trap_time <= 0.0 and start_stall <= 0.0 and not airborne:
 		stuck_time += delta
 	else:
 		stuck_time = 0.0
-	if position.y < FALL_Y:
+	if position.y < ground + FALL_Y:
 		start_rescue(true)
 	elif stuck_time > (STUCK_AI_TIME if autopilot else STUCK_PLAYER_TIME):
 		start_rescue(false)
@@ -541,6 +609,7 @@ func start_rescue(fell := false) -> void:
 	rescue_idx = track.safe_before(safe_idx)
 	rescue_moved = false
 	rescues += 1
+	on_loop = false
 	speed = 0.0
 	vel = Vector3.ZERO
 	drifting = false
@@ -573,10 +642,11 @@ func _update_rescue(delta: float) -> void:
 			rescue_moved = true
 			_jump_to(rescue_idx)
 		var f := clampf((t - RESCUE_LIFT) / (RESCUE_TIME - RESCUE_LIFT), 0.0, 1.0)
-		position.y = RESCUE_HEIGHT * (1.0 - f) * (1.0 - f)
+		position.y = track.points[rescue_idx].y + RESCUE_HEIGHT * (1.0 - f) * (1.0 - f)
 	if rescue_time <= 0.0:
 		rescue_time = 0.0
-		position.y = 0.0
+		position.y = track.points[rescue_idx].y
+		ground = position.y
 		rescue_ghost = RESCUE_GHOST
 		last_pos = position
 		_show_balloons(false)
@@ -674,6 +744,9 @@ func _ai_input(delta: float) -> void:
 	ai_evading = maxf(0.0, ai_evading - delta)
 	var look := (3 + int(absf(speed) * 0.12)) if ai_evading > 0.0 else (5 + int(absf(speed) * 0.3))
 	var ti := (track_idx + look) % n
+	# RF-321: o alvo no meio do looping fica "atrás" no plano; mira a entrada dele
+	if not on_loop and track.in_loop(ti):
+		ti = int(track.loops[track.loop_id[ti]]["i0"])
 	var target: Vector3 = track.points[ti] + track.rights[ti] * ai_lane
 	var to := target - position
 	var desired := atan2(-to.x, -to.z)
@@ -873,7 +946,16 @@ func celebrate() -> void:
 
 
 func _update_visuals(delta: float) -> void:
-	rotation.y = heading
+	# RF-320/321: no looping o kart segue a normal da pista; no chão inclina o bico na subida/descida
+	if on_loop:
+		var lt: Vector3 = track.tangents[track_idx]
+		var lu: Vector3 = track.ups[track_idx]
+		basis = Basis(lt.cross(lu).normalized(), lu, -lt)
+	else:
+		var tt: Vector3 = track.tangents[track_idx]
+		var target := 0.0 if airborne else asin(clampf(tt.y, -1.0, 1.0)) * forward().dot(Vector3(tt.x, 0.0, tt.z).normalized())
+		pitch = lerpf(pitch, target, 1.0 - exp(-10.0 * delta))
+		rotation = Vector3(pitch, heading, 0.0)
 	if model == null:
 		return
 	# RF-312: depois do resgate o kart pisca enquanto nada acerta

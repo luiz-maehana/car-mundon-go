@@ -153,6 +153,33 @@ const TRACKS := [
 		"deco": "playground", "deco_color": Color(0.95, 0.3, 0.3),
 		"ground_tex": "grass", "clouds": 0.4, "fog": 0.0012, "exposure": 1.0, "cloud_color": Color(1.0, 0.88, 0.8), "scenery": "rocks_green",
 	},
+	{
+		"id": "geladeira", "name": "Geladeira Polar", "music": "geladeira",
+		# RF-324: 3 andares (fundo 0 m, prateleira 8 m, congelador 16 m), looping na prateleira,
+		# viaduto do congelador por cima da reta de largada, gelo e túnel de caixa de leite
+		"points": [
+			Vector2(-52, 103), Vector2(35, 103), Vector2(113, 86), Vector2(147, 35),
+			Vector2(138, -26), Vector2(95, -60), Vector2(26, -52), Vector2(-35, -52),
+			Vector2(-103, -73), Vector2(-156, -52), Vector2(-173, 8), Vector2(-130, 39),
+			Vector2(-52, 52), Vector2(0, 121), Vector2(-17, 181), Vector2(-95, 190),
+			Vector2(-164, 164), Vector2(-147, 113),
+		],
+		"heights": [0, 0, 0, 2, 6, 8, 8, 8, 8, 12, 16, 16, 16, 16, 14, 8, 3, 0],
+		"loops": [{"cp": 7, "r": 11.0, "w": 22.0}],
+		"zones": [{"kind": "ice", "from": 0.57, "to": 0.66}],
+		"narrow": [[0.68, 0.73]], "tunnels": [[0.1, 0.16]],
+		"ramp_range": [0.8, 0.86],
+		"ground": Color(0.82, 0.88, 0.95), "offroad": Color(0.72, 0.84, 0.95),
+		"road": [Color(0.32, 0.42, 0.58), Color(0.35, 0.46, 0.62)],
+		"curb": [Color(0.95, 0.97, 1.0), Color(0.3, 0.75, 1.0)],
+		"wall": [Color(0.97, 0.98, 1.0), Color(0.55, 0.8, 1.0)],
+		"slab": Color(0.78, 0.9, 0.98),
+		"sky_top": Color(0.7, 0.85, 1.0), "sky_horizon": Color(0.95, 0.98, 1.0),
+		"ambient": Color(0.75, 0.82, 0.95), "sun": [0.9, -70.0, Color(0.85, 0.93, 1.0)],
+		"deco": "fridge", "deco_color": Color(0.95, 0.95, 0.97),
+		"ground_tex": "tiles", "clouds": 0.0, "fog": 0.002, "exposure": 1.0, "cloud_color": Color(0.9, 0.95, 1.0), "scenery": "ice",
+		"enclosure": true,
+	},
 ]
 
 var def: Dictionary
@@ -235,6 +262,8 @@ func _build_safe() -> void:
 		block.call(int(z["i0"]) - 3, int(z["i0"]) + int(z["len"]) + 2)
 	if ramp_idx >= 0:
 		block.call(ramp_idx - 2, ramp_idx + RAMP_LEN + 18)  # rampa e pouso
+	for l in loops:
+		block.call(int(l["i0"]) - 6, int(l["i1"]) + 4)  # RF-321: nunca dentro do looping
 	for c in crossings:
 		for ci in c:
 			block.call(int(ci) - 14, int(ci) + 14)
@@ -342,26 +371,71 @@ func item_box_positions() -> Array:
 	return out
 
 
-# ---------------------------------------------------------------- path
+# ---------------------------------------------------------------- path (v0.26: altura e loopings, RF-320..322)
 
-func _cr(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector3:
+const LOOP_DENSE := 72          # pontos densos por looping
+const NARROW_WALL := ROAD_HALF + CURB + 0.3   # muro colado na zebra (loopings e pontes)
+const TUNNEL_H := 9.0
+
+var ups := PackedVector3Array()     # normal da pista (UP no plano; gira no looping)
+var loop_id := PackedInt32Array()   # por amostra: índice em `loops` ou -1
+var loops: Array = []               # {i0, i1, r, w, center, right}
+var walls := PackedFloat32Array()   # por amostra: distância do muro (WALL ou NARROW_WALL)
+
+
+## Hermite (Catmull-Rom com tangentes explícitas, pra o looping não entortar a pista em volta).
+func _hermite(p1: Vector3, m1: Vector3, p2: Vector3, m2: Vector3, t: float) -> Vector3:
 	var t2 := t * t
 	var t3 := t2 * t
-	var v := 0.5 * ((2.0 * p1) + (-p0 + p2) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
-	return Vector3(v.x, 0.0, v.y)
+	return (2.0 * t3 - 3.0 * t2 + 1.0) * p1 + (t3 - 2.0 * t2 + t) * m1 + (-2.0 * t3 + 3.0 * t2) * p2 + (t3 - t2) * m2
 
 
 func _build_path() -> void:
 	var cps: Array = def["points"]
+	var hs: Array = def.get("heights", [])
 	var m := cps.size()
-	var dense: Array[Vector3] = []
+	var real: Array[Vector3] = []
 	for i in m:
-		var p0: Vector2 = cps[(i - 1 + m) % m]
-		var p1: Vector2 = cps[i]
-		var p2: Vector2 = cps[(i + 1) % m]
-		var p3: Vector2 = cps[(i + 2) % m]
+		var c: Vector2 = cps[i]
+		real.append(Vector3(c.x, float(hs[i]) if i < hs.size() else 0.0, c.y))
+	var loop_at := {}
+	for l in def.get("loops", []):
+		loop_at[int(l["cp"])] = l
+	# lista de pontos de controle; um looping no cp k vira o par (P_k, P_k + direita * w)
+	var list: Array = []   # {p, m, loop}
+	for i in m:
+		var tan := (real[(i + 1) % m] - real[(i - 1 + m) % m]) * 0.5
+		list.append({"p": real[i], "m": tan, "loop": null})
+		if loop_at.has(i):
+			var l: Dictionary = loop_at[i]
+			var d := Vector3(tan.x, 0.0, tan.z).normalized()
+			var r := d.cross(Vector3.UP).normalized()
+			list.append({"p": real[i] + r * float(l.get("w", 22.0)), "m": tan, "loop": l, "dir": d, "right": r, "from": real[i]})
+	var dense: Array[Vector3] = []
+	var dense_loop := PackedInt32Array()
+	var loop_defs: Array = []
+	var lm := list.size()
+	for j in lm:
+		var a: Dictionary = list[j]
+		var b: Dictionary = list[(j + 1) % lm]
+		if b["loop"] != null:
+			# RF-321: looping vertical com deslocamento lateral (a saída passa do lado da entrada)
+			var rr := float(b["loop"].get("r", 12.0))
+			var w := float(b["loop"].get("w", 22.0))
+			var d: Vector3 = b["dir"]
+			var right: Vector3 = b["right"]
+			var base: Vector3 = b["from"]
+			loop_defs.append({"r": rr, "w": w, "center": base + Vector3.UP * rr, "right": right, "dir": d})
+			for s in LOOP_DENSE:
+				var th := TAU * s / LOOP_DENSE
+				dense.append(base + d * rr * sin(th) + Vector3.UP * rr * (1.0 - cos(th)) + right * w * (th - sin(th)) / TAU)
+				dense_loop.append(loop_defs.size() - 1)
+			continue
 		for s in 40:
-			dense.append(_cr(p0, p1, p2, p3, s / 40.0))
+			var hp := _hermite(a["p"], a["m"], b["p"], b["m"], s / 40.0)
+			hp.y = maxf(hp.y, 0.0)  # a curva da spline não afunda abaixo do chão
+			dense.append(hp)
+			dense_loop.append(-1)
 	var dn := dense.size()
 	var cum := PackedFloat64Array()
 	cum.append(0.0)
@@ -378,15 +452,65 @@ func _build_path() -> void:
 		var seg := cum[j + 1] - cum[j]
 		var f := 0.0 if seg <= 0.0 else (d - cum[j]) / seg
 		points.append(dense[j].lerp(dense[(j + 1) % dn], f))
+		loop_id.append(dense_loop[j] if dense_loop[(j + 1) % dn] == dense_loop[j] else -1)
 	bounds_min = Vector2(INF, INF)
 	bounds_max = Vector2(-INF, -INF)
 	for i in n:
 		var t := (points[(i + 1) % n] - points[(i - 1 + n) % n]).normalized()
 		tangents.append(t)
-		rights.append(t.cross(Vector3.UP))
+		var r: Vector3
+		if loop_id[i] >= 0:
+			var lr: Vector3 = loop_defs[loop_id[i]]["right"]
+			r = (lr - t * lr.dot(t)).normalized()
+		else:
+			r = t.cross(Vector3.UP).normalized()
+		rights.append(r)
+		ups.append(r.cross(t).normalized())
 		var p := points[i]
 		bounds_min = Vector2(minf(bounds_min.x, p.x), minf(bounds_min.y, p.z))
 		bounds_max = Vector2(maxf(bounds_max.x, p.x), maxf(bounds_max.y, p.z))
+	# amostras de cada looping e trechos de muro estreito (looping ± a vizinhança, pontes)
+	for li in loop_defs.size():
+		var l: Dictionary = loop_defs[li]
+		var first := -1
+		var last := -1
+		for i in n:
+			if loop_id[i] == li:
+				if first < 0:
+					first = i
+				last = i
+		l["i0"] = first
+		l["i1"] = last
+		loops.append(l)
+	walls.resize(n)
+	walls.fill(WALL)
+	for l in loops:
+		var c: Vector3 = l["center"]
+		for i in n:
+			if Vector2(points[i].x - c.x, points[i].z - c.z).length() < float(l["r"]) + float(l["w"]) + 6.0 and absf(points[i].y - (c.y - float(l["r"]))) < float(l["r"]) * 2.0 + 1.0:
+				walls[i] = NARROW_WALL
+	for z in def.get("narrow", []):
+		var i0 := int(n * float(z[0]))
+		var i1 := int(n * float(z[1]))
+		for k in wrapi(i1 - i0, 0, n) + 1:
+			walls[(i0 + k) % n] = NARROW_WALL
+
+
+## Distância do muro na amostra i (estreito no looping e nas pontes).
+func wall_at(i: int) -> float:
+	return walls[i] if not walls.is_empty() else WALL
+
+
+## Altura do chão da pista perto da amostra i (interpola com a vizinha conforme `along`).
+func ground_y(i: int, along: float) -> float:
+	var n := points.size()
+	if along >= 0.0:
+		return lerpf(points[i].y, points[(i + 1) % n].y, clampf(along / SPACING, 0.0, 1.0))
+	return lerpf(points[i].y, points[(i - 1 + n) % n].y, clampf(-along / SPACING, 0.0, 1.0))
+
+
+func in_loop(i: int) -> bool:
+	return not loop_id.is_empty() and loop_id[i] >= 0
 
 
 # ---------------------------------------------------------------- cruzamento (RF-300)
@@ -397,10 +521,12 @@ const CROSS_MIN_GAP := 60       # amostras: mais perto que isso é o mesmo trech
 var cross_near: Array = []      # por amostra: índices de outra passada a menos de CROSS_NEAR
 var crossing_top: Array = []    # por amostra: é a passada desenhada por cima?
 var crossings: Array = []       # [[i, j], ...] amostras onde as passadas se cruzam
+var overpasses: Array = []      # [[baixo, cima], ...] RF-322: uma passada por cima da outra (andares)
+const LEVEL_GAP := 3.5          # diferença de altura a partir da qual são andares diferentes
 
 
 func _find_crossings() -> void:
-	if not def.get("crossing", false):
+	if not def.get("crossing", false) and def.get("heights", []).is_empty():
 		return
 	var n := points.size()
 	cross_near.resize(n)
@@ -413,7 +539,13 @@ func _find_crossings() -> void:
 		for j in range(i + CROSS_MIN_GAP, n):
 			if n - (j - i) < CROSS_MIN_GAP:
 				break
-			var d2 := points[i].distance_squared_to(points[j])
+			var dy := absf(points[i].y - points[j].y)
+			var h2 := Vector2(points[i].x - points[j].x, points[i].z - points[j].z).length_squared()
+			if dy >= LEVEL_GAP:
+				if h2 < 2.3 * 2.3 and (overpasses.is_empty() or absi(int(overpasses[-1][0]) - (i if points[i].y < points[j].y else j)) > 5):
+					overpasses.append([i, j] if points[i].y < points[j].y else [j, i])
+				continue
+			var d2 := h2 + dy * dy
 			if d2 < r2:
 				cross_near[i].append(j)
 				cross_near[j].append(i)
@@ -456,21 +588,28 @@ func _build_visuals() -> void:
 		for s in [1.0, -1.0]:
 			if not _in_other_road(i, s * (ROAD_HALF + CURB * 0.5), ROAD_HALF + CURB):
 				_strip(st, i, ROAD_HALF if s > 0 else -ROAD_HALF - CURB, ROAD_HALF + CURB if s > 0 else -ROAD_HALF, 0.04, 0.04, curb_c)
+		# RF-320: muro por amostra (estreito no looping e nas pontes); w0/w1 = as duas pontas do trecho
+		var w0 := wall_at(i)
+		var w1 := wall_at((i + 1) % n)
 		var off_c: Color = def["offroad"]
+		var edge := ROAD_HALF + CURB
 		for s in [1.0, -1.0]:
-			if not _in_other_road(i, s * (ROAD_HALF + CURB + OFFROAD * 0.5), ROAD_HALF + CURB + OFFROAD * 0.5):
-				_strip(st, i, ROAD_HALF + CURB if s > 0 else -WALL, WALL if s > 0 else -ROAD_HALF - CURB, 0.02, 0.02, off_c)
+			if w0 > edge + 0.5 and not _in_other_road(i, s * (edge + OFFROAD * 0.5), edge + OFFROAD * 0.5):
+				_strip_e(st, i, s * edge, s * w0, s * edge, s * w1, 0.02, 0.02, off_c)
 		var wall_c: Color = def["wall"][(i / 3) % 2]
-		# muro direito: face interna, topo, face externa
-		if not _in_other_road(i, WALL, WALL + WALL_T + 1.0):
-			_strip(st, i, WALL, WALL, 0.0, WALL_H, wall_c)
-			_strip(st, i, WALL, WALL + WALL_T, WALL_H, WALL_H, wall_c)
-			_strip(st, i, WALL + WALL_T, WALL + WALL_T, WALL_H, 0.0, wall_c)
-		# muro esquerdo
-		if not _in_other_road(i, -WALL, WALL + WALL_T + 1.0):
-			_strip(st, i, -WALL, -WALL, WALL_H, 0.0, wall_c)
-			_strip(st, i, -WALL - WALL_T, -WALL, WALL_H, WALL_H, wall_c)
-			_strip(st, i, -WALL - WALL_T, -WALL - WALL_T, 0.0, WALL_H, wall_c)
+		for s in [1.0, -1.0]:
+			if not _in_other_road(i, s * WALL, WALL + WALL_T + 1.0):
+				# face interna, topo, face externa
+				_strip_e(st, i, s * w0, s * w0, s * w1, s * w1, 0.0, WALL_H, wall_c)
+				_strip_e(st, i, s * w0, s * (w0 + WALL_T), s * w1, s * (w1 + WALL_T), WALL_H, WALL_H, wall_c)
+				_strip_e(st, i, s * (w0 + WALL_T), s * (w0 + WALL_T), s * (w1 + WALL_T), s * (w1 + WALL_T), WALL_H, 0.0, wall_c)
+		# RF-320: trecho no alto (ou no looping) ganha laje por baixo: bordas e fundo
+		if points[i].y > 0.5 or in_loop(i) or points[(i + 1) % n].y > 0.5:
+			var slab_c: Color = def.get("slab", Color(0.85, 0.88, 0.92))
+			var th := -0.6 if in_loop(i) else -0.9
+			for s in [1.0, -1.0]:
+				_strip_e(st, i, s * (w0 + WALL_T), s * (w0 + WALL_T), s * (w1 + WALL_T), s * (w1 + WALL_T), 0.0, th, slab_c)
+			_strip_e(st, i, -(w0 + WALL_T), w0 + WALL_T, -(w1 + WALL_T), w1 + WALL_T, th, th, slab_c.darkened(0.25))
 	_start_line(st)
 	_pads_and_ramp(st)
 	_zones_visual(st)
@@ -480,6 +619,8 @@ func _build_visuals() -> void:
 	mi.name = "TrackMesh"
 	add_child(mi)
 	_build_belts()
+	_build_supports()
+	_build_tunnels_and_enclosure()
 	_build_hazard_bases()
 	_build_ground()
 	_build_arch()
@@ -487,13 +628,142 @@ func _build_visuals() -> void:
 	_build_scenery()
 
 
+## RF-324: túneis (caixa de leite) por cima da pista e a "geladeira" em volta do mundo.
+func _build_tunnels_and_enclosure() -> void:
+	var n := points.size()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var any := false
+	for tn in def.get("tunnels", []):
+		var i0 := int(n * float(tn[0]))
+		var i1 := int(n * float(tn[1]))
+		for k in wrapi(i1 - i0, 0, n):
+			var i := (i0 + k) % n
+			var w0 := wall_at(i) + WALL_T
+			var w1 := wall_at((i + 1) % n) + WALL_T
+			var band := (k / 6) % 2 == 0
+			var side_c := Color(0.97, 0.97, 0.98) if band else Color(0.25, 0.55, 0.95)
+			for s in [1.0, -1.0]:
+				_strip_e(st, i, s * w0, s * w0, s * w1, s * w1, 0.0, TUNNEL_H, side_c)
+			_strip_e(st, i, -w0, w0, -w1, w1, TUNNEL_H, TUNNEL_H, Color(0.92, 0.94, 0.97))
+			any = true
+	if any:
+		var mi := MeshInstance3D.new()
+		mi.mesh = st.commit()
+		mi.material_override = _vc_mat(0.6)
+		mi.material_override.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mi.name = "Tunnels"
+		add_child(mi)
+	if not def.get("enclosure", false):
+		return
+	# paredes brancas da geladeira (o céu vira o teto) e a lâmpada lá em cima
+	var c := (bounds_max + bounds_min) * 0.5
+	var half := (bounds_max - bounds_min) * 0.5 + Vector2(170, 170)
+	var h := 140.0
+	var wall_mat := StandardMaterial3D.new()
+	wall_mat.albedo_color = Color(0.9, 0.94, 0.98)
+	wall_mat.roughness = 0.35
+	var specs := [
+		[Vector3(c.x, h * 0.5, c.y - half.y), Vector3(half.x * 2.0, h, 2.0)],
+		[Vector3(c.x, h * 0.5, c.y + half.y), Vector3(half.x * 2.0, h, 2.0)],
+		[Vector3(c.x - half.x, h * 0.5, c.y), Vector3(2.0, h, half.y * 2.0)],
+		[Vector3(c.x + half.x, h * 0.5, c.y), Vector3(2.0, h, half.y * 2.0)],
+		[Vector3(c.x, h, c.y), Vector3(half.x * 2.0, 2.0, half.y * 2.0)],
+	]
+	for sp in specs:
+		var box := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = sp[1]
+		box.mesh = bm
+		box.material_override = wall_mat
+		box.position = sp[0]
+		box.name = "FridgeWall"
+		add_child(box)
+	# frisos das prateleiras na parede (as bordas de vidro) e a lâmpada
+	var glass := StandardMaterial3D.new()
+	glass.albedo_color = Color(0.7, 0.88, 1.0, 0.45)
+	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	for y in [40.0, 80.0]:
+		for sp in specs.slice(0, 4):
+			var strip := MeshInstance3D.new()
+			var bm := BoxMesh.new()
+			var sz: Vector3 = sp[1]
+			bm.size = Vector3(sz.x if sz.x > 3.0 else 30.0, 1.5, sz.z if sz.z > 3.0 else 30.0)
+			strip.mesh = bm
+			strip.material_override = glass
+			strip.position = Vector3(sp[0].x, y, sp[0].z)
+			add_child(strip)
+	var lamp := MeshInstance3D.new()
+	var lm := SphereMesh.new()
+	lm.radius = 14.0
+	lm.height = 14.0
+	lamp.mesh = lm
+	var lmat := StandardMaterial3D.new()
+	lmat.albedo_color = Color(1.0, 0.98, 0.9)
+	lmat.emission_enabled = true
+	lmat.emission = Color(1.0, 0.97, 0.88)
+	lmat.emission_energy_multiplier = 3.0
+	lamp.material_override = lmat
+	lamp.position = Vector3(c.x, h - 4.0, c.y)
+	add_child(lamp)
+	var light := OmniLight3D.new()
+	light.position = lamp.position - Vector3.UP * 20.0
+	light.omni_range = 600.0
+	light.light_energy = 1.2
+	light.light_color = Color(0.9, 0.95, 1.0)
+	add_child(light)
+
+
+## RF-320: pilares embaixo dos trechos altos (caixas de leite/potes na geladeira), fora de outras pistas.
+func _build_supports() -> void:
+	var n := points.size()
+	var xf: Array = []
+	var cols: Array = []
+	var pal: Array = def.get("pillar_colors", [Color(0.95, 0.95, 0.97), Color(0.35, 0.6, 0.95), Color(0.95, 0.4, 0.45)])
+	var k := 0
+	for i in range(0, n, 9):
+		var top := points[i].y - 0.9
+		if top < 1.5 or in_loop(i):
+			continue
+		var base := Vector3(points[i].x, 0.0, points[i].z)
+		if _over_other_road(i, base, 1.5):
+			continue
+		var w := 5.0 + float(k % 3)
+		xf.append(Transform3D(Basis(Vector3.UP, heading_at(i)).scaled(Vector3(w, top, w * 0.8)), base + Vector3.UP * top * 0.5))
+		cols.append(pal[k % pal.size()])
+		k += 1
+	var box := BoxMesh.new()
+	box.size = Vector3.ONE
+	_multimesh_colored(box, xf, cols, _vc_mat(0.5))
+	scenery_count += xf.size()
+
+
+## O ponto do chão `p` (abaixo da amostra i) cai em cima de outra pista mais baixa?
+func _over_other_road(i: int, p: Vector3, margin: float) -> bool:
+	var n := points.size()
+	for j in n:
+		if absi(wrapi(j - i, -n / 2, n / 2)) < 20:
+			continue
+		if points[j].y < points[i].y - LEVEL_GAP and Vector2(p.x - points[j].x, p.z - points[j].z).length() < wall_at(j) + WALL_T + margin:
+			return true
+	return false
+
+
 func _strip(st: SurfaceTool, i: int, la: float, lb: float, ya: float, yb: float, c: Color) -> void:
+	_strip_e(st, i, la, lb, la, lb, ya, yb, c)
+
+
+## Faixa entre as amostras i e i+1, com laterais próprias em cada ponta; a altura segue a normal
+## da pista (no looping o "pra cima" gira junto).
+func _strip_e(st: SurfaceTool, i: int, la0: float, lb0: float, la1: float, lb1: float, ya: float, yb: float, c: Color) -> void:
 	var n := points.size()
 	var k := (i + 1) % n
-	var a0 := points[i] + rights[i] * la + Vector3.UP * ya
-	var b0 := points[i] + rights[i] * lb + Vector3.UP * yb
-	var a1 := points[k] + rights[k] * la + Vector3.UP * ya
-	var b1 := points[k] + rights[k] * lb + Vector3.UP * yb
+	var ui := ups[i] if not ups.is_empty() else Vector3.UP
+	var uk := ups[k] if not ups.is_empty() else Vector3.UP
+	var a0 := points[i] + rights[i] * la0 + ui * ya
+	var b0 := points[i] + rights[i] * lb0 + ui * yb
+	var a1 := points[k] + rights[k] * la1 + uk * ya
+	var b1 := points[k] + rights[k] * lb1 + uk * yb
 	_quad(st, a0, b0, b1, a1, c)
 
 
@@ -585,6 +855,7 @@ func _racing_props() -> void:
 	for sp in spots:
 		var i := wrapi(int(sp[0]), 0, n)
 		var pos: Vector3 = points[i] + rights[i] * side * (WALL + 11.0)
+		pos.y = 0.0
 		if not _clear_of_track(pos, 7.0):
 			continue
 		var p := Gfx.prop(RACING + String(sp[1]), float(sp[2]))
@@ -630,8 +901,7 @@ func _build_trees() -> void:
 	while xforms.size() < 160 and tries < 4000:
 		tries += 1
 		var p := Vector3(rng.randf_range(bounds_min.x - 120, bounds_max.x + 120), 0, rng.randf_range(bounds_min.y - 120, bounds_max.y + 120))
-		var i := nearest_index(p)
-		if p.distance_to(points[i]) < WALL + 6.0:
+		if not _clear_of_track(p, 6.0):
 			continue
 		var s := rng.randf_range(0.8, 1.6)
 		xforms.append(Transform3D(Basis().scaled(Vector3(s, s, s)), p))
@@ -678,6 +948,64 @@ func _build_trees() -> void:
 			_multimesh(glass, bt, Vector3(0, 2.5, 0))
 			_multimesh(neck, bt, Vector3(0, 6.1, 0))
 			_multimesh(label, bt, Vector3(0, 2.6, 0))
+		"fridge":
+			# RF-324: comida gigante de geladeira — caixas de leite, potes de iogurte, ovos e garrafas
+			var groups: Array = [[], [], [], []]
+			for i in xforms.size():
+				(groups[i % 4] as Array).append(xforms[i])
+			var milk: Array[Transform3D] = []
+			milk.assign(groups[0])
+			var carton := BoxMesh.new()
+			carton.size = Vector3(5.0, 11.0, 5.0)
+			carton.material = _deco_mat(Color(0.97, 0.97, 0.98))
+			_multimesh(carton, milk, Vector3(0, 5.5, 0))
+			var band := BoxMesh.new()
+			band.size = Vector3(5.1, 3.0, 5.1)
+			band.material = _deco_mat(Color(0.25, 0.55, 0.95))
+			_multimesh(band, milk, Vector3(0, 6.5, 0))
+			var roof := PrismMesh.new()
+			roof.size = Vector3(5.0, 2.2, 5.0)
+			roof.material = _deco_mat(Color(0.95, 0.95, 0.97))
+			_multimesh(roof, milk, Vector3(0, 12.1, 0))
+			var yog: Array[Transform3D] = []
+			yog.assign(groups[1])
+			var pot := CylinderMesh.new()
+			pot.top_radius = 3.0
+			pot.bottom_radius = 2.4
+			pot.height = 5.0
+			pot.material = _deco_mat(Color(1.0, 0.92, 0.95))
+			_multimesh(pot, yog, Vector3(0, 2.5, 0))
+			var lid := CylinderMesh.new()
+			lid.top_radius = 3.15
+			lid.bottom_radius = 3.15
+			lid.height = 0.25
+			lid.material = _deco_mat(Color(0.9, 0.3, 0.5))
+			_multimesh(lid, yog, Vector3(0, 5.1, 0))
+			var eggs: Array[Transform3D] = []
+			for x in groups[2]:
+				eggs.append(Transform3D(x.basis.scaled(Vector3(1.0, 1.3, 1.0)), x.origin))
+			var egg := SphereMesh.new()
+			egg.radius = 2.2
+			egg.height = 4.4
+			egg.material = _deco_mat(Color(0.98, 0.9, 0.78))
+			_multimesh(egg, eggs, Vector3(0, 2.6, 0))
+			var bot: Array[Transform3D] = []
+			bot.assign(groups[3])
+			var bottle := CylinderMesh.new()
+			bottle.top_radius = 1.6
+			bottle.bottom_radius = 1.6
+			bottle.height = 9.0
+			var bm := StandardMaterial3D.new()
+			bm.albedo_color = Color(0.85, 0.15, 0.1)
+			bm.roughness = 0.3
+			bottle.material = bm
+			_multimesh(bottle, bot, Vector3(0, 4.5, 0))
+			var cap := CylinderMesh.new()
+			cap.top_radius = 0.6
+			cap.bottom_radius = 1.2
+			cap.height = 2.0
+			cap.material = _deco_mat(Color(0.95, 0.95, 0.95))
+			_multimesh(cap, bot, Vector3(0, 10.0, 0))
 		"playground":
 			# RF-304: praça — árvores do Racing Kit, balanços (pórtico + assentos) e bolas coloridas
 			var trees: Array[Transform3D] = []
@@ -928,8 +1256,11 @@ func _build_scenery() -> void:
 
 
 func _clear_of_track(pos: Vector3, radius: float) -> bool:
-	var i := nearest_index(pos)
-	return Vector2(pos.x - points[i].x, pos.z - points[i].z).length() > WALL + radius
+	# no plano (x, z): um trecho alto também ocupa o chão embaixo dele
+	for i in points.size():
+		if Vector2(pos.x - points[i].x, pos.z - points[i].z).length() <= wall_at(i) + radius:
+			return false
+	return true
 
 
 func _vc_mat(roughness := 0.8) -> StandardMaterial3D:
@@ -1116,6 +1447,8 @@ func _scatter() -> void:
 	var rocks: Array = []
 	var rock_cols: Array = []
 	var count := 260 if kind != "cheese" else 30
+	if kind == "ice":
+		count = 70
 	if kind == "bbq":
 		count = 90
 	var tries := 0
@@ -1124,6 +1457,7 @@ func _scatter() -> void:
 		var i := rng.randi_range(0, points.size() - 1)
 		var side := -1.0 if rng.randf() < 0.5 else 1.0
 		var p: Vector3 = points[i] + rights[i] * side * rng.randf_range(WALL + 3.0, WALL + 55.0)
+		p.y = 0.0
 		if not _clear_of_track(p, 2.5):
 			continue
 		var yaw := rng.randf() * TAU
@@ -1134,6 +1468,11 @@ func _scatter() -> void:
 			var sv: Vector3 = pk[1] * s
 			rocks.append(Transform3D(Basis(Vector3.UP, yaw).scaled(sv), p + Vector3.UP * sv.y * 0.45))
 			rock_cols.append((pk[0] as Color).darkened(rng.randf() * 0.12))
+		elif kind == "ice":  # RF-324: cubos de gelo derretendo no fundo da geladeira
+			var s := rng.randf_range(1.5, 4.0)
+			var axis := Vector3(rng.randf() - 0.5, 1.0, rng.randf() - 0.5).normalized()
+			rocks.append(Transform3D(Basis(axis, yaw).scaled(Vector3(s, s * 0.85, s)), p + Vector3.UP * s * 0.4))
+			rock_cols.append(Color(0.75, 0.9, 1.0).lightened(rng.randf() * 0.2))
 		elif kind == "cheese":
 			var s := rng.randf_range(3.0, 8.0)
 			rocks.append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(s, s * 0.6, s)), p + Vector3.UP * s * 0.3))
@@ -1156,7 +1495,11 @@ func _scatter() -> void:
 	tuft.radial_segments = 5
 	_multimesh_colored(tuft, tufts, tuft_cols, _vc_mat(1.0))
 	var rock: Mesh
-	if kind == "cheese":
+	if kind == "ice":
+		var cube := BoxMesh.new()
+		cube.size = Vector3.ONE
+		rock = cube
+	elif kind == "cheese":
 		var c := CylinderMesh.new()
 		c.top_radius = 1.0
 		c.bottom_radius = 1.0
@@ -1230,6 +1573,12 @@ func _zones_visual(st: SurfaceTool) -> void:
 						var c := points[i] + rights[i] * lat + tangents[i] * rng.randf_range(0.0, SPACING) + Vector3.UP * 0.075
 						var s := rng.randf_range(0.12, 0.3)
 						_quad(st, c - rights[i] * s - tangents[i] * s, c + rights[i] * s - tangents[i] * s, c + rights[i] * s + tangents[i] * s, c - rights[i] * s + tangents[i] * s, Color(0.98, 0.85, 0.55) if g % 2 == 0 else Color(0.6, 0.42, 0.2))
+				"ice":
+					# RF-323: gelo azul-claro brilhante com riscos de patins
+					_strip(st, i, la, lb, 0.06, 0.06, Color(0.78, 0.92, 1.0).lightened(rng.randf() * 0.1))
+					if k % 2 == 0:
+						var lat := rng.randf_range(la + 1.0, lb - 3.0)
+						_strip(st, i, lat, lat + rng.randf_range(0.15, 0.3), 0.07, 0.07, Color(1, 1, 1))
 				"sand":
 					# RF-301: caixa de areia clarinha com moldura de madeira e forminhas de brinquedo
 					_strip(st, i, la, lb, 0.06, 0.06, Color(0.95, 0.85, 0.6).darkened(rng.randf() * 0.06))

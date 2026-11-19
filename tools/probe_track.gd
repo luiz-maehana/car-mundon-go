@@ -1,7 +1,7 @@
 extends SceneTree
 ## Mede uma pista: extensão, cruzamentos, curvatura e onde caem setas/rampa/itens.
 func _init() -> void:
-	var id := "parquinho"
+	var id := "geladeira"
 	for a in OS.get_cmdline_user_args():
 		id = a
 	var T = load("res://scripts/track.gd")
@@ -26,6 +26,11 @@ func _init() -> void:
 	var si := int(n * 0.065)
 	print("curva da areia vira pra %s" % ("direita (lat +)" if t.tangents[(si + 8) % n].dot(t.rights[si]) > 0.0 else "esquerda (lat -)"))
 	print("crossings ", t.crossings)
+	print("overpasses ", t.overpasses, " loops ", t.loops.map(func(l): return [l["i0"], l["i1"], snappedf(float(l["i0"]) / n, 0.001)]))
+	var ys := []
+	for q in 20:
+		ys.append("%.2f:%.0f" % [q / 20.0, t.points[int(n * q / 20.0)].y])
+	print("alturas ", " ".join(ys))
 	print("pads ", t.pads.map(func(p): return snappedf(float(p["idx"]) / n, 0.001)), " ramp %.3f" % (float(t.ramp_idx) / n))
 	t.free()
 	quit()

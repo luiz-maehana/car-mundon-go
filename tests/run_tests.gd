@@ -53,6 +53,7 @@ func _run() -> void:
 	await _test_drift_feel()
 	await _test_parquinho()
 	await _test_rescue()
+	await _test_geladeira()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -124,7 +125,10 @@ func _test_one_track(track_id: String) -> void:
 				continue
 			if _at_crossing(t, i, j):  # RF-300: o 8 se cruza de propósito, só ali
 				continue
-			worst = minf(worst, t.points[i].distance_to(t.points[j]))
+			if absf(t.points[i].y - t.points[j].y) >= 6.0:  # RF-322: andares diferentes (viaduto)
+				continue
+			# RF-320: muro estreito (looping, ponte) deixa os trechos chegarem mais perto
+			worst = minf(worst, t.points[i].distance_to(t.points[j]) - (t.wall_at(i) + t.wall_at(j) - Track.WALL * 2.0))
 	check(worst > Track.WALL * 2.0 + 2.0, "menor distância entre trechos %.1f m > %.1f" % [worst, Track.WALL * 2.0 + 2.0])
 	t.free()
 
@@ -970,7 +974,7 @@ func _test_music() -> void:
 	var Track = load("res://scripts/track.gd")
 	var sigs := {}
 	var ok := true
-	for style in ["menu", "queijo", "deserto", "cozinha", "churrasco", "fabrica", "parquinho", "victory"]:
+	for style in ["menu", "queijo", "deserto", "cozinha", "churrasco", "fabrica", "parquinho", "geladeira", "victory"]:
 		var t0 := Time.get_ticks_msec()
 		var w: AudioStream = Sfx.music(style)
 		var secs: float = w.get_length()
@@ -979,7 +983,7 @@ func _test_music() -> void:
 		if not looped or secs < 8.0:
 			ok = false
 		sigs[w.resource_name] = true
-	check(ok and sigs.size() == 8, "8 trilhas em loop, > 8 s e diferentes entre si")
+	check(ok and sigs.size() == 9, "9 trilhas em loop, > 8 s e diferentes entre si")
 	var tracks_ok := true
 	for td in Track.TRACKS:
 		if not Sfx.MUSIC_STYLES.has(td.get("music", td["id"])):
@@ -1949,5 +1953,185 @@ func _test_rescue() -> void:
 		ai.step(dt, true)
 		s2 += dt
 	check(ai.rescues == 1 and s2 < ai.STUCK_AI_TIME + 0.5, "IA parada: balões em %.1f s" % s2)
+	race.queue_free()
+	await process_frame
+
+
+func _test_geladeira() -> void:
+	var dt := 1.0 / 60.0
+	print("CA-74 andares, viaduto e looping na geometria")
+	var race = await _race_on("geladeira")
+	var t = race.track
+	var n: int = t.sample_count()
+	var ymin := INF
+	var ymax := -INF
+	for p in t.points:
+		ymin = minf(ymin, p.y)
+		ymax = maxf(ymax, p.y)
+	check(ymin >= 0.0 and ymax > 15.0, "do fundo (%.1f m) ao congelador e acima (%.1f m)" % [ymin, ymax])
+	check(t.overpasses.size() == 1, "um viaduto: %s" % str(t.overpasses))
+	var ov: Array = t.overpasses[0]
+	check(t.points[ov[1]].y - t.points[ov[0]].y > 6.0, "vão livre do viaduto %.1f m" % (t.points[ov[1]].y - t.points[ov[0]].y))
+	check(t.wall_at(ov[1]) < t.WALL and t.wall_at(ov[0]) == t.WALL, "ponte estreita em cima, pista normal embaixo")
+	check(t.loops.size() == 1, "um looping")
+	var lp: Dictionary = t.loops[0]
+	var top_i := int(lp["i0"])
+	for i in range(int(lp["i0"]), int(lp["i1"]) + 1):
+		if t.points[i].y > t.points[top_i].y:
+			top_i = i
+	check(t.ups[top_i].y < -0.9, "no alto do looping a pista está de cabeça pra baixo (up.y %.2f)" % t.ups[top_i].y)
+	check(t.wall_at(int(lp["i0"]) - 3) < t.WALL and t.wall_at(int(lp["i1"]) + 3) < t.WALL, "muro estreito na entrada e na saída do looping")
+	var safe_in_loop := 0
+	for i in range(int(lp["i0"]), int(lp["i1"]) + 1):
+		safe_in_loop += t.safe[i]
+	check(safe_in_loop == 0, "resgate nunca devolve dentro do looping")
+
+	print("CA-75 subida acompanha o chão")
+	var k = race.player
+	var climb := -1
+	for i in n:
+		if t.points[i].y < 1.0 and t.points[(i + 40) % n].y > 5.0:
+			climb = i
+			break
+	check(climb >= 0, "achou a subida do fundo pra prateleira (%d)" % climb)
+	_put(k, climb, 0.0, 22.0)
+	Input.action_press("p1_accelerate")
+	var worst := 0.0
+	for s in 240:
+		k.step(dt, true)
+		if not k.airborne and not k.on_ramp:
+			worst = maxf(worst, absf(k.position.y - k.ground))
+	Input.action_release("p1_accelerate")
+	check(k.position.y > 3.0 and worst < 0.05, "subiu rumo à prateleira (%.1f m) colado no chão (erro %.2f m)" % [k.position.y, worst])
+	check(k.pitch > 0.02 or t.tangents[k.track_idx].y < 0.02, "kart empina na subida (%.2f rad)" % k.pitch)
+
+	print("CA-76 looping")
+	var i0 := int(lp["i0"])
+	_put(k, i0 - 12, 0.0, 26.0)
+	Input.action_press("p1_accelerate")
+	var seen := false
+	var top_y := 0.0
+	var upside := false
+	var secs := 0.0
+	while secs < 6.0 and k.loops_done == 0:
+		k.step(dt, true)
+		secs += dt
+		if k.on_loop:
+			seen = true
+			top_y = maxf(top_y, k.position.y - t.points[i0].y)
+			if k.basis.y.y < -0.8:
+				upside = true
+	for s in 30:
+		k.step(dt, true)
+	Input.action_release("p1_accelerate")
+	var r: float = lp["r"]
+	check(seen and k.loops_done == 1, "entrou no trilho e saiu (%.1f s)" % secs)
+	check(top_y > r * 2.0 - 1.0 and upside, "deu a volta inteira de cabeça pra baixo (subiu %.1f m)" % top_y)
+	check(not k.on_loop and absf(k.position.y - k.ground) < 0.1 and wrapi(k.track_idx - int(lp["i1"]), 0, n) < 40, "voltou pro chão depois do looping (idx +%d)" % wrapi(k.track_idx - int(lp["i1"]), 0, n))
+	check(k.forward().dot(Vector3(t.tangents[k.track_idx].x, 0, t.tangents[k.track_idx].z).normalized()) > 0.95, "saiu alinhado com a pista")
+	# devagar também passa (trilho com velocidade mínima)
+	_put(k, i0 - 2, 0.0, 4.0)
+	var done0: int = k.loops_done
+	secs = 0.0
+	Input.action_press("p1_accelerate")
+	while secs < 8.0 and k.loops_done == done0:
+		k.step(dt, true)
+		secs += dt
+	Input.action_release("p1_accelerate")
+	check(k.loops_done == done0 + 1 and k.rescues == 0, "entrando devagar não fica preso no looping (%.1f s)" % secs)
+	# trocar de faixa dentro do looping
+	_put(k, i0 - 2, 0.0, 22.0)
+	Input.action_press("p1_steer_right")
+	for s in 40:
+		k.step(dt, true)
+	var lat_in: float = k.lateral
+	Input.action_release("p1_steer_right")
+	check(k.on_loop and lat_in > 2.0, "direcional troca de faixa no looping (%.1f m)" % lat_in)
+	var fr: Array = k.cam_frame()
+	check((fr[1] as Vector3).distance_to(t.ups[k.track_idx]) < 0.01, "câmera gira com a pista no looping")
+	race.queue_free()
+	await process_frame
+
+	print("CA-77 gelo escorrega")
+	race = await _race_on("geladeira")
+	k = race.player
+	t = race.track
+	var iz: Dictionary = {}
+	for z in t.zones:
+		if z["kind"] == "ice":
+			iz = z
+	var slip := []
+	for where in [int(iz["i0"]) + 4, 30]:
+		_put(k, where, 0.0, 24.0)
+		Input.action_press("p1_accelerate")
+		Input.action_press("p1_steer_left")
+		for s in 25:
+			k.step(dt, true)
+		Input.action_release("p1_steer_left")
+		Input.action_release("p1_accelerate")
+		slip.append(rad_to_deg(k.vel.normalized().angle_to(k.forward())))
+	check(slip[0] > slip[1] * 2.0 and slip[0] > 8.0, "no gelo o kart derrapa mais (%.0f° x %.0f° no asfalto)" % [slip[0], slip[1]])
+	race.queue_free()
+	await process_frame
+
+	print("CA-78 viaduto")
+	race = await _race_on("geladeira")
+	t = race.track
+	var lo = race.karts[0]
+	var hi = race.karts[1]
+	_put(lo, int(t.overpasses[0][0]), 0.0, 0.0)
+	_put(hi, int(t.overpasses[0][1]), 0.0, 0.0)
+	var before: Vector3 = lo.position
+	race._kart_collisions()
+	check(lo.position == before and hi.position.y - lo.position.y > 6.0, "kart de cima não bate no de baixo")
+	hi.cheese = 0
+	race.cheeses[0]["pos"] = lo.position + Vector3.UP * 0.7
+	race.cheeses[0]["cd"] = 0.0
+	race._update_cheese(dt)
+	check(hi.cheese == 0, "queijinho de baixo não é pego por quem passa em cima")
+	# resgate no congelador devolve no congelador
+	k = race.player
+	var up_i := int(t.overpasses[0][1]) - 30
+	_face_wall(k, up_i)
+	k.safe_idx = up_i
+	Input.action_press("p1_accelerate")
+	var guard := 0.0
+	while k.rescues == 0 and guard < 6.0:
+		k.step(dt, true)
+		guard += dt
+	while k.rescue_time > 0.0:
+		k.step(dt, true)
+	Input.action_release("p1_accelerate")
+	check(k.rescues == 1 and k.position.y > 12.0, "resgate no alto pousa no alto (%.1f m)" % k.position.y)
+	race.queue_free()
+	await process_frame
+
+	print("CA-79 IA na Geladeira")
+	race = load("res://scripts/race.gd").new()
+	race.use_game_settings = false
+	race.autopilot_player = true
+	race.player_chars = ["nanni"]
+	race.track_id = "geladeira"
+	race.laps = 2
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	var tt := 0.0
+	while tt < 200.0 and not race.all_finished():
+		race.step(dt)
+		tt += dt
+	var best := INF
+	var worst_l := 0.0
+	var loops_ok := true
+	var resc := 0
+	for kk in race.karts:
+		if kk.finished:
+			best = minf(best, kk.finish_time / 2.0)
+			worst_l = maxf(worst_l, kk.finish_time / 2.0)
+		loops_ok = loops_ok and kk.loops_done >= 2
+		resc += kk.rescues
+	check(race.all_finished() and best > 30.0 and worst_l < 60.0, "volta da IA %.1f..%.1f s" % [best, worst_l])
+	check(loops_ok, "todos os karts passaram pelo looping nas 2 voltas")
+	check(resc <= 2, "IA quase nunca precisa de resgate (%d)" % resc)
 	race.queue_free()
 	await process_frame
