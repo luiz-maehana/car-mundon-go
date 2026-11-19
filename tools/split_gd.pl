@@ -14,8 +14,8 @@ open my $ph, '<:raw', $plan or die "sem $plan"; my @P = grep { /\S/ } <$ph>; clo
 my @decl;  # índices de linhas de declaração de topo
 for my $i (0..$#L) {
 	my $l = $L[$i];
-	next if $l =~ /^\s/ || $l =~ /^#/ || $l =~ /^\r?\n$/;
-	next if $l =~ /^(extends|class_name|\@tool)\b/;
+	# só declarações de topo (o "]" que fecha uma constante de várias linhas não conta)
+	next unless $l =~ /^(?:\@\w+\s+)*(?:static\s+)?(?:func|var|const|signal|enum)\b/;
 	push @decl, $i;
 }
 die "nada pra dividir" unless @decl;
@@ -37,7 +37,7 @@ for my $k (0..$#decl) {
 	my $line = $L[$decl[$k]];
 	my ($kind, $name) = ('other', '');
 	if ($line =~ /^(?:static\s+)?func\s+(\w+)/) { ($kind, $name) = ('func', $1); }
-	elsif ($line =~ /^(?:\@\w+\s+)*(?:static\s+)?(?:var|const|signal|enum)\s+(\w+)/) { ($kind, $name) = ('data', $1); }
+	elsif ($line =~ /^(?:\@\w+\s+)*(?:static\s+)?(?:var|const|signal|enum)\b\s*(\w*)/) { ($kind, $name) = ('data', $1); }
 	push @blocks, { kind => $kind, name => $name, text => join('', @L[$s..$e]) };
 }
 my @layers;
