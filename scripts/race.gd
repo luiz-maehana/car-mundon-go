@@ -75,6 +75,8 @@ const SettingsMenu = preload("res://scripts/settings_menu.gd")
 
 func _ready() -> void:
 	var game := get_node_or_null("/root/Game")
+	if game and game.has_method("hide_loading"):
+		get_tree().process_frame.connect(game.hide_loading, CONNECT_ONE_SHOT)  # RF-350: tira o "Carregando"
 	if use_game_settings and game:
 		player_chars = game.selected_chars.slice(0, game.num_players)
 		laps = game.laps
@@ -424,7 +426,11 @@ func _leave() -> void:
 
 func restart() -> void:
 	_leave()
-	get_tree().reload_current_scene()
+	var game := get_node_or_null("/root/Game")
+	if game:
+		game.go_race(true)  # RF-350: "Carregando" enquanto a pista remonta
+	else:
+		get_tree().reload_current_scene()
 
 
 func to_menu() -> void:
@@ -1075,7 +1081,7 @@ func gp_continue() -> void:
 		return
 	_leave()
 	if game.gp_next():
-		get_tree().reload_current_scene()
+		game.go_race(true)  # RF-350
 	else:
 		get_tree().change_scene_to_file("res://scenes/gp_final.tscn")
 

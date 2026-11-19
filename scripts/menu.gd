@@ -1154,7 +1154,11 @@ func _start_race() -> void:
 		# RF-263: escurece rápido e vai pra corrida
 		var tw := create_tween()
 		tw.tween_property(fade, "color:a", 1.0, 0.35).set_delay(0.15)
-		tw.tween_callback(func(): get_tree().change_scene_to_file("res://scenes/race.tscn"))
+		tw.tween_callback(func():
+			if game:
+				game.go_race()  # RF-350: "Carregando" com o nome da pista
+			else:
+				get_tree().change_scene_to_file("res://scenes/race.tscn"))
 
 
 # ---------------------------------------------------------------- entrada (RF-240/241)

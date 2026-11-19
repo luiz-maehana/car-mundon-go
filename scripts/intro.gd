@@ -62,6 +62,8 @@ func _load_art() -> Texture2D:
 
 func _process(delta: float) -> void:
 	t += delta
+	if t == delta:
+		print("[boot] abertura na tela em %d ms" % Time.get_ticks_msec())
 	art.modulate.a = minf(1.0, t / 0.6)
 	# zoom lento a partir do centro (RF-102)
 	var z := 1.0 + 0.04 * (0.5 - 0.5 * cos(t * 0.35))

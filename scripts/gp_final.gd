@@ -180,7 +180,9 @@ func _confetti() -> void:
 func _new_gp() -> void:
 	if game:
 		game.start_gp()
-	get_tree().change_scene_to_file("res://scenes/race.tscn")
+		game.go_race()  # RF-350
+	else:
+		get_tree().change_scene_to_file("res://scenes/race.tscn")
 
 
 func _to_menu() -> void:

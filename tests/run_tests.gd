@@ -56,6 +56,7 @@ func _run() -> void:
 	await _test_geladeira()
 	await _test_telhados()
 	await _test_menu_look()
+	await _test_loading()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -2291,4 +2292,32 @@ func _test_menu_look() -> void:
 	check(cur.bg_color != done.bg_color, "chip da etapa atual destacado")
 	menu.queue_free()
 	game.num_players = 1
+	await process_frame
+
+
+func _test_loading() -> void:
+	print("CA-86 tela de carregamento")
+	var game = root.get_node_or_null("Game")
+	check(ProjectSettings.get_setting("application/boot_splash/image") == "res://assets/ui/splash.png" and ResourceLoader.exists("res://assets/ui/splash.png"), "imagem de inicialização configurada")
+	game.track_id = "geladeira"
+	game.mode = "race"
+	game.show_loading(game.loading_text())
+	check(game.is_loading() and game.loading_name.text == "Geladeira Polar" and game.loading.layer >= 100, "CARREGANDO com o nome da pista, por cima de tudo")
+	game.gp_cup = 1
+	game.start_gp()
+	check("Copa Farofa" in game.loading_text() and "1/4" in game.loading_text(), "no GP mostra a copa e a corrida (%s)" % game.loading_text().replace("\n", " / "))
+	game.mode = "race"
+	game.gp_cup = 0
+	# a corrida tira a tela quando o primeiro quadro dela fica pronto
+	var race = load("res://scripts/race.gd").new()
+	race.use_game_settings = false
+	race.autopilot_player = true
+	race.player_chars = ["nanni"]
+	race.track_id = "queijo"
+	root.add_child(race)
+	await process_frame
+	await process_frame
+	await create_timer(0.5).timeout
+	check(not game.is_loading(), "a corrida tira o CARREGANDO sozinha")
+	race.queue_free()
 	await process_frame

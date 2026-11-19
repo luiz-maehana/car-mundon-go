@@ -67,6 +67,7 @@ func _ready() -> void:
 		AudioServer.add_bus_effect(0, lim)
 	add_child(music)
 	music.play()
+	print("[boot] Game pronto em %d ms" % Time.get_ticks_msec())
 
 
 func _input(event: InputEvent) -> void:
@@ -397,6 +398,8 @@ func apply_settings() -> void:
 
 
 func _process(_delta: float) -> void:
+	if loading and loading.visible and loading_spin:
+		loading_spin.rotation += _delta * 7.0
 	if fps_label and fps_label.visible:
 		fps_label.text = "%d FPS" % Engine.get_frames_per_second()
 
@@ -701,3 +704,115 @@ func move_keys(player: int) -> String:
 		ks.append(key_label(player, a).split(" / ")[0])
 	var short := ks.all(func(s): return s.length() == 1)
 	return "".join(ks) if short else " ".join(ks)
+
+
+# ---------------------------------------------------------------- tela de carregamento (RF-350)
+
+const TrackData = preload("res://scripts/track.gd")
+var loading: CanvasLayer
+var loading_root: Control
+var loading_spin: Control
+var loading_name: Label
+var loading_tw: Tween
+
+
+func _build_loading() -> void:
+	loading = CanvasLayer.new()
+	loading.layer = 100
+	add_child(loading)
+	loading_root = Control.new()
+	loading_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	loading_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	loading.add_child(loading_root)
+	var bg := ColorRect.new()
+	bg.color = Color(0.03, 0.04, 0.1)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	loading_root.add_child(bg)
+	if ResourceLoader.exists("res://assets/ui/intro.jpg"):
+		var art := TextureRect.new()
+		art.texture = load("res://assets/ui/intro.jpg")
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var sm := ShaderMaterial.new()
+		sm.shader = load("res://shaders/menu_bg.gdshader")
+		art.material = sm
+		loading_root.add_child(art)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	loading_root.add_child(center)
+	var vb := VBoxContainer.new()
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_theme_constant_override("separation", 14)
+	center.add_child(vb)
+	loading_spin = Control.new()
+	loading_spin.custom_minimum_size = Vector2(80, 80)
+	loading_spin.pivot_offset = Vector2(40, 40)
+	loading_spin.draw.connect(func():
+		var c := Vector2(40, 40)
+		loading_spin.draw_arc(c, 30, 0.0, TAU, 48, Color(1, 1, 1, 0.12), 8.0, true)
+		loading_spin.draw_arc(c, 30, 0.0, TAU * 0.3, 24, Color(1.0, 0.82, 0.2), 8.0, true)
+		loading_spin.draw_circle(c + Vector2(30, 0).rotated(TAU * 0.3), 6.0, Color(1.0, 0.92, 0.5)))
+	var spin_box := CenterContainer.new()
+	spin_box.add_child(loading_spin)
+	vb.add_child(spin_box)
+	var title := Label.new()
+	title.text = "CARREGANDO"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 44)
+	title.add_theme_color_override("font_color", Color(1.0, 0.82, 0.15))
+	title.add_theme_color_override("font_outline_color", Color.BLACK)
+	title.add_theme_constant_override("outline_size", 10)
+	vb.add_child(title)
+	loading_name = Label.new()
+	loading_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	loading_name.add_theme_font_size_override("font_size", 26)
+	loading_name.add_theme_color_override("font_color", Color(0.92, 0.94, 1.0))
+	loading_name.add_theme_color_override("font_outline_color", Color.BLACK)
+	loading_name.add_theme_constant_override("outline_size", 8)
+	vb.add_child(loading_name)
+	loading.visible = false
+
+
+func show_loading(sub := "") -> void:
+	if loading == null:
+		_build_loading()
+	if loading_tw:
+		loading_tw.kill()
+	loading_name.text = sub
+	loading_root.modulate.a = 1.0
+	loading.visible = true
+
+
+func hide_loading() -> void:
+	if loading == null or not loading.visible:
+		return
+	if loading_tw:
+		loading_tw.kill()
+	loading_tw = create_tween()
+	loading_tw.tween_property(loading_root, "modulate:a", 0.0, 0.3)
+	loading_tw.tween_callback(func(): loading.visible = false)
+
+
+func is_loading() -> bool:
+	return loading != null and loading.visible
+
+
+## Texto da tela de carregamento: nome da pista (e a corrida do GP).
+func loading_text() -> String:
+	var name: String = TrackData.find(track_id)["name"]
+	if is_gp():
+		return "%s · corrida %d/%d\n%s" % [gp_cup_name(), gp_index + 1, gp_tracks().size(), name]
+	return name
+
+
+## RF-350: mostra "Carregando" e só depois troca pra corrida (a pista monta com a tela de pé).
+## A corrida chama hide_loading() quando o primeiro quadro dela estiver pronto.
+func go_race(reload := false) -> void:
+	show_loading(loading_text())
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if reload:
+		get_tree().reload_current_scene()
+	else:
+		get_tree().change_scene_to_file("res://scenes/race.tscn")
