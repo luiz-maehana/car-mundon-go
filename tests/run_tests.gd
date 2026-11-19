@@ -1642,6 +1642,7 @@ func _test_new_tracks() -> void:
 
 	print("CA-60 voltas da IA nas pistas novas")
 	for tid in ["churrasco", "fabrica", "parquinho"]:
+		seed(20261119)  # IA determinística: o teste não oscila com a sorte
 		race = load("res://scripts/race.gd").new()
 		race.use_game_settings = false
 		race.autopilot_player = true
@@ -2147,6 +2148,7 @@ func _test_geladeira() -> void:
 	await process_frame
 
 	print("CA-79 IA na Geladeira")
+	seed(20261119)
 	race = load("res://scripts/race.gd").new()
 	race.use_game_settings = false
 	race.autopilot_player = true
@@ -2263,6 +2265,7 @@ func _test_telhados() -> void:
 	await process_frame
 
 	print("CA-84 IA nos Telhados")
+	seed(20261119)
 	race = load("res://scripts/race.gd").new()
 	race.use_game_settings = false
 	race.autopilot_player = true
@@ -2439,6 +2442,7 @@ func _test_feira() -> void:
 	await process_frame
 
 	print("CA-90 IA na Feira")
+	seed(20261119)
 	race = load("res://scripts/race.gd").new()
 	race.use_game_settings = false
 	race.autopilot_player = true
