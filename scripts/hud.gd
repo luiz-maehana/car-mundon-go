@@ -150,7 +150,7 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 	var g := get_node_or_null("/root/Game")
 	if g and g.is_gp():
 		var gpl := _label(20)
-		gpl.text = "GRAND PRIX · CORRIDA %d/%d" % [g.gp_index + 1, g.GP_TRACKS.size()]
+		gpl.text = "GRAND PRIX · CORRIDA %d/%d" % [g.gp_index + 1, g.gp_tracks().size()]
 		gpl.position = lbl_laptime.position + Vector2(0, 26)
 		gpl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.2))
 	# RF-232: recorde da pista no contra o relógio
@@ -473,7 +473,7 @@ func show_results() -> void:
 	var title := _label(44, outer)
 	var game := get_node_or_null("/root/Game")
 	var gp: bool = game != null and game.is_gp()
-	title.text = "GRAND PRIX · CORRIDA %d/%d" % [game.gp_index + 1, game.GP_TRACKS.size()] if gp else "RESULTADO"
+	title.text = "GRAND PRIX · CORRIDA %d/%d" % [game.gp_index + 1, game.gp_tracks().size()] if gp else "RESULTADO"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
 	var body := HBoxContainer.new()
@@ -524,7 +524,7 @@ func show_results() -> void:
 	var again := Button.new()
 	if gp:
 		var TrackScript = load("res://scripts/track.gd")
-		again.text = "PÓDIO DO GP" if game.gp_is_last() else "PRÓXIMA: %s" % TrackScript.find(game.GP_TRACKS[game.gp_index + 1])["name"]
+		again.text = "PÓDIO DO GP" if game.gp_is_last() else "PRÓXIMA: %s" % TrackScript.find(game.gp_tracks()[game.gp_index + 1])["name"]
 		again.pressed.connect(race.gp_continue)
 	else:
 		again.text = "Correr de novo (R)"

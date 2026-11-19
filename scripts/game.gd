@@ -356,10 +356,15 @@ func _process(_delta: float) -> void:
 # ---------------------------------------------------------------- Grand Prix (RF-190..195)
 
 const GP_POINTS := [15, 12, 10, 8, 6, 4, 2, 1]
-const GP_TRACKS := ["queijo", "deserto", "cozinha"]
+## RF-305: copas do Grand Prix (a Copa Farofa junta as pistas novas com uma das antigas)
+const CUPS := [
+	{"id": "queijo", "name": "Copa Queijo", "tracks": ["queijo", "deserto", "cozinha"]},
+	{"id": "farofa", "name": "Copa Farofa", "tracks": ["churrasco", "parquinho", "deserto", "fabrica"]},
+]
 const CharsData = preload("res://scripts/characters.gd")
 
 var mode := "race"          # "race" | "gp" | "tt" (contra o relógio, RF-230)
+var gp_cup := 0             # índice em CUPS
 var gp_index := 0           # corrida atual (0..2)
 var gp_points := {}         # id -> pontos
 var gp_wins := {}           # id -> vitórias
@@ -378,7 +383,15 @@ func start_gp() -> void:
 		gp_points[c["id"]] = 0
 		gp_wins[c["id"]] = 0
 		gp_last_pos[c["id"]] = 8
-	track_id = GP_TRACKS[0]
+	track_id = gp_tracks()[0]
+
+
+func gp_tracks() -> Array:
+	return CUPS[clampi(gp_cup, 0, CUPS.size() - 1)]["tracks"]
+
+
+func gp_cup_name() -> String:
+	return CUPS[clampi(gp_cup, 0, CUPS.size() - 1)]["name"]
 
 
 func is_gp() -> bool:
@@ -420,7 +433,7 @@ func gp_standings() -> Array:
 
 
 func gp_is_last() -> bool:
-	return gp_index >= GP_TRACKS.size() - 1
+	return gp_index >= gp_tracks().size() - 1
 
 
 func gp_is_over() -> bool:
@@ -432,7 +445,7 @@ func gp_next() -> bool:
 	if gp_is_last():
 		return false
 	gp_index += 1
-	track_id = GP_TRACKS[gp_index]
+	track_id = gp_tracks()[gp_index]
 	return true
 
 

@@ -34,7 +34,8 @@ Baixados do OpenGameArt; licença conferida na página de cada um em 2026-11-18.
 | music/queijo | [Pure Raceway](https://opengameart.org/content/pure-raceway) | MintoDog |
 | music/deserto | [As fast as you can](https://opengameart.org/content/as-fast-as-you-can) | Centurion_of_war |
 | music/cozinha | [Awake! (Megawall-10)](https://opengameart.org/content/awake-megawall-10) | cynicmusic |
-
-Se faltar algum arquivo, o jogo usa a versão sintetizada em código (scripts/sfx.gd).
 | music/churrasco | [Bossa Nova (8bit Bossa)](https://opengameart.org/content/bossa-nova) | Joth |
 | music/fabrica | [Empacotatron](https://opengameart.org/content/empacotatron) (loop) | Fupi |
+| music/parquinho | [Loop Town](https://opengameart.org/content/loop-town) | Fupi |
+
+Se faltar algum arquivo, o jogo usa a versão sintetizada em código (scripts/sfx.gd).

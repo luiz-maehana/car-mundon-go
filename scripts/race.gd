@@ -1224,6 +1224,10 @@ const PRESS_SLAM := 0.2
 const PRESS_UP_Y := 7.0
 const PRESS_DOWN_Y := 0.75
 const WHEEL_R := 1.8
+const SEESAW_HALF := 3.5     # meia tábua (m)
+const SEESAW_PIVOT_Y := 0.8
+const SEESAW_TILT := 0.23     # ponta encosta no chão
+const SEESAW_RAMP_Y := 0.45   # ponta de trás abaixo disso = rampa
 
 var track_hazards: Array = []  # {spec, nodes..., state}
 var hazard_clock := 0.0        # anda sempre (visual); perigo só depois do VAI!
@@ -1345,6 +1349,52 @@ func _spawn_track_hazards() -> void:
 				h["mid"] = (float(lat[0]) + float(lat[1])) * 0.5
 				h["half"] = wdt * 0.5
 				h["y"] = PRESS_UP_Y
+			"seesaw":
+				# RF-303: gangorra numa metade da pista; o pivô fica no meio da tábua
+				var lat: Array = s["lat"]
+				var wdt: float = absf(float(lat[1]) - float(lat[0]))
+				var mid: float = (float(lat[0]) + float(lat[1])) * 0.5
+				var base_pos: Vector3 = track.points[i] + track.rights[i] * mid
+				var yaw := Basis(Vector3.UP, track.heading_at(i))
+				var fulcrum := MeshInstance3D.new()
+				var fm := CylinderMesh.new()
+				fm.top_radius = 0.0
+				fm.bottom_radius = 0.9
+				fm.height = SEESAW_PIVOT_Y
+				fm.radial_segments = 4
+				fulcrum.mesh = fm
+				var fmat := StandardMaterial3D.new()
+				fmat.albedo_color = Color(0.25, 0.45, 0.95)
+				fulcrum.material_override = fmat
+				fulcrum.basis = yaw * Basis(Vector3.UP, PI / 4.0).scaled(Vector3(wdt * 0.5, 1.0, 0.8))
+				fulcrum.position = base_pos + Vector3.UP * SEESAW_PIVOT_Y * 0.5
+				add_child(fulcrum)
+				var pivot := Node3D.new()
+				pivot.position = base_pos + Vector3.UP * SEESAW_PIVOT_Y
+				add_child(pivot)
+				var plank := MeshInstance3D.new()
+				var pm := BoxMesh.new()
+				pm.size = Vector3(wdt, 0.3, SEESAW_HALF * 2.0)
+				plank.mesh = pm
+				var pmat := StandardMaterial3D.new()
+				pmat.albedo_color = Color(1.0, 0.78, 0.2)
+				plank.material_override = pmat
+				pivot.add_child(plank)
+				for e in [-1.0, 1.0]:  # alças vermelhas nas pontas
+					var grip := MeshInstance3D.new()
+					var gm := BoxMesh.new()
+					gm.size = Vector3(wdt * 0.6, 0.7, 0.25)
+					grip.mesh = gm
+					var gmat := StandardMaterial3D.new()
+					gmat.albedo_color = Color(0.9, 0.2, 0.2)
+					grip.material_override = gmat
+					grip.position = Vector3(0, 0.45, e * (SEESAW_HALF - 0.6))
+					pivot.add_child(grip)
+				h["node"] = pivot
+				h["yaw"] = yaw
+				h["mid"] = mid
+				h["half"] = wdt * 0.5
+				h["angle"] = 0.0
 		track_hazards.append(h)
 	_update_track_hazards(0.0, false)
 
@@ -1437,6 +1487,38 @@ func _update_track_hazards(delta: float, can_drive: bool) -> void:
 						if near_idx and absf(k.lateral - float(h["mid"])) < float(h["half"]) + 0.6 and absf(along) < 2.4 and k.spin_time <= 0.0:
 							k.hit(1.4)
 							shake(k, 0.6)
+			"seesaw":
+				# RF-303: descansa num lado e no outro. Ponta de trás no chão = rampa (lança o kart);
+				# ponta de trás no alto = parede (bate e roda). Anda sempre; só pega depois do VAI!
+				var ang := SEESAW_TILT * clampf(1.6 * sin(TAU * (hazard_clock + phase) / period), -1.0, 1.0)
+				h["angle"] = ang
+				var rear_y := SEESAW_PIVOT_Y - SEESAW_HALF * sin(ang)
+				h["state"] = "ramp" if rear_y < SEESAW_RAMP_Y else "wall"
+				var pv: Node3D = h["node"]
+				pv.basis = (h["yaw"] as Basis) * Basis(Vector3.RIGHT, ang)
+				if can_drive:
+					for k in karts:
+						if k.airborne or k.spin_time > 0.0:
+							continue
+						if absi(wrapi(k.track_idx - i, -n / 2, n / 2)) > 4 or absf(k.lateral - float(h["mid"])) > float(h["half"]) + 0.4:
+							continue
+						var along: float = (k.position - track.points[i]).dot(track.tangents[i])
+						if along < -SEESAW_HALF - 0.8 or along > -SEESAW_HALF + 1.4:
+							continue
+						if h["state"] == "ramp":
+							if k.speed > 6.0:
+								k.airborne = true
+								k.on_ramp = false
+								k.position.y = 0.4
+								k.vy = 7.0 + k.speed * 0.12
+								k.air_time = 0.0
+								k.trick = false
+								if k.is_player:
+									sfx("drop")
+						else:
+							k.hit(1.0)
+							k.position -= track.tangents[i] * 1.5
+							shake(k, 0.4)
 
 
 ## RF-272: perigos da pista que a IA deve evitar agora (mesmo formato da casca: id, lat).
@@ -1458,9 +1540,12 @@ func _track_hazards_ahead(k: Node3D, samples: int, out: Array) -> void:
 			"press":
 				if h["state"] != "up":
 					out.append({"id": 1000000 + hi * 100, "lat": float(h["mid"])})
+			"seesaw":
+				if h["state"] == "wall" or ds < 6:
+					out.append({"id": 1000000 + hi * 100, "lat": float(h["mid"])})
 	for zi in track.zones.size():
 		var z: Dictionary = track.zones[zi]
-		if z["kind"] != "farofa":
+		if z["kind"] != "farofa" and z["kind"] != "sand":
 			continue
 		var dz := wrapi(int(z["i0"]) - k.track_idx, 0, n)
 		if dz > 0 and dz < samples:

@@ -122,6 +122,37 @@ const TRACKS := [
 			{"kind": "press", "at": 0.73, "lat": [0.5, 7.5], "period": 3.4, "down": 0.7, "phase": 1.7},
 		],
 	},
+	{
+		"id": "parquinho", "name": "Parquinho em Oito", "music": "parquinho",
+		# RF-300: traçado em 8 com cruzamento no mesmo nível (dois pontos de controle no centro)
+		"points": [
+			Vector2(144, 100), Vector2(200, 88), Vector2(227, 40), Vector2(224, -24),
+			Vector2(192, -76), Vector2(136, -92), Vector2(84, -80), Vector2(48, -48),
+			Vector2(0, 0), Vector2(-48, 48), Vector2(-84, 84), Vector2(-140, 96),
+			Vector2(-196, 80), Vector2(-224, 32), Vector2(-216, -32), Vector2(-180, -80),
+			Vector2(-128, -92), Vector2(-80, -80), Vector2(-48, -48), Vector2(0, 0),
+			Vector2(48, 48), Vector2(88, 88),
+		],
+		"crossing": true,
+		# cruzamento em ~0.365 e ~0.857: setas, escorregador, caixas e queijinhos longe dele
+		"pad_ranges": [[0.14, 0.2], [0.7, 0.78]], "ramp_range": [0.43, 0.5], "ramp_h": 2.2, "ramp_style": "slide",
+		"item_rows": [0.22, 0.55, 0.93], "cheese_rows": [[0.28, -3.5], [0.58, 3.5], [0.95, 0.0]],
+		"zones": [
+			{"kind": "sand", "from": 0.03, "to": 0.1, "lat": [-8.0, 0.0]},
+		],
+		"hazards": [
+			{"kind": "seesaw", "at": 0.63, "lat": [-7.5, -0.5], "period": 3.0, "phase": 0.0},
+			{"kind": "seesaw", "at": 0.66, "lat": [0.5, 7.5], "period": 3.0, "phase": 1.5},
+		],
+		"ground": Color(0.24, 0.42, 0.16), "offroad": Color(0.42, 0.62, 0.3),
+		"road": [Color(0.86, 0.36, 0.22), Color(0.82, 0.33, 0.2)],
+		"curb": [Color(0.15, 0.55, 0.95), Color(1.0, 0.85, 0.15)],
+		"wall": [Color(0.95, 0.3, 0.55), Color(0.3, 0.8, 0.45)],
+		"sky_top": Color(0.32, 0.5, 0.9), "sky_horizon": Color(1.0, 0.75, 0.5),
+		"ambient": Color(0.72, 0.66, 0.62), "sun": [1.15, -28.0, Color(1.0, 0.85, 0.65)],
+		"deco": "playground", "deco_color": Color(0.95, 0.3, 0.3),
+		"ground_tex": "grass", "clouds": 0.4, "fog": 0.0012, "exposure": 1.0, "cloud_color": Color(1.0, 0.88, 0.8), "scenery": "rocks_green",
+	},
 ]
 
 var def: Dictionary
@@ -150,6 +181,7 @@ const RAMP_RANGE := [0.3, 0.42]
 
 var pads: Array = []     # {idx, lat}
 var ramp_idx := -1
+var ramp_h := RAMP_H     # o escorregador do parquinho é mais alto (RF-302)
 
 
 ## Curvatura em i: ângulo entre a tangente 10 amostras antes e 20 depois.
@@ -172,9 +204,13 @@ func _straightest(f0: float, f1: float) -> int:
 
 func _place_features() -> void:
 	var lats := [-4.0, 4.0]
-	for k in PAD_RANGES.size():
-		pads.append({"idx": _straightest(PAD_RANGES[k][0], PAD_RANGES[k][1]), "lat": lats[k]})
-	ramp_idx = _straightest(RAMP_RANGE[0], RAMP_RANGE[1])
+	var pr: Array = def.get("pad_ranges", PAD_RANGES)
+	for k in pr.size():
+		pads.append({"idx": _straightest(pr[k][0], pr[k][1]), "lat": lats[k % 2]})
+	var rr: Array = def.get("ramp_range", RAMP_RANGE)
+	ramp_idx = _straightest(rr[0], rr[1])
+	ramp_h = float(def.get("ramp_h", RAMP_H))
+	_find_crossings()
 	_parse_zones()
 
 
@@ -202,7 +238,7 @@ func ramp_frac(i: int, along: float, lat: float) -> float:
 func cheese_positions() -> Array:
 	var out := []
 	var n := points.size()
-	for row in CHEESE_ROWS:
+	for row in def.get("cheese_rows", CHEESE_ROWS):
 		var i0 := int(n * float(row[0]))
 		for k in 5:
 			var i := (i0 + k * 4) % n
@@ -263,7 +299,7 @@ func nearest_index(pos: Vector3, hint: int = -1, window: int = 12) -> int:
 func item_box_positions() -> Array:
 	var out := []
 	var n := points.size()
-	for f in ITEM_ROWS:
+	for f in def.get("item_rows", ITEM_ROWS):
 		var i := int(n * float(f))
 		for lat in [-6.0, -2.0, 2.0, 6.0]:
 			out.append(points[i] + rights[i] * lat + Vector3.UP * 1.2)
@@ -317,6 +353,52 @@ func _build_path() -> void:
 		bounds_max = Vector2(maxf(bounds_max.x, p.x), maxf(bounds_max.y, p.z))
 
 
+# ---------------------------------------------------------------- cruzamento (RF-300)
+
+const CROSS_NEAR := 45.0        # raio pra achar a "outra passada" da pista
+const CROSS_MIN_GAP := 60       # amostras: mais perto que isso é o mesmo trecho
+
+var cross_near: Array = []      # por amostra: índices de outra passada a menos de CROSS_NEAR
+var crossing_top: Array = []    # por amostra: é a passada desenhada por cima?
+var crossings: Array = []       # [[i, j], ...] amostras onde as passadas se cruzam
+
+
+func _find_crossings() -> void:
+	if not def.get("crossing", false):
+		return
+	var n := points.size()
+	cross_near.resize(n)
+	crossing_top.resize(n)
+	for i in n:
+		cross_near[i] = PackedInt32Array()
+		crossing_top[i] = false
+	var r2 := CROSS_NEAR * CROSS_NEAR
+	for i in n:
+		for j in range(i + CROSS_MIN_GAP, n):
+			if n - (j - i) < CROSS_MIN_GAP:
+				break
+			var d2 := points[i].distance_squared_to(points[j])
+			if d2 < r2:
+				cross_near[i].append(j)
+				cross_near[j].append(i)
+				crossing_top[j] = true
+				if d2 < 2.3 * 2.3 and (crossings.is_empty() or absi(int(crossings[-1][0]) - i) > 5):
+					crossings.append([i, j])
+
+
+## O ponto (meio da amostra i, lateral lat) cai a menos de `half` da linha central de outra passada?
+func _in_other_road(i: int, lat: float, half: float) -> bool:
+	if cross_near.is_empty() or (cross_near[i] as PackedInt32Array).is_empty():
+		return false
+	var k := (i + 1) % points.size()
+	var p := (points[i] + points[k]) * 0.5 + rights[i] * lat
+	var h2 := half * half
+	for j in cross_near[i]:
+		if Vector2(p.x - points[j].x, p.z - points[j].z).length_squared() < h2:
+			return true
+	return false
+
+
 # ---------------------------------------------------------------- visuals
 
 func _build_visuals() -> void:
@@ -324,23 +406,35 @@ func _build_visuals() -> void:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var n := points.size()
 	for i in n:
+		# RF-300: no cruzamento a passada de cima fica um tiquinho mais alta e zebra,
+		# grama e muro que cairiam dentro da outra pista não são desenhados
+		var top: bool = crossing_top[i] if not crossing_top.is_empty() else false
 		var road_c: Color = def["road"][(i / 4) % 2]
-		_strip(st, i, -ROAD_HALF, ROAD_HALF, 0.03, 0.03, road_c)
+		var ry := 0.036 if top else 0.03
+		_strip(st, i, -ROAD_HALF, ROAD_HALF, ry, ry, road_c)
+		if top and i % 2 == 0 and _in_other_road(i, 0.0, ROAD_HALF + CURB + 1.0):
+			# faixas brancas tracejadas: mostram por onde a outra passada atravessa
+			for s in [1.0, -1.0]:
+				_strip(st, i, s * (ROAD_HALF - 0.9) - 0.35, s * (ROAD_HALF - 0.9) + 0.35, 0.045, 0.045, Color(0.97, 0.97, 0.95))
 		var curb_c: Color = def["curb"][(i / 2) % 2]
-		_strip(st, i, ROAD_HALF, ROAD_HALF + CURB, 0.04, 0.04, curb_c)
-		_strip(st, i, -ROAD_HALF - CURB, -ROAD_HALF, 0.04, 0.04, curb_c)
+		for s in [1.0, -1.0]:
+			if not _in_other_road(i, s * (ROAD_HALF + CURB * 0.5), ROAD_HALF + CURB):
+				_strip(st, i, ROAD_HALF if s > 0 else -ROAD_HALF - CURB, ROAD_HALF + CURB if s > 0 else -ROAD_HALF, 0.04, 0.04, curb_c)
 		var off_c: Color = def["offroad"]
-		_strip(st, i, ROAD_HALF + CURB, WALL, 0.02, 0.02, off_c)
-		_strip(st, i, -WALL, -ROAD_HALF - CURB, 0.02, 0.02, off_c)
+		for s in [1.0, -1.0]:
+			if not _in_other_road(i, s * (ROAD_HALF + CURB + OFFROAD * 0.5), ROAD_HALF + CURB + OFFROAD * 0.5):
+				_strip(st, i, ROAD_HALF + CURB if s > 0 else -WALL, WALL if s > 0 else -ROAD_HALF - CURB, 0.02, 0.02, off_c)
 		var wall_c: Color = def["wall"][(i / 3) % 2]
 		# muro direito: face interna, topo, face externa
-		_strip(st, i, WALL, WALL, 0.0, WALL_H, wall_c)
-		_strip(st, i, WALL, WALL + WALL_T, WALL_H, WALL_H, wall_c)
-		_strip(st, i, WALL + WALL_T, WALL + WALL_T, WALL_H, 0.0, wall_c)
+		if not _in_other_road(i, WALL, WALL + WALL_T + 1.0):
+			_strip(st, i, WALL, WALL, 0.0, WALL_H, wall_c)
+			_strip(st, i, WALL, WALL + WALL_T, WALL_H, WALL_H, wall_c)
+			_strip(st, i, WALL + WALL_T, WALL + WALL_T, WALL_H, 0.0, wall_c)
 		# muro esquerdo
-		_strip(st, i, -WALL, -WALL, WALL_H, 0.0, wall_c)
-		_strip(st, i, -WALL - WALL_T, -WALL, WALL_H, WALL_H, wall_c)
-		_strip(st, i, -WALL - WALL_T, -WALL - WALL_T, 0.0, WALL_H, wall_c)
+		if not _in_other_road(i, -WALL, WALL + WALL_T + 1.0):
+			_strip(st, i, -WALL, -WALL, WALL_H, 0.0, wall_c)
+			_strip(st, i, -WALL - WALL_T, -WALL, WALL_H, WALL_H, wall_c)
+			_strip(st, i, -WALL - WALL_T, -WALL - WALL_T, 0.0, WALL_H, wall_c)
 	_start_line(st)
 	_pads_and_ramp(st)
 	_zones_visual(st)
@@ -548,6 +642,54 @@ func _build_trees() -> void:
 			_multimesh(glass, bt, Vector3(0, 2.5, 0))
 			_multimesh(neck, bt, Vector3(0, 6.1, 0))
 			_multimesh(label, bt, Vector3(0, 2.6, 0))
+		"playground":
+			# RF-304: praça — árvores do Racing Kit, balanços (pórtico + assentos) e bolas coloridas
+			var trees: Array[Transform3D] = []
+			var swings: Array[Transform3D] = []
+			var balls: Array[Transform3D] = []
+			for i in xforms.size():
+				var x := xforms[i]
+				match i % 4:
+					0, 1:
+						trees.append(Transform3D(x.basis.scaled(Vector3.ONE * 9.0), x.origin))
+					2:
+						swings.append(Transform3D(Basis(Vector3.UP, float(i) * 1.7), x.origin))
+					3:
+						balls.append(x)
+			_multimesh_scene(RACING + "treeLarge.glb", trees)
+			var leg := BoxMesh.new()
+			leg.size = Vector3(0.35, 8.6, 0.35)
+			leg.material = _deco_mat(Color(0.2, 0.45, 0.9))
+			for sx in [-4.0, 4.0]:
+				for sz in [-1.2, 1.2]:
+					var tilted: Array[Transform3D] = []
+					for x in swings:
+						tilted.append(Transform3D(x.basis * Basis(Vector3.RIGHT, -signf(sz) * 0.14), x.origin + x.basis * Vector3(sx, 0, sz)))
+					_multimesh(leg, tilted, Vector3(0, 4.2, 0))
+			var bar := BoxMesh.new()
+			bar.size = Vector3(8.6, 0.4, 0.4)
+			bar.material = _deco_mat(Color(0.95, 0.3, 0.3))
+			_multimesh(bar, swings, Vector3(0, 8.4, 0))
+			var rope := BoxMesh.new()
+			rope.size = Vector3(0.08, 6.0, 0.08)
+			rope.material = _deco_mat(Color(0.3, 0.3, 0.32))
+			var seat := BoxMesh.new()
+			seat.size = Vector3(1.6, 0.18, 0.8)
+			seat.material = _deco_mat(Color(1.0, 0.8, 0.2))
+			for sx in [-2.0, 2.0]:
+				_multimesh(rope, swings, Vector3(sx - 0.6, 5.3, 0))
+				_multimesh(rope, swings, Vector3(sx + 0.6, 5.3, 0))
+				_multimesh(seat, swings, Vector3(sx, 2.3, 0))
+			var ball := SphereMesh.new()
+			ball.radius = 1.6
+			ball.height = 3.2
+			var cols := [Color(0.95, 0.25, 0.25), Color(0.25, 0.55, 1.0), Color(1.0, 0.85, 0.2), Color(0.35, 0.8, 0.35)]
+			var bxf: Array = []
+			var bcol: Array = []
+			for k in balls.size():
+				bxf.append(Transform3D(balls[k].basis, balls[k].origin + Vector3.UP * 1.6 * balls[k].basis.get_scale().y))
+				bcol.append(cols[k % cols.size()])
+			_multimesh_colored(ball, bxf, bcol, _vc_mat(0.4))
 		"machine":
 			# RF-274: chaminés com faixa (metade) e máquinas-caixa com luz (outra metade)
 			var ch: Array[Transform3D] = []
@@ -709,26 +851,31 @@ func _pads_and_ramp(st: SurfaceTool) -> void:
 			_quad(st, c + r * 1.2 - t * 0.6 + up, c + r * 1.8 - t * 0.6 + up, tip - t * 0.6, tip, Color(1.0, 0.92, 0.2))
 	if ramp_idx < 0:
 		return
+	var slide: bool = def.get("ramp_style", "") == "slide"
 	for k in RAMP_LEN:
 		var i := (ramp_idx + k) % n
 		var j := (i + 1) % n
-		var y0 := RAMP_H * float(k) / RAMP_LEN
-		var y1 := RAMP_H * float(k + 1) / RAMP_LEN
+		var y0 := ramp_h * float(k) / RAMP_LEN
+		var y1 := ramp_h * float(k + 1) / RAMP_LEN
 		var stripes := 6
 		for s in stripes:
 			var la := -ROAD_HALF + 2.0 * ROAD_HALF * s / stripes
 			var lb := -ROAD_HALF + 2.0 * ROAD_HALF * (s + 1) / stripes
 			var c := Color(1.0, 0.8, 0.1) if (s + k) % 2 == 0 else Color(0.1, 0.1, 0.12)
+			if slide:  # RF-302: escorregador de plástico (vermelho com faixas amarelas)
+				c = Color(0.92, 0.22, 0.2) if s % 3 != 1 else Color(1.0, 0.82, 0.2)
 			_quad(st, points[i] + rights[i] * la + Vector3.UP * y0, points[i] + rights[i] * lb + Vector3.UP * y0,
 				points[j] + rights[j] * lb + Vector3.UP * y1, points[j] + rights[j] * la + Vector3.UP * y1, c)
-		# laterais
+		# laterais (no escorregador: parede azul que sobe acima da rampa, a "borda" do brinquedo)
+		var side_c := Color(0.2, 0.5, 0.95) if slide else Color(0.25, 0.25, 0.28)
+		var lip := 0.7 if slide else 0.0
 		for side in [-ROAD_HALF, ROAD_HALF]:
-			_quad(st, points[i] + rights[i] * side, points[i] + rights[i] * side + Vector3.UP * y0,
-				points[j] + rights[j] * side + Vector3.UP * y1, points[j] + rights[j] * side, Color(0.25, 0.25, 0.28))
+			_quad(st, points[i] + rights[i] * side, points[i] + rights[i] * side + Vector3.UP * (y0 + lip),
+				points[j] + rights[j] * side + Vector3.UP * (y1 + lip), points[j] + rights[j] * side, side_c)
 	# face de trás (queda)
 	var e := (ramp_idx + RAMP_LEN) % n
 	_quad(st, points[e] - rights[e] * ROAD_HALF, points[e] + rights[e] * ROAD_HALF,
-		points[e] + rights[e] * ROAD_HALF + Vector3.UP * RAMP_H, points[e] - rights[e] * ROAD_HALF + Vector3.UP * RAMP_H, Color(0.25, 0.25, 0.28))
+		points[e] + rights[e] * ROAD_HALF + Vector3.UP * ramp_h, points[e] - rights[e] * ROAD_HALF + Vector3.UP * ramp_h, Color(0.2, 0.5, 0.95) if slide else Color(0.25, 0.25, 0.28))
 
 
 # ---------------------------------------------------------------- cenário (RF-167)
@@ -996,6 +1143,7 @@ func _scatter() -> void:
 const BELT_SPEED := 9.0       # esteira pra frente (m/s)
 const BELT_SIDE_SPEED := 5.0  # esteira lateral (m/s)
 const FAROFA_MULT := 0.62
+const SAND_MULT := 0.72         # caixa de areia do parquinho: atalho por dentro, mas lento
 
 var zones: Array = []          # {kind, i0, len, lat0, lat1, dir}
 var hazard_specs: Array = []   # {kind, idx, ...} — a corrida cria e anima
@@ -1046,6 +1194,19 @@ func _zones_visual(st: SurfaceTool) -> void:
 						var c := points[i] + rights[i] * lat + tangents[i] * rng.randf_range(0.0, SPACING) + Vector3.UP * 0.075
 						var s := rng.randf_range(0.12, 0.3)
 						_quad(st, c - rights[i] * s - tangents[i] * s, c + rights[i] * s - tangents[i] * s, c + rights[i] * s + tangents[i] * s, c - rights[i] * s + tangents[i] * s, Color(0.98, 0.85, 0.55) if g % 2 == 0 else Color(0.6, 0.42, 0.2))
+				"sand":
+					# RF-301: caixa de areia clarinha com moldura de madeira e forminhas de brinquedo
+					_strip(st, i, la, lb, 0.06, 0.06, Color(0.95, 0.85, 0.6).darkened(rng.randf() * 0.06))
+					for lat in [la, lb]:
+						_strip(st, i, lat - 0.25, lat + 0.25, 0.14, 0.14, Color(0.6, 0.38, 0.18))
+					if k == 0 or k == int(z["len"]) - 1:
+						var e := points[i] + tangents[i] * (0.0 if k == 0 else SPACING) + Vector3.UP * 0.14
+						_quad(st, e + rights[i] * la - tangents[i] * 0.25, e + rights[i] * lb - tangents[i] * 0.25, e + rights[i] * lb + tangents[i] * 0.25, e + rights[i] * la + tangents[i] * 0.25, Color(0.6, 0.38, 0.18))
+					if k % 3 == 1:
+						var c := points[i] + rights[i] * rng.randf_range(la + 1.5, lb - 1.5) + Vector3.UP * 0.075
+						var s := rng.randf_range(0.4, 0.7)
+						var toy: Color = [Color(0.95, 0.3, 0.3), Color(0.3, 0.6, 1.0), Color(1.0, 0.85, 0.2)][(k / 3) % 3]
+						_quad(st, c - rights[i] * s - tangents[i] * s, c + rights[i] * s - tangents[i] * s, c + rights[i] * s + tangents[i] * s, c - rights[i] * s + tangents[i] * s, toy)
 				"grill":
 					# grelha: fundo com brasa e barras escuras atravessadas
 					_strip(st, i, la, lb, 0.05, 0.05, Color(0.55, 0.12, 0.02))

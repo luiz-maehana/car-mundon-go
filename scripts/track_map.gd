@@ -1,7 +1,8 @@
 extends Control
 ## RF-292: desenho do trajeto de uma pista (tela de escolha de pista).
 ## O traço "se desenha" ao trocar de pista e depois um ponto fica dando voltas.
-## Marca largada, setas, rampa, zonas (farofa, esteira, grelha) e perigos (fogo, roda, prensa).
+## Marca largada, setas, rampa, zonas (farofa, areia, esteira, grelha), perigos (fogo, roda, prensa,
+## gangorra) e o cruzamento das pistas em 8.
 
 const TrackScript = preload("res://scripts/track.gd")
 
@@ -30,7 +31,7 @@ static func data(id: String) -> Dictionary:
 	var pads := []
 	for p in t.pads:
 		pads.append(int(p["idx"]))
-	var d := {"pts": pts, "pads": pads, "ramp": t.ramp_idx, "zones": zones, "hazards": hazards, "length": t.length}
+	var d := {"pts": pts, "pads": pads, "ramp": t.ramp_idx, "zones": zones, "hazards": hazards, "length": t.length, "crossings": t.crossings.duplicate()}
 	t.free()
 	_cache[id] = d
 	return d
@@ -81,7 +82,7 @@ func _draw() -> void:
 		draw_polyline(poly, Color(0, 0, 0, 0.6), 16.0, true)
 		draw_polyline(poly, Color(0.85, 0.87, 0.92), 11.0, true)
 	# zonas por cima do traço
-	var zone_cols := {"farofa": Color(0.9, 0.7, 0.35), "belt": Color(0.35, 0.8, 1.0), "belt_side": Color(0.6, 0.5, 1.0), "grill": Color(1.0, 0.35, 0.1)}
+	var zone_cols := {"farofa": Color(0.9, 0.7, 0.35), "belt": Color(0.35, 0.8, 1.0), "belt_side": Color(0.6, 0.5, 1.0), "grill": Color(1.0, 0.35, 0.1), "sand": Color(1.0, 0.92, 0.7)}
 	for z in d["zones"]:
 		var seg := PackedVector2Array()
 		for k in int(z["len"]) + 1:
@@ -100,12 +101,17 @@ func _draw() -> void:
 		var c := Color.WHITE if k % 2 == 0 else Color.BLACK
 		var a := s0 + nrm * (-9.0 + k * 4.5)
 		draw_line(a, a + nrm * 4.5, c, 6.0)
+	for c in d.get("crossings", []):  # RF-300: cruzamento (X branco)
+		var cp: Vector2 = map.call(pts[int(c[0])])
+		draw_circle(cp, 12.0, Color(0, 0, 0, 0.7))
+		draw_line(cp + Vector2(-6, -6), cp + Vector2(6, 6), Color.WHITE, 3.0, true)
+		draw_line(cp + Vector2(-6, 6), cp + Vector2(6, -6), Color.WHITE, 3.0, true)
 	for pi in d["pads"]:
 		_marker(map.call(pts[pi]), Color(1.0, 0.55, 0.1), "T")
 	if int(d["ramp"]) >= 0:
 		_marker(map.call(pts[int(d["ramp"])]), Color(1.0, 0.85, 0.15), "R")
-	var hz_cols := {"flame": Color(1.0, 0.35, 0.1), "wheel": Color(1.0, 0.8, 0.25), "press": Color(0.7, 0.72, 0.78)}
-	var hz_txt := {"flame": "F", "wheel": "Q", "press": "P"}
+	var hz_cols := {"flame": Color(1.0, 0.35, 0.1), "wheel": Color(1.0, 0.8, 0.25), "press": Color(0.7, 0.72, 0.78), "seesaw": Color(0.3, 0.55, 1.0)}
+	var hz_txt := {"flame": "F", "wheel": "Q", "press": "P", "seesaw": "G"}
 	for h in d["hazards"]:
 		_marker(map.call(pts[int(h["idx"])]), hz_cols.get(h["kind"], Color.WHITE), hz_txt.get(h["kind"], "!"))
 	# pontinho dando voltas

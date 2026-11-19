@@ -196,6 +196,8 @@ const MUSIC_STYLES := {
 		"lead": "tri", "lead_vol": 0.06, "bass": "sync", "drums": "dance", "seed": 31, "rest": 0.3},
 	"fabrica": {"bpm": 150, "chords": [[40, "m"], [40, "m"], [43, "M"], [38, "M"]], "scale": [64, 67, 69, 71, 74, 76],
 		"lead": "saw", "lead_vol": 0.04, "bass": "octaves", "drums": "dance", "seed": 1313, "rest": 0.4},
+	"parquinho": {"bpm": 140, "chords": [[48, "M"], [43, "M"], [45, "m"], [41, "M"]], "scale": [72, 74, 76, 79, 81, 84],
+		"lead": "square", "lead_vol": 0.055, "bass": "half", "drums": "rock", "seed": 808, "rest": 0.3},
 	"victory": {"bpm": 132, "chords": [[43, "M"], [48, "M"], [50, "M"], [43, "M"]], "scale": [67, 69, 71, 74, 76, 79],
 		"lead": "square", "lead_vol": 0.06, "bass": "half", "drums": "rock", "seed": 5, "rest": 0.2},
 }

@@ -260,6 +260,14 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-274** **Fábrica de Queijo**: galpão escuro com luz de forno, chão de chapa, muro amarelo e preto, chaminés e máquinas, queijos empilhados; esteira pra frente na reta, esteira lateral numa curva, 2 rodas de queijo e 2 prensas.
 - [x] **RF-275** Cada uma com música CC0 própria.
 
+### Parquinho em Oito e Copa Farofa (v0.24)
+- [x] **RF-300** Pista em **8 com cruzamento no mesmo nível** (`"crossing": true`): a pista acha sozinha onde as passadas se cruzam; ali não desenha muro, zebra nem grama dentro da outra pista, a passada de cima fica um tiquinho mais alta (sem piscar) e ganha faixas brancas tracejadas. Os karts seguem a própria passada (busca local do índice) e batem de lado em quem cruza. O trajeto no menu marca o cruzamento com um X.
+- [x] **RF-301** **Caixa de areia** (zona `sand`) na metade de dentro de uma curva fechada: segura menos que a farofa (×0,72), então cortar por dentro é um atalho com preço. Moldura de madeira e forminhas de brinquedo.
+- [x] **RF-302** **Escorregador**: a rampa da pista pode ter altura própria (`ramp_h`, 2,2 m no parquinho) e visual de brinquedo (`ramp_style: slide`). Setas, rampa, caixas e queijinhos podem ter posições próprias por pista (longe do cruzamento).
+- [x] **RF-303** **Gangorra** (perigo `seesaw`) numa metade da pista, balançando sempre: com a ponta de trás no chão vira rampa e lança o kart; com a ponta levantada é parede (bate e roda). A IA desvia quando está levantada.
+- [x] **RF-304** Cenário de praça: árvores, balanços e bolas gigantes; zebra azul/amarela, muro rosa/verde, pista de borracha laranja, fim de tarde. Música própria (CC0).
+- [x] **RF-305** **Copas no Grand Prix**: Copa Queijo (queijo, deserto, cozinha) e **Copa Farofa** (churrasco, parquinho, deserto, fábrica). Na etapa PISTA do GP a lista vira a lista de copas.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -378,6 +386,11 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-61** Depois de um drift completo numa curva, ao soltar o ângulo entre velocidade e direção do kart é < 3° e o mini-turbo acelera pra frente; o giro máximo no drift não passa de 1,05× o normal.
 - [x] **CA-62** (CA-46 refeito) Só com controle: escolher modo e jogadores, abrir/fechar configurações, 2 pilotos, copa, mudar voltas e IA e começar; numa corrida, trocar a pista muda o trajeto e a corrida sai na pista escolhida.
 - [x] **CA-63** (CA-47 refeito) B desfaz piloto, volta etapas e reabre o último piloto ao sair da PISTA. CA-49 cobre as 4 etapas em 3 proporções.
+- [x] **CA-64** Parquinho: um cruzamento a 60..120°, muro aberto só ali, uma passada por cima; kart atravessa e segue na mesma passada; karts das duas passadas colidem.
+- [x] **CA-65** Caixa de areia segura (≤ 0,72 do máximo) e menos que a farofa.
+- [x] **CA-66** Gangorra: no chão lança o kart, levantada derruba, do outro lado da pista não pega, IA enxerga.
+- [x] **CA-67** Escorregador mais alto que a rampa comum e pulo > 3 m; rampa e setas longe do cruzamento.
+- [x] **CA-68** Copa Farofa com 4 pistas; no menu ↓ escolhe a copa, o GP começa na Churrascada e a 2ª corrida é o Parquinho.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
@@ -394,7 +407,7 @@ Teste manual (checklist por release):
 7. **Export web** (GitHub Pages) pra turma jogar no navegador.
 8. **Multiplayer online.**
 
-## 10. Plano: pistas novas (rascunho, nada implementado)
+## 10. Plano: pistas novas (P1, P2 e P3 feitas — v0.21 e v0.24)
 
 Ideia geral: o mundo é **visto do tamanho de um camundongo** — cada pista é um lugar comum da casa/cidade em escala gigante, com um "truque" que muda o jeito de pilotar. Uma segunda copa (**Copa Farofa**, 4 pistas) entra no Grand Prix junto da atual (**Copa Queijo**). Tudo original; assets só CC0.
 
@@ -403,7 +416,7 @@ Ideia geral: o mundo é **visto do tamanho de um camundongo** — cada pista é 
 | # | Pista | Onde | Truque de pilotagem | Tecnologia nova |
 |---|---|---|---|---|
 | P1 | **Churrascada de Domingo** | em cima de uma mesa de churrasco | trecho sobre a **grelha** com labaredas que sobem em ritmo (acertam quem passa na hora errada); **farofa** espalhada = areia que segura o kart; espetos e vinagrete de cenário; pulo da tábua de carne pro prato | T1 superfícies, T4 perigos com tempo |
-| P2 | **Parquinho em Oito** | parquinho da praça à tarde | traçado em **8 com cruzamento no mesmo nível** (dá pra bater de lado em quem cruza); **escorregador** vira rampa gigante; **caixa de areia** como atalho lento; gangorra que sobe e desce | T5 cruzamento, T4 gangorra |
+| P2 ✅ | **Parquinho em Oito** | parquinho da praça à tarde | traçado em **8 com cruzamento no mesmo nível** (dá pra bater de lado em quem cruza); **escorregador** vira rampa gigante; **caixa de areia** como atalho lento; gangorra que sobe e desce | T5 cruzamento, T4 gangorra |
 | P3 | **Fábrica de Queijo** | linha de produção | **esteiras** que empurram pra frente (rápido) ou pro lado; **rodas de queijo rolando** pela pista como obstáculo; prensas que descem; queijinhos em dobro | T1 esteira, T4 obstáculos móveis |
 | P4 | **Geladeira Polar** | dentro da geladeira aberta, luz azul | **prateleiras em andares** ligadas por rampas (pista sobe e desce); **gelo** que escorrega no congelador; potes de iogurte e caixa de leite como túnel | T3 elevação, T1 gelo |
 | P5 | **Telhados da Vila** | telhados à noite, lua cheia | **pulos entre prédios** (cair = volta pro último ponto); varal de roupa como teto; **gato de verdade patrulhando** um telhado; antenas e caixas d'água | T3 elevação, T6 vãos + respawn, T4 gato |

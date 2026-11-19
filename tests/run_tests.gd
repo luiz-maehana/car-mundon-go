@@ -51,6 +51,7 @@ func _run() -> void:
 	await _test_char_select()
 	await _test_new_tracks()
 	await _test_drift_feel()
+	await _test_parquinho()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -88,6 +89,17 @@ func _test_track() -> void:
 		_test_one_track(td["id"])
 
 
+## Par de amostras (i, j) dentro da região de um cruzamento declarado da pista?
+func _at_crossing(t, i: int, j: int) -> bool:
+	var n: int = t.sample_count()
+	for c in t.crossings:
+		var a := absi(wrapi(i - int(c[0]), -n / 2, n / 2)) < 20 and absi(wrapi(j - int(c[1]), -n / 2, n / 2)) < 20
+		var b := absi(wrapi(j - int(c[0]), -n / 2, n / 2)) < 20 and absi(wrapi(i - int(c[1]), -n / 2, n / 2)) < 20
+		if a or b:
+			return true
+	return false
+
+
 func _test_one_track(track_id: String) -> void:
 	var Track = load("res://scripts/track.gd")
 	var t = Track.new(track_id)
@@ -108,6 +120,8 @@ func _test_one_track(track_id: String) -> void:
 	for i in n:
 		for j in range(i + gap, n):
 			if n - (j - i) < gap:
+				continue
+			if _at_crossing(t, i, j):  # RF-300: o 8 se cruza de propósito, só ali
 				continue
 			worst = minf(worst, t.points[i].distance_to(t.points[j]))
 	check(worst > Track.WALL * 2.0 + 2.0, "menor distância entre trechos %.1f m > %.1f" % [worst, Track.WALL * 2.0 + 2.0])
@@ -773,7 +787,7 @@ func _test_gp() -> void:
 	var total := 0
 	for v in game.gp_points.values():
 		total += v
-	check(tracks_seen == game.GP_TRACKS, "pistas na ordem %s" % str(tracks_seen))
+	check(tracks_seen == game.gp_tracks(), "pistas na ordem %s" % str(tracks_seen))
 	check(total == 174, "174 pontos distribuídos em 3 corridas (%d)" % total)
 	check(game.gp_is_over() and not game.gp_next(), "GP termina depois da 3ª corrida")
 
@@ -955,7 +969,7 @@ func _test_music() -> void:
 	var Track = load("res://scripts/track.gd")
 	var sigs := {}
 	var ok := true
-	for style in ["menu", "queijo", "deserto", "cozinha", "churrasco", "fabrica", "victory"]:
+	for style in ["menu", "queijo", "deserto", "cozinha", "churrasco", "fabrica", "parquinho", "victory"]:
 		var t0 := Time.get_ticks_msec()
 		var w: AudioStream = Sfx.music(style)
 		var secs: float = w.get_length()
@@ -964,7 +978,7 @@ func _test_music() -> void:
 		if not looped or secs < 8.0:
 			ok = false
 		sigs[w.resource_name] = true
-	check(ok and sigs.size() == 7, "7 trilhas em loop, > 8 s e diferentes entre si")
+	check(ok and sigs.size() == 8, "8 trilhas em loop, > 8 s e diferentes entre si")
 	var tracks_ok := true
 	for td in Track.TRACKS:
 		if not Sfx.MUSIC_STYLES.has(td.get("music", td["id"])):
@@ -1143,7 +1157,7 @@ func _test_ui_nav() -> void:
 	menu._input(_pad(a))
 	menu._input(_pad(a))
 	check(menu.picks.size() == 2 and menu.step == menu.STEP_TRACK, "J1 e J2 escolhem e vai pra PISTA")
-	check(menu.track_btns[0].visible and not menu.track_btns[1].visible, "no Grand Prix a etapa PISTA mostra só a copa")
+	check(menu.track_btns[0].visible and menu.track_btns[1].visible and not menu.track_btns[2].visible, "no Grand Prix a etapa PISTA mostra as 2 copas")
 	menu._input(_pad(a))
 	check(menu.step == menu.STEP_SETUP and menu.get_viewport().gui_get_focus_owner() == menu.go_btn, "A na copa vai pra AJUSTES com foco no CORRER!")
 	menu._input(_pad(up))
@@ -1600,7 +1614,7 @@ func _test_new_tracks() -> void:
 	await process_frame
 
 	print("CA-60 voltas da IA nas pistas novas")
-	for tid in ["churrasco", "fabrica"]:
+	for tid in ["churrasco", "fabrica", "parquinho"]:
 		race = load("res://scripts/race.gd").new()
 		race.use_game_settings = false
 		race.autopilot_player = true
@@ -1653,4 +1667,151 @@ func _test_drift_feel() -> void:
 	check(ang < 3.0, "ao soltar sai alinhado (%.1f°)" % ang)
 	check(charge >= Kart.MINI_TURBO_1 and k.boost_time > 0.0, "mini-turbo saiu (carga %.2f)" % charge)
 	race.queue_free()
+	await process_frame
+
+
+func _test_parquinho() -> void:
+	print("CA-64 cruzamento do 8")
+	var race = await _race_on("parquinho")
+	var t = race.track
+	var n: int = t.sample_count()
+	check(t.crossings.size() == 1, "um cruzamento (passado 2x por volta): %s" % str(t.crossings))
+	var c0: int = t.crossings[0][0]
+	var c1: int = t.crossings[0][1]
+	var ang := rad_to_deg(t.tangents[c0].angle_to(t.tangents[c1]))
+	check(ang > 60.0 and ang < 120.0, "as passadas se cruzam de lado (%.0f°)" % ang)
+	check(t._in_other_road(c0, t.WALL, t.WALL + t.WALL_T + 1.0) and t._in_other_road(c0, -t.WALL, t.WALL + t.WALL_T + 1.0), "muro aberto no cruzamento")
+	check(not t._in_other_road(wrapi(c0 + 60, 0, n), t.WALL, t.WALL + t.WALL_T + 1.0), "muro normal longe do cruzamento")
+	check(t.crossing_top[c1] and not t.crossing_top[c0], "uma passada por cima da outra (sem piscar)")
+	# o kart atravessa o cruzamento seguindo a própria passada
+	var k = race.player
+	Input.action_press("p1_accelerate")
+	_put(k, wrapi(c0 - 10, 0, n), 0.0, 25.0)
+	var p0: int = k.progress
+	_drive(k, 2.0)
+	Input.action_release("p1_accelerate")
+	var ahead := wrapi(k.track_idx - c0, 0, n)
+	check(ahead > 5 and ahead < 60 and k.progress - p0 > 15, "kart cruza e segue na mesma passada (idx +%d)" % ahead)
+	# quem cruza bate de lado em quem vem pela outra passada
+	var a = race.karts[0]
+	var b = race.karts[1]
+	_put(a, c0, 0.0, 0.0)
+	_put(b, c1, 0.0, 0.0)
+	b.position += Vector3(0.5, 0, 0)
+	race._kart_collisions()
+	var d: float = Vector2(a.position.x - b.position.x, a.position.z - b.position.z).length()
+	check(d >= a.RADIUS * 2.0 - 0.05, "karts de passadas diferentes colidem no cruzamento (%.2f m)" % d)
+	race.queue_free()
+	await process_frame
+
+	print("CA-65 caixa de areia")
+	race = await _race_on("parquinho")
+	k = race.player
+	var sz: Dictionary = {}
+	for z in race.track.zones:
+		if z["kind"] == "sand":
+			sz = z
+	var in_lat: float = (sz["lat0"] + sz["lat1"]) * 0.5
+	Input.action_press("p1_accelerate")
+	_put(k, int(sz["i0"]) + 2, in_lat, 0.0)
+	_drive(k, 1.6)
+	var on_sand: float = k.speed
+	var kind_seen: String = k.zone_kind
+	_put(k, int(sz["i0"]) + 2, -in_lat, 0.0)
+	_drive(k, 1.6)
+	var clean: float = k.speed
+	Input.action_release("p1_accelerate")
+	check(kind_seen == "sand" and on_sand <= k.top_speed() * race.track.SAND_MULT + 0.5 and clean > on_sand + 1.5, "areia segura (%.1f m/s na areia x %.1f fora)" % [on_sand, clean])
+	check(race.track.SAND_MULT > race.track.FAROFA_MULT, "areia segura menos que farofa (é atalho)")
+	race.queue_free()
+	await process_frame
+
+	print("CA-66 gangorra")
+	race = await _race_on("parquinho")
+	k = race.player
+	var ss: Dictionary = {}
+	for h in race.track_hazards:
+		if h["spec"]["kind"] == "seesaw":
+			ss = h
+			break
+	var sp: Dictionary = ss["spec"]
+	var si: int = sp["idx"]
+	var period: float = sp["period"]
+	var phase: float = sp["phase"]
+	# relógio no meio de cada lado: sin = +1 (rampa) e sin = -1 (parede)
+	race.hazard_clock = period * 0.25 - phase
+	race._update_track_hazards(0.0, false)
+	check(ss["state"] == "ramp", "ponta de trás no chão = rampa")
+	_put(k, si, float(ss["mid"]), 22.0)
+	k.position -= race.track.tangents[si] * (race.SEESAW_HALF - 0.2)
+	k.airborne = false
+	k.spin_time = 0.0
+	race._update_track_hazards(0.0, true)
+	check(k.airborne and k.vy > 5.0 and k.spin_time == 0.0, "gangorra na rampa lança o kart (vy %.1f)" % k.vy)
+	race.hazard_clock = period * 0.75 - phase
+	race._update_track_hazards(0.0, false)
+	check(ss["state"] == "wall", "ponta de trás no alto = parede")
+	_put(k, si, float(ss["mid"]), 22.0)
+	k.position -= race.track.tangents[si] * (race.SEESAW_HALF - 0.2)
+	k.airborne = false
+	k.position.y = 0.0
+	k.spin_time = 0.0
+	race._update_track_hazards(0.0, true)
+	check(k.spin_time > 0.0 and not k.airborne, "gangorra levantada derruba o kart")
+	_put(k, si, -float(ss["mid"]), 22.0)
+	k.position -= race.track.tangents[si] * (race.SEESAW_HALF - 0.2)
+	k.spin_time = 0.0
+	race._update_track_hazards(0.0, true)
+	check(k.spin_time == 0.0 and not k.airborne, "do outro lado da pista a gangorra não pega")
+	var out: Array = []
+	k.track_idx = wrapi(si - 20, 0, race.track.sample_count())
+	race._track_hazards_ahead(k, 40, out)
+	var warned := out.any(func(o): return absf(float(o["lat"]) - float(ss["mid"])) < 0.01)
+	check(warned, "IA vê a gangorra levantada à frente")
+	race.queue_free()
+	await process_frame
+
+	print("CA-67 escorregador")
+	race = await _race_on("parquinho")
+	k = race.player
+	var rt = race.track
+	check(rt.ramp_h > rt.RAMP_H * 1.8, "escorregador mais alto que a rampa comum (%.1f m)" % rt.ramp_h)
+	_put(k, wrapi(rt.ramp_idx - 4, 0, rt.sample_count()), 0.0, 24.0)
+	k.max_height = 0.0
+	Input.action_press("p1_accelerate")
+	_drive(k, 2.5)
+	Input.action_release("p1_accelerate")
+	check(k.max_height > 3.0, "pulo do escorregador sobe %.1f m" % k.max_height)
+	var far := true
+	for c in rt.crossings:
+		for ci in c:
+			far = far and absi(wrapi(rt.ramp_idx - int(ci), -rt.sample_count() / 2, rt.sample_count() / 2)) > 30
+	for p in rt.pads:
+		for c in rt.crossings:
+			for ci in c:
+				far = far and absi(wrapi(int(p["idx"]) - int(ci), -rt.sample_count() / 2, rt.sample_count() / 2)) > 30
+	check(far, "rampa e setas longe do cruzamento")
+	race.queue_free()
+	await process_frame
+
+	print("CA-68 Copa Farofa no Grand Prix")
+	var game = root.get_node_or_null("Game")
+	check(game.CUPS.size() == 2 and game.CUPS[1]["tracks"].has("parquinho") and game.CUPS[1]["tracks"].size() == 4, "Copa Farofa com 4 pistas, incluindo o Parquinho")
+	game.mode = "race"
+	game.num_players = 1
+	var menu = await _new_menu()
+	menu._input(_pad(JOY_BUTTON_DPAD_RIGHT))  # GRAND PRIX
+	menu._input(_pad(JOY_BUTTON_A))
+	menu._input(_pad(JOY_BUTTON_A))           # piloto
+	check(menu.step == menu.STEP_TRACK, "etapa PISTA")
+	menu._input(_pad(JOY_BUTTON_DPAD_DOWN))
+	check(menu.cup_i == 1 and menu.track_map.track_id == "churrasco" and menu.track_title.text == "COPA FAROFA", "↓ escolhe a Copa Farofa e mostra a 1ª pista dela")
+	menu._input(_pad(JOY_BUTTON_A))
+	menu._input(_pad(JOY_BUTTON_A))           # CORRER!
+	check(menu.started and game.is_gp() and game.gp_cup == 1 and game.track_id == "churrasco", "GP começa na Churrascada")
+	game.gp_index = 0
+	check(game.gp_next() and game.track_id == "parquinho", "2ª corrida da copa: Parquinho")
+	menu.queue_free()
+	game.mode = "race"
+	game.gp_cup = 0
 	await process_frame

@@ -82,7 +82,7 @@ const START_WINDOW_LATE := 0.6
 var start_hold := -1.0     # countdown no momento em que começou a segurar o acelerador
 var start_stall := 0.0
 var start_result := ""     # "" | "turbo" | "queimou"
-var zone_kind := ""         # RF-270: farofa | belt | belt_side | grill | ""
+var zone_kind := ""         # RF-270: farofa | sand | belt | belt_side | grill | ""
 
 # v0.8: ar/rampa, manobra, queijinhos, vácuo, roleta
 var vy := 0.0
@@ -332,6 +332,8 @@ func _move(delta: float) -> void:
 	zone_kind = String(zone.get("kind", ""))
 	if zone_kind == "farofa" and boost_time <= 0.0:
 		top *= TrackScript.FAROFA_MULT
+	elif zone_kind == "sand" and boost_time <= 0.0:  # RF-301: caixa de areia
+		top *= TrackScript.SAND_MULT
 	elif zone_kind == "belt":
 		top *= 1.15
 	if boost_time > 0.0:
@@ -400,7 +402,7 @@ func _update_air(delta: float) -> void:
 		var f: float = track.ramp_frac(track_idx, track.along_of(position, track_idx), lateral)
 		if f >= 0.0:
 			on_ramp = true
-			position.y = f * TrackScript.RAMP_H
+			position.y = f * track.ramp_h
 		elif on_ramp:
 			on_ramp = false
 			if speed > 8.0:

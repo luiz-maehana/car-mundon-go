@@ -23,7 +23,7 @@ const MODE_NAMES := ["CORRIDA", "GRAND PRIX", "CONTRA O RELÓGIO"]
 const MODE_IDS := ["race", "gp", "tt"]
 const MODE_DESC := [
 	"Uma corrida contra 7 pilotos na pista que você escolher.",
-	"As 3 pistas da Copa Queijo em sequência. Pontos por posição; quem somar mais leva a taça.",
+	"Escolha uma copa e corra as pistas dela em sequência. Pontos por posição; quem somar mais leva a taça.",
 	"Sozinho contra o tempo, com o fantasma do seu recorde. Começa com Queijo Triplo.",
 ]
 const MODE_COLORS := [Color(0.95, 0.35, 0.2), Color(0.95, 0.75, 0.15), Color(0.3, 0.75, 1.0)]
@@ -34,6 +34,7 @@ const TRACK_DESC := {
 	"cozinha": "A cozinha de madrugada: azulejo escorregadio e luz de geladeira.",
 	"churrasco": "Em cima da mesa do churrasco: farofa que segura e grelha com labaredas.",
 	"fabrica": "Linha de produção: esteiras, rodas de queijo rolando e prensas.",
+	"parquinho": "Pista em 8 na praça: cruzamento no meio, escorregador gigante, caixa de areia e gangorras.",
 }
 
 var step := STEP_MODE
@@ -42,6 +43,7 @@ var num_players := 1
 var selected := 0
 var picks: Array = []
 var track_i := 0
+var cup_i := 0             # RF-305: copa escolhida no Grand Prix
 var laps_i := 2
 var diff_i := 1
 var start_scene := true   # os testes desligam pra não trocar de cena
@@ -97,6 +99,7 @@ func _ready() -> void:
 		laps_i = maxi(0, LAP_OPTIONS.find(game.laps))
 		mode_i = maxi(0, MODE_IDS.find(game.mode))
 		diff_i = game.difficulty
+		cup_i = clampi(game.gp_cup, 0, game.CUPS.size() - 1)
 		for ti in TrackScript.TRACKS.size():
 			if TrackScript.TRACKS[ti]["id"] == game.track_id:
 				track_i = ti
@@ -323,7 +326,11 @@ func _build_track() -> Control:
 		b.add_child(chip)
 		b.pressed.connect(func(): _pick_track(i))
 		b.focus_entered.connect(func():
-			if not _is_gp() and not started:
+			if started:
+				pass
+			elif _is_gp():
+				cup_i = mini(i, _cups().size() - 1)
+			else:
 				track_i = i
 			_refresh_track())
 		b.mouse_entered.connect(func(): b.grab_focus())
@@ -688,7 +695,7 @@ func _go_step(s: int, animate := true) -> void:
 			_refresh_pilot()
 		STEP_TRACK:
 			_refresh_track()
-			_focus(1 + (0 if _is_gp() else track_i), 0)
+			_focus(1 + (cup_i if _is_gp() else track_i), 0)
 		STEP_SETUP:
 			_refresh_setup()
 			_focus(nav_rows.size() - 1, 0)
@@ -710,8 +717,9 @@ func _build_nav() -> void:
 		STEP_PILOT:
 			nav_rows.append([])   # cartas: navegação própria (selected)
 		STEP_TRACK:
-			for b in track_btns:
-				nav_rows.append([b])
+			for i in track_btns.size():
+				if not _is_gp() or i < _cups().size():  # no GP a lista vira a lista de copas
+					nav_rows.append([track_btns[i]])
 		STEP_SETUP:
 			nav_rows.append([laps_btn])
 			nav_rows.append([diff_btn])
@@ -907,15 +915,20 @@ func _confirm_fx(i: int) -> void:
 # ---------------------------------------------------------------- etapa PISTA
 
 func _pick_track(i: int) -> void:
-	if not _is_gp():
+	if _is_gp():
+		cup_i = mini(i, _cups().size() - 1)
+	else:
 		track_i = i
 	_play(SND_OK)
 	_go_step(STEP_SETUP)
 
 
+func _cups() -> Array:
+	return GameScript.CUPS
+
+
 func _cup() -> Array:
-	var game_m := get_node_or_null("/root/Game")
-	return game_m.GP_TRACKS if game_m else ["queijo", "deserto", "cozinha"]
+	return _cups()[cup_i]["tracks"]
 
 
 func _refresh_track() -> void:
@@ -923,9 +936,9 @@ func _refresh_track() -> void:
 	var cup := _cup()
 	for i in track_btns.size():
 		var b: Button = track_btns[i]
-		b.visible = not gp or i == 0
-		b.text = "COPA QUEIJO (3 PISTAS)" if gp and i == 0 else TrackScript.TRACKS[i]["name"]
-		if not gp and i == track_i:
+		b.visible = not gp or i < _cups().size()
+		b.text = ("%s (%d PISTAS)" % [String(_cups()[i]["name"]).to_upper(), _cups()[i]["tracks"].size()]) if gp and i < _cups().size() else TrackScript.TRACKS[i]["name"]
+		if i == (cup_i if gp else track_i):
 			GameScript.make_primary(b)
 		else:
 			for s in ["normal", "hover", "pressed", "focus"]:
@@ -937,7 +950,7 @@ func _refresh_track() -> void:
 		var names := []
 		for id in cup:
 			names.append(TrackScript.find(id)["name"])
-		track_title.text = "COPA QUEIJO"
+		track_title.text = String(_cups()[cup_i]["name"]).to_upper()
 		track_desc.text = "Corridas em sequência: " + " → ".join(names) + "."
 		track_info.text = "Pontos: 15, 12, 10, 8, 6, 4, 2, 1. O trajeto mostrado é o da 1ª pista."
 		return
@@ -951,13 +964,15 @@ func _refresh_track() -> void:
 		rec_txt = "recorde %d:%05.2f (%s)" % [int(secs / 60.0), fmod(secs, 60.0), Chars.find(String(rec.get("race_char", ""))).get("name", "?")]
 	var uniq := []
 	for z in d["zones"]:
-		var e: String = {"farofa": "farofa", "belt": "esteira", "belt_side": "esteira lateral", "grill": "grelha"}.get(z["kind"], "")
+		var e: String = {"farofa": "farofa", "belt": "esteira", "belt_side": "esteira lateral", "grill": "grelha", "sand": "caixa de areia"}.get(z["kind"], "")
 		if e != "" and not uniq.has(e):
 			uniq.append(e)
 	for h in d["hazards"]:
-		var e: String = {"flame": "labaredas", "wheel": "rodas de queijo", "press": "prensas"}.get(h["kind"], "")
+		var e: String = {"flame": "labaredas", "wheel": "rodas de queijo", "press": "prensas", "seesaw": "gangorras"}.get(h["kind"], "")
 		if e != "" and not uniq.has(e):
 			uniq.append(e)
+	if not d.get("crossings", []).is_empty():
+		uniq.append("cruzamento")
 	track_info.text = "%.1f km · %s%s" % [float(d["length"]) / 1000.0, rec_txt, (" · " + ", ".join(uniq)) if not uniq.is_empty() else ""]
 
 
@@ -984,7 +999,7 @@ func _refresh_setup() -> void:
 	var pilots := []
 	for i in picks.size():
 		pilots.append(("J%d " % (i + 1) if num_players > 1 else "") + Chars.LIST[picks[i]]["name"])
-	var track_name: String = "Copa Queijo (3 pistas)" if _is_gp() else TrackScript.TRACKS[track_i]["name"]
+	var track_name: String = ("%s (%d pistas)" % [_cups()[cup_i]["name"], _cup().size()]) if _is_gp() else TrackScript.TRACKS[track_i]["name"]
 	summary.text = "MODO\n%s\n\nPILOTO%s\n%s\n\nPISTA\n%s" % [MODE_NAMES[mode_i], "S" if picks.size() > 1 else "", ", ".join(pilots) if not pilots.is_empty() else "—", track_name]
 
 
@@ -998,6 +1013,7 @@ func _start_race() -> void:
 		game.laps = LAP_OPTIONS[laps_i]
 		game.track_id = TrackScript.TRACKS[track_i]["id"]
 		if _is_gp():
+			game.gp_cup = cup_i
 			game.start_gp()  # RF-191: começa pela 1ª pista do GP
 		else:
 			game.mode = MODE_IDS[mode_i]
