@@ -6,6 +6,8 @@ const TrackScript = preload("res://scripts/track.gd")
 const KartScript = preload("res://scripts/kart.gd")
 const HudScript = preload("res://scripts/hud.gd")
 const Chars = preload("res://scripts/characters.gd")
+const Ids = preload("res://scripts/ids.gd")
+const HazardRegistry = preload("res://scripts/hazards/registry.gd")
 const Sfx = preload("res://scripts/sfx.gd")
 const Gfx = preload("res://scripts/gfx.gd")
 const GameScript = preload("res://scripts/game.gd")
@@ -1244,497 +1246,49 @@ func tt_best_lap() -> float:
 	return best
 
 
-# ---------------------------------------------------------------- perigos da pista (RF-271/272)
+# ---------------------------------------------------------------- perigos da pista (RF-271/272, RF-450)
+# Cada tipo mora em scripts/hazards/<tipo>.gd (registro em scripts/hazards/registry.gd).
 
-const FLAME_WARN := 0.6
-const PRESS_RISE := 0.5
-const PRESS_WARN := 0.8
-const PRESS_SLAM := 0.2
-const PRESS_UP_Y := 7.0
-const PRESS_DOWN_Y := 0.75
-const WHEEL_R := 1.8
-const SEESAW_HALF := 3.5     # meia tábua (m)
-const ROOFCAT_SCALE := 2.6
-const ROOFCAT_R := 2.6
-const ROVER_R := 2.0
-const SEESAW_PIVOT_Y := 0.8
-const SEESAW_TILT := 0.23     # ponta encosta no chão
-const SEESAW_RAMP_Y := 0.45   # ponta de trás abaixo disso = rampa
-
-var track_hazards: Array = []  # {spec, nodes..., state}
+var track_hazards: Array = []  # {spec, state, ...o que o script do tipo guardar}
 var hazard_clock := 0.0        # anda sempre (visual); perigo só depois do VAI!
-
-
-func _emissive(c: Color, energy: float) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = c
-	m.emission_enabled = true
-	m.emission = c
-	m.emission_energy_multiplier = energy
-	return m
 
 
 func _spawn_track_hazards() -> void:
 	for s in track.hazard_specs:
-		var i: int = s["idx"]
-		var h := {"spec": s, "state": "off"}
-		match s["kind"]:
-			"flame":
-				var flames := []
-				var embers := []
-				for lat in s["lats"]:
-					var base: Vector3 = track.points[i] + track.rights[i] * float(lat)
-					var fl := Node3D.new()
-					fl.position = base
-					var outer := MeshInstance3D.new()
-					var om := CylinderMesh.new()
-					om.top_radius = 0.0
-					om.bottom_radius = 1.0
-					om.height = 3.2
-					outer.mesh = om
-					var omat := _emissive(Color(1.0, 0.45, 0.08), 2.5)
-					omat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-					omat.albedo_color.a = 0.85
-					outer.material_override = omat
-					outer.position.y = 1.6
-					fl.add_child(outer)
-					var inner := MeshInstance3D.new()
-					var im := CylinderMesh.new()
-					im.top_radius = 0.0
-					im.bottom_radius = 0.5
-					im.height = 2.0
-					inner.mesh = im
-					inner.material_override = _emissive(Color(1.0, 0.9, 0.35), 4.0)
-					inner.position.y = 1.0
-					fl.add_child(inner)
-					fl.visible = false
-					add_child(fl)
-					flames.append(fl)
-					var em := MeshInstance3D.new()  # brasa que acende antes do fogo
-					var cm := CylinderMesh.new()
-					cm.top_radius = 1.0
-					cm.bottom_radius = 1.0
-					cm.height = 0.05
-					em.mesh = cm
-					var emat := _emissive(Color(1.0, 0.3, 0.05), 0.2)
-					em.material_override = emat
-					em.position = base + Vector3.UP * 0.1
-					add_child(em)
-					embers.append(emat)
-				h["flames"] = flames
-				h["embers"] = embers
-			"wheel":
-				var w := MeshInstance3D.new()
-				var wm := CylinderMesh.new()
-				wm.top_radius = WHEEL_R
-				wm.bottom_radius = WHEEL_R
-				wm.height = 1.3
-				wm.radial_segments = 20
-				w.mesh = wm
-				var mat := StandardMaterial3D.new()
-				mat.albedo_color = Color(1.0, 0.78, 0.25)
-				mat.roughness = 0.6
-				w.material_override = mat
-				var rind := MeshInstance3D.new()  # casca vermelha nas faces
-				var rm := CylinderMesh.new()
-				rm.top_radius = WHEEL_R * 0.98
-				rm.bottom_radius = WHEEL_R * 0.98
-				rm.height = 1.34
-				rind.mesh = rm
-				var rmat := StandardMaterial3D.new()
-				rmat.albedo_color = Color(0.8, 0.12, 0.08)
-				rind.material_override = rmat
-				rind.scale = Vector3(0.7, 1.0, 0.7)
-				w.add_child(rind)
-				add_child(w)
-				h["node"] = w
-				h["roll"] = 0.0
-				h["lat"] = 0.0
-			"press":
-				var lat: Array = s["lat"]
-				var wdt: float = absf(float(lat[1]) - float(lat[0]))
-				var blk := MeshInstance3D.new()
-				var bm := BoxMesh.new()
-				bm.size = Vector3(wdt, 1.5, 3.6)
-				blk.mesh = bm
-				var pm := StandardMaterial3D.new()
-				pm.albedo_color = Color(0.45, 0.47, 0.52)
-				pm.metallic = 0.6
-				pm.roughness = 0.4
-				blk.material_override = pm
-				blk.basis = Basis(Vector3.UP, track.heading_at(i))
-				add_child(blk)
-				var shadow := MeshInstance3D.new()
-				var sm := PlaneMesh.new()
-				sm.size = Vector2(wdt, 3.6)
-				shadow.mesh = sm
-				var smat := StandardMaterial3D.new()
-				smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-				smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-				smat.albedo_color = Color(0, 0, 0, 0.0)
-				shadow.material_override = smat
-				shadow.basis = blk.basis
-				shadow.position = track.points[i] + track.rights[i] * (float(lat[0]) + float(lat[1])) * 0.5 + Vector3.UP * 0.09
-				add_child(shadow)
-				h["node"] = blk
-				h["shadow"] = smat
-				h["mid"] = (float(lat[0]) + float(lat[1])) * 0.5
-				h["half"] = wdt * 0.5
-				h["y"] = PRESS_UP_Y
-			"roofcat", "crosser":
-				# RF-332/391: bicho (ou bola de feno) atravessando a pista de um lado pro outro
-				var cat: Node3D = _crosser_model(String(s.get("model", "cat")))
-				add_child(cat)
-				h["node"] = cat
-				h["lat"] = 0.0
-			"rover":
-				# RF-391: robô aspirador indo e voltando ao longo da pista
-				var rv := _rover_model()
-				add_child(rv)
-				h["node"] = rv
-				h["lat"] = float(s.get("lat", 0.0))
-			"seesaw":
-				# RF-303: gangorra numa metade da pista; o pivô fica no meio da tábua
-				var lat: Array = s["lat"]
-				var wdt: float = absf(float(lat[1]) - float(lat[0]))
-				var mid: float = (float(lat[0]) + float(lat[1])) * 0.5
-				var base_pos: Vector3 = track.points[i] + track.rights[i] * mid
-				var yaw := Basis(Vector3.UP, track.heading_at(i))
-				var fulcrum := MeshInstance3D.new()
-				var fm := CylinderMesh.new()
-				fm.top_radius = 0.0
-				fm.bottom_radius = 0.9
-				fm.height = SEESAW_PIVOT_Y
-				fm.radial_segments = 4
-				fulcrum.mesh = fm
-				var fmat := StandardMaterial3D.new()
-				fmat.albedo_color = Color(0.25, 0.45, 0.95)
-				fulcrum.material_override = fmat
-				fulcrum.basis = yaw * Basis(Vector3.UP, PI / 4.0).scaled(Vector3(wdt * 0.5, 1.0, 0.8))
-				fulcrum.position = base_pos + Vector3.UP * SEESAW_PIVOT_Y * 0.5
-				add_child(fulcrum)
-				var pivot := Node3D.new()
-				pivot.position = base_pos + Vector3.UP * SEESAW_PIVOT_Y
-				add_child(pivot)
-				var plank := MeshInstance3D.new()
-				var pm := BoxMesh.new()
-				pm.size = Vector3(wdt, 0.3, SEESAW_HALF * 2.0)
-				plank.mesh = pm
-				var pmat := StandardMaterial3D.new()
-				pmat.albedo_color = Color(1.0, 0.78, 0.2)
-				plank.material_override = pmat
-				pivot.add_child(plank)
-				for e in [-1.0, 1.0]:  # alças vermelhas nas pontas
-					var grip := MeshInstance3D.new()
-					var gm := BoxMesh.new()
-					gm.size = Vector3(wdt * 0.6, 0.7, 0.25)
-					grip.mesh = gm
-					var gmat := StandardMaterial3D.new()
-					gmat.albedo_color = Color(0.9, 0.2, 0.2)
-					grip.material_override = gmat
-					grip.position = Vector3(0, 0.45, e * (SEESAW_HALF - 0.6))
-					pivot.add_child(grip)
-				h["node"] = pivot
-				h["yaw"] = yaw
-				h["mid"] = mid
-				h["half"] = wdt * 0.5
-				h["angle"] = 0.0
+		var impl := HazardRegistry.of(String(s["kind"]))
+		if impl == null:
+			push_warning("perigo desconhecido: %s" % s["kind"])
+			continue
+		var h := {"spec": s, "state": "off", "impl": impl}
+		impl.spawn(self, h)
 		track_hazards.append(h)
 	_update_track_hazards(0.0, false)
 
-
-## RF-391: modelo do atravessador: gato, vaca ou bola de feno.
-func _crosser_model(model: String) -> Node3D:
-	if model == "cat":
-		var cat: Node3D = HazardModels.cat()
-		cat.scale = Vector3.ONE * ROOFCAT_SCALE
-		return cat
-	var root := Node3D.new()
-	if model == "tumbleweed":
-		var ball := MeshInstance3D.new()
-		var sm := SphereMesh.new()
-		sm.radius = 1.3
-		sm.height = 2.6
-		sm.radial_segments = 10
-		sm.rings = 6
-		ball.mesh = sm
-		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.62, 0.48, 0.25)
-		m.roughness = 1.0
-		ball.material_override = m
-		root.add_child(ball)
-		for k in 3:  # galhos em volta
-			var ring := MeshInstance3D.new()
-			var tm := TorusMesh.new()
-			tm.inner_radius = 1.25
-			tm.outer_radius = 1.45
-			ring.mesh = tm
-			var rm := StandardMaterial3D.new()
-			rm.albedo_color = Color(0.45, 0.33, 0.16)
-			ring.material_override = rm
-			ring.rotation = Vector3(k * 1.05, k * 0.7, 0.0)
-			root.add_child(ring)
-		return root
-	# vaca: corpo branco com manchas pretas, cabeça, chifrinhos e pernas
-	var white := StandardMaterial3D.new()
-	white.albedo_color = Color(0.95, 0.95, 0.93)
-	var black := StandardMaterial3D.new()
-	black.albedo_color = Color(0.08, 0.08, 0.09)
-	var pink := StandardMaterial3D.new()
-	pink.albedo_color = Color(0.95, 0.6, 0.65)
-	var parts := [
-		[Vector3(2.2, 1.5, 3.6), Vector3(0, 2.1, 0), white], [Vector3(1.3, 1.2, 1.3), Vector3(0, 2.6, -2.3), white],
-		[Vector3(1.0, 0.6, 0.5), Vector3(0, 2.2, -3.0), pink], [Vector3(1.0, 0.8, 1.2), Vector3(0.9, 2.4, 0.4), black],
-		[Vector3(0.8, 0.7, 1.0), Vector3(-0.9, 2.0, -0.8), black],
-	]
-	for lx in [-0.75, 0.75]:
-		for lz in [-1.3, 1.3]:
-			parts.append([Vector3(0.4, 1.4, 0.4), Vector3(lx, 0.7, lz), white])
-	for hx in [-0.5, 0.5]:
-		parts.append([Vector3(0.15, 0.4, 0.15), Vector3(hx, 3.3, -2.3), black])
-	for p in parts:
-		var mi := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = p[0]
-		mi.mesh = bm
-		mi.material_override = p[2]
-		mi.position = p[1]
-		root.add_child(mi)
-	return root
-
-
-## RF-391: robô aspirador (disco escuro com luz azul e para-choque).
-func _rover_model() -> Node3D:
-	var root := Node3D.new()
-	var body := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 1.7
-	cm.bottom_radius = 1.8
-	cm.height = 0.7
-	body.mesh = cm
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.15, 0.15, 0.18)
-	m.metallic = 0.5
-	m.roughness = 0.35
-	body.material_override = m
-	body.position.y = 0.4
-	root.add_child(body)
-	var ring := MeshInstance3D.new()
-	var rm := CylinderMesh.new()
-	rm.top_radius = 1.85
-	rm.bottom_radius = 1.85
-	rm.height = 0.2
-	ring.mesh = rm
-	ring.material_override = _emissive(Color(0.25, 0.7, 1.0), 2.5)
-	ring.position.y = 0.55
-	root.add_child(ring)
-	var eye := MeshInstance3D.new()
-	var em := SphereMesh.new()
-	em.radius = 0.25
-	em.height = 0.5
-	eye.mesh = em
-	eye.material_override = _emissive(Color(1.0, 0.3, 0.2), 3.0)
-	eye.position = Vector3(0, 0.85, -1.2)
-	root.add_child(eye)
-	return root
 
 func _update_track_hazards(delta: float, can_drive: bool) -> void:
 	hazard_clock += delta
 	var t_live := race_time if state != "countdown" else -1.0
 	var n: int = track.sample_count()
 	for h in track_hazards:
-		var s: Dictionary = h["spec"]
-		var i: int = s["idx"]
-		var period: float = s.get("period", 3.0)
-		var phase: float = s.get("phase", 0.0)
-		match s["kind"]:
-			"flame":
-				var on_dur: float = s.get("on", 1.0)
-				var t := fmod(t_live + phase, period) if t_live >= 0.0 else -1.0
-				var st := "off"
-				if t >= 0.0 and t < FLAME_WARN:
-					st = "warn"
-				elif t >= FLAME_WARN and t < FLAME_WARN + on_dur:
-					st = "on"
-				h["state"] = st
-				for fl in h["flames"]:
-					fl.visible = st == "on"
-					if fl.visible:
-						var flick := 1.0 + 0.18 * sin(hazard_clock * 31.0 + fl.position.x)
-						fl.scale = Vector3(1.0, flick, 1.0)
-				for em in h["embers"]:
-					em.emission_energy_multiplier = 3.0 if st == "on" else (1.2 + 1.2 * sin(hazard_clock * 25.0) if st == "warn" else 0.2)
-				if st == "on" and can_drive:
-					for fl in h["flames"]:
-						for k in karts:
-							var d := Vector2(k.position.x - fl.position.x, k.position.z - fl.position.z).length()
-							if d < 1.9 and k.position.y - fl.position.y < 2.5:
-								k.hit(1.0)
-			"wheel":
-				var amp: float = s.get("amp", 10.0)
-				var lat := amp * sin(TAU * (hazard_clock + phase) / period)
-				var dl: float = lat - float(h["lat"])
-				h["lat"] = lat
-				h["roll"] = float(h["roll"]) + dl / WHEEL_R
-				h["state"] = "on"
-				var w: MeshInstance3D = h["node"]
-				var tan: Vector3 = track.tangents[i]
-				# cilindro deitado com o eixo na tangente da pista; rola pro lado
-				var lying := Basis(Vector3.UP, track.heading_at(i)) * Basis(Vector3.RIGHT, PI / 2.0)
-				w.basis = Basis(tan, -float(h["roll"])) * lying
-				w.position = track.points[i] + track.rights[i] * lat + Vector3.UP * WHEEL_R
-				if can_drive:
-					for k in karts:
-						if Vector2(k.position.x - w.position.x, k.position.z - w.position.z).length() < WHEEL_R + 0.7 and k.position.y - (w.position.y - WHEEL_R) < 3.0:
-							k.hit(1.0)
-			"press":
-				var hold: float = s.get("down", 0.8)
-				var up_time := maxf(0.4, period - PRESS_RISE - PRESS_WARN - PRESS_SLAM - hold)
-				var t := fmod(hazard_clock + phase, period)
-				var y := PRESS_UP_Y
-				var st := "up"
-				var shade := 0.0
-				if t < PRESS_RISE:
-					y = lerpf(PRESS_DOWN_Y, PRESS_UP_Y, t / PRESS_RISE)
-					st = "rise"
-					shade = 0.6 * (1.0 - t / PRESS_RISE)
-				elif t < PRESS_RISE + up_time:
-					y = PRESS_UP_Y
-				elif t < PRESS_RISE + up_time + PRESS_WARN:
-					var f := (t - PRESS_RISE - up_time) / PRESS_WARN
-					y = lerpf(PRESS_UP_Y, PRESS_UP_Y - 1.2, f) + 0.08 * sin(hazard_clock * 60.0)
-					st = "warn"
-					shade = 0.25 + 0.35 * f
-				elif t < PRESS_RISE + up_time + PRESS_WARN + PRESS_SLAM:
-					var f := (t - PRESS_RISE - up_time - PRESS_WARN) / PRESS_SLAM
-					y = lerpf(PRESS_UP_Y - 1.2, PRESS_DOWN_Y, f * f)
-					st = "slam"
-					shade = 0.6
-				else:
-					y = PRESS_DOWN_Y
-					st = "down"
-					shade = 0.6
-				h["state"] = st
-				h["y"] = y
-				h["shadow"].albedo_color.a = shade
-				var blk: MeshInstance3D = h["node"]
-				blk.position = track.points[i] + track.rights[i] * float(h["mid"]) + Vector3.UP * y
-				if can_drive and y < 1.8:
-					for k in karts:
-						var along: float = (k.position - track.points[i]).dot(track.tangents[i])
-						var near_idx: bool = absi(wrapi(k.track_idx - i, -n / 2, n / 2)) < 4
-						if near_idx and absf(k.lateral - float(h["mid"])) < float(h["half"]) + 0.6 and absf(along) < 2.4 and k.spin_time <= 0.0:
-							k.hit(1.4)
-							shake(k, 0.6)
-			"roofcat", "crosser":
-				var model := String(s.get("model", "cat"))
-				var amp: float = s.get("amp", 6.0)
-				var ph := TAU * (hazard_clock + phase) / period
-				var lat := amp * sin(ph)
-				h["lat"] = lat
-				h["state"] = "on"
-				var cat: Node3D = h["node"]
-				var dir: Vector3 = track.rights[i] * signf(cos(ph) + 0.0001)
-				cat.position = track.points[i] + track.rights[i] * lat + Vector3.UP * absf(sin(hazard_clock * 9.0)) * 0.3
-				if model == "tumbleweed":  # rola de lado
-					cat.position.y = track.points[i].y + 1.3
-					cat.rotation = Vector3(0.0, track.heading_at(i), -float(h["lat"]) / 1.3)
-				else:
-					cat.rotation.y = atan2(-dir.x, -dir.z)
-				var cr: float = {"cat": ROOFCAT_R, "cow": 3.0, "tumbleweed": 1.9}.get(model, ROOFCAT_R)
-				if can_drive:
-					for k in karts:
-						if Vector2(k.position.x - cat.position.x, k.position.z - cat.position.z).length() < cr and absf(k.position.y - track.points[i].y) < 2.5:
-							k.hit(1.0)
-							if k.is_player:
-								sfx("meow" if model == "cat" else "bump")
-			"rover":
-				var span: float = s.get("span", 12.0)
-				var ph := TAU * (hazard_clock + phase) / period
-				var fi := float(i) + span * sin(ph)
-				var a := wrapi(int(floorf(fi)), 0, n)
-				var b := (a + 1) % n
-				var fr := fi - floorf(fi)
-				var lat: float = float(s.get("lat", 0.0)) + 2.0 * sin(ph * 2.3)
-				h["lat"] = lat
-				h["state"] = "on"
-				h["at"] = a
-				var rv: Node3D = h["node"]
-				rv.position = track.points[a].lerp(track.points[b], fr) + track.rights[a] * lat
-				var fwd: Vector3 = track.tangents[a] * signf(cos(ph) + 0.0001)
-				rv.rotation.y = atan2(-fwd.x, -fwd.z)
-				if can_drive:
-					for k in karts:
-						if Vector2(k.position.x - rv.position.x, k.position.z - rv.position.z).length() < ROVER_R and absf(k.position.y - rv.position.y) < 2.0:
-							k.hit(1.0)
-							if k.is_player:
-								sfx("bump")
-			"seesaw":
-				# RF-303: descansa num lado e no outro. Ponta de trás no chão = rampa (lança o kart);
-				# ponta de trás no alto = parede (bate e roda). Anda sempre; só pega depois do VAI!
-				var ang := SEESAW_TILT * clampf(1.6 * sin(TAU * (hazard_clock + phase) / period), -1.0, 1.0)
-				h["angle"] = ang
-				var rear_y := SEESAW_PIVOT_Y - SEESAW_HALF * sin(ang)
-				h["state"] = "ramp" if rear_y < SEESAW_RAMP_Y else "wall"
-				var pv: Node3D = h["node"]
-				pv.basis = (h["yaw"] as Basis) * Basis(Vector3.RIGHT, ang)
-				if can_drive:
-					for k in karts:
-						if k.airborne or k.spin_time > 0.0:
-							continue
-						if absi(wrapi(k.track_idx - i, -n / 2, n / 2)) > 4 or absf(k.lateral - float(h["mid"])) > float(h["half"]) + 0.4:
-							continue
-						var along: float = (k.position - track.points[i]).dot(track.tangents[i])
-						if along < -SEESAW_HALF - 0.8 or along > -SEESAW_HALF + 1.4:
-							continue
-						if h["state"] == "ramp":
-							if k.speed > 6.0:
-								k.airborne = true
-								k.on_ramp = false
-								k.position.y = k.ground + 0.4
-								k.vy = 7.0 + k.speed * 0.12
-								k.air_time = 0.0
-								k.trick = false
-								if k.is_player:
-									sfx("drop")
-						else:
-							k.hit(1.0)
-							k.position -= track.tangents[i] * 1.5
-							shake(k, 0.4)
+		h["impl"].update(self, h, can_drive, t_live, n)
 
 
-## RF-272: perigos da pista que a IA deve evitar agora (mesmo formato da casca: id, lat).
+## RF-272: perigos que a IA deve evitar agora (mesmo formato da casca: id, lat).
 func _track_hazards_ahead(k: Node3D, samples: int, out: Array) -> void:
 	var n: int = track.sample_count()
 	for hi in track_hazards.size():
 		var h: Dictionary = track_hazards[hi]
-		var s: Dictionary = h["spec"]
-		var ds := wrapi(int(s["idx"]) - k.track_idx, 0, n)
-		if ds <= 0 or ds >= samples:
-			continue
-		match s["kind"]:
-			"flame":
-				if h["state"] != "off":
-					for j in s["lats"].size():
-						out.append({"id": 1000000 + hi * 100 + j, "lat": float(s["lats"][j])})
-			"wheel", "roofcat", "crosser":
-				out.append({"id": 1000000 + hi * 100, "lat": float(h["lat"])})
-			"press":
-				if h["state"] != "up":
-					out.append({"id": 1000000 + hi * 100, "lat": float(h["mid"])})
-			"seesaw":
-				if h["state"] == "wall" or ds < 6:
-					out.append({"id": 1000000 + hi * 100, "lat": float(h["mid"])})
-			"rover":
-				out.append({"id": 1000000 + hi * 100, "lat": float(h["lat"])})
-	for pi in track.pits.size():  # RF-390: buracos
+		var ds := wrapi(int(h["spec"]["idx"]) - k.track_idx, 0, n)
+		if ds > 0 and ds < samples:
+			h["impl"].ahead(self, h, hi, ds, out)
+	for pi in track.pits.size():  # RF-390: buracos (desvio obrigatório)
 		var pt: Dictionary = track.pits[pi]
 		var dp := wrapi(int(pt["idx"]) - k.track_idx, 0, n)
 		if dp > 0 and dp < samples:
-			out.append({"id": 3000000 + pi, "lat": float(pt["lat"]), "r": float(pt["r"]), "pit": true})
+			out.append({"id": 3000000 + pi, "lat": float(pt["lat"]), "r": float(pt["r"]), Ids.AHEAD_PIT: true})
 	for zi in track.zones.size():
 		var z: Dictionary = track.zones[zi]
-		if z["kind"] != "farofa" and z["kind"] != "sand":
+		if not Ids.SLOW_ZONES.has(z["kind"]):
 			continue
 		var dz := wrapi(int(z["i0"]) - k.track_idx, 0, n)
 		if dz > 0 and dz < samples:

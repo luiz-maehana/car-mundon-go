@@ -1,4 +1,7 @@
 extends SceneTree
+
+const HzFlame = preload("res://scripts/hazards/flame.gd")
+const HzSeesaw = preload("res://scripts/hazards/seesaw.gd")
 ## Testes headless dos critérios de aceite (SPEC.md §8).
 ## godot --headless --path . --script tests/run_tests.gd
 
@@ -1573,17 +1576,17 @@ func _test_new_tracks() -> void:
 	var flame: Node3D = fh["flames"][1]
 	var dt := 1.0 / 60.0
 	# aceso: ajusta o relógio da corrida pro meio da janela de fogo
-	race.race_time = race.FLAME_WARN + 0.3 - float(fs["phase"])
+	race.race_time = HzFlame.WARN + 0.3 - float(fs["phase"])
 	_put(k, int(fs["idx"]), float(fs["lats"][1]), 0.0)
 	k.spin_time = 0.0
 	race._update_track_hazards(dt, true)
 	check(fh["state"] == "on" and k.spin_time > 0.0, "labareda acesa roda o kart")
-	race.race_time = race.FLAME_WARN + float(fs["on"]) + 0.3 - float(fs["phase"])
+	race.race_time = HzFlame.WARN + float(fs["on"]) + 0.3 - float(fs["phase"])
 	k.spin_time = 0.0
 	race._update_track_hazards(dt, true)
 	check(fh["state"] == "off" and k.spin_time == 0.0, "labareda apagada não faz nada")
 	race.state = "countdown"
-	race.race_time = race.FLAME_WARN + 0.3 - float(fs["phase"])
+	race.race_time = HzFlame.WARN + 0.3 - float(fs["phase"])
 	race._update_track_hazards(dt, false)
 	check(k.spin_time == 0.0 and not flame.visible, "antes do VAI! o fogo não acende")
 	race.queue_free()
@@ -1767,7 +1770,7 @@ func _test_parquinho() -> void:
 	race._update_track_hazards(0.0, false)
 	check(ss["state"] == "ramp", "ponta de trás no chão = rampa")
 	_put(k, si, float(ss["mid"]), 22.0)
-	k.position -= race.track.tangents[si] * (race.SEESAW_HALF - 0.2)
+	k.position -= race.track.tangents[si] * (HzSeesaw.HALF - 0.2)
 	k.airborne = false
 	k.spin_time = 0.0
 	race._update_track_hazards(0.0, true)
@@ -1776,14 +1779,14 @@ func _test_parquinho() -> void:
 	race._update_track_hazards(0.0, false)
 	check(ss["state"] == "wall", "ponta de trás no alto = parede")
 	_put(k, si, float(ss["mid"]), 22.0)
-	k.position -= race.track.tangents[si] * (race.SEESAW_HALF - 0.2)
+	k.position -= race.track.tangents[si] * (HzSeesaw.HALF - 0.2)
 	k.airborne = false
 	k.position.y = 0.0
 	k.spin_time = 0.0
 	race._update_track_hazards(0.0, true)
 	check(k.spin_time > 0.0 and not k.airborne, "gangorra levantada derruba o kart")
 	_put(k, si, -float(ss["mid"]), 22.0)
-	k.position -= race.track.tangents[si] * (race.SEESAW_HALF - 0.2)
+	k.position -= race.track.tangents[si] * (HzSeesaw.HALF - 0.2)
 	k.spin_time = 0.0
 	race._update_track_hazards(0.0, true)
 	check(k.spin_time == 0.0 and not k.airborne, "do outro lado da pista a gangorra não pega")
