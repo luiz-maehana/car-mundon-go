@@ -305,6 +305,9 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-371** **Ilha de barracas** (`islands: [{from, to, lat, shortcut}]`): fileira de bancas no meio de um trecho largo que divide a pista em duas faixas; bate como muro. A faixa de dentro da curva é o **atalho** (mais curta), embaixo dos toldos listrados (a câmera passa por baixo). A IA escolhe a faixa pela personalidade (atrevidos pelo atalho) e fica nela até passar.
 - [x] **RF-372** **Feira Livre** (1,3 km, manhã): rua normal → beco entre barracas (10 m) → praça larga (32 m) com a ilha e o atalho → chicane apertada → rampa. Barracas com fruta dos dois lados nos becos, barraca de pastel e de caldo de cana com placa, tendas e caixotes em volta, frutas caídas. O trajeto no menu engrossa onde alarga e marca o atalho (A). Música CC0.
 
+### Cores dos pilotos (v0.32)
+- [x] **RF-380** Cor e número de cada piloto = o carro dele na arte da abertura: 1 FeJauM azul, 2 Burcca vermelho, 3 Nanni amarelo, 4 Mugurin verde, 5 Digão laranja, 6 Shinando azul-claro, 7 Telles vermelho (carmim, pra diferenciar do Burcca), 8 Ortiz roxo. Vale pro kart, cartão, HUD e minimapa.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -450,6 +453,7 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-88** Feira: pista afunila (≤ 10 m) e abre (≥ 31 m) sem degrau no muro; no beco o muro cola na zebra e o kart segue dentro.
 - [x] **CA-89** Ninguém atravessa a ilha de barracas; o atalho é pelo menos 15% mais curto que a faixa larga.
 - [x] **CA-90** IA na Feira: volta entre 30 e 60 s e usa as duas faixas.
+- [x] **CA-91** Números de 1 a 8 sem repetir e a cor de cada piloto na mesma família da do carro na arte.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

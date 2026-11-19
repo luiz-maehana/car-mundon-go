@@ -59,6 +59,7 @@ func _run() -> void:
 	await _test_loading()
 	await _test_results_live()
 	await _test_feira()
+	_test_char_colors()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -2454,3 +2455,38 @@ func _test_feira() -> void:
 	check(short_users.size() >= 2 and long_users.size() >= 2, "IA usa as duas faixas (%d pelo atalho, %d por fora)" % [short_users.size(), long_users.size()])
 	race.queue_free()
 	await process_frame
+
+
+func _test_char_colors() -> void:
+	print("CA-91 cor e número de cada piloto = o carro dele na arte")
+	var chars: Array = load("res://scripts/characters.gd").LIST
+	var nums := {}
+	for c in chars:
+		nums[int(c.get("number", 0))] = true
+	check(nums.size() == 8 and nums.has(1) and nums.has(8) and not nums.has(0), "números de 1 a 8 sem repetir")
+	# na arte: 1 azul, 2 vermelho, 3 amarelo, 4 verde, 5 laranja, 6 azul-claro, 7 vermelho, 8 roxo
+	var want := {"fejaum": "azul", "burcca": "vermelho", "nanni": "amarelo", "mugurin": "verde", "digao": "laranja", "shinando": "azul-claro", "telles": "vermelho", "ortiz": "roxo"}
+	var bad := []
+	for c in chars:
+		var col: Color = c["color"]
+		var h := col.h * 360.0
+		var name := ""
+		if col.s < 0.3:
+			name = "cinza"
+		elif h < 15.0 or h >= 330.0:
+			name = "vermelho"
+		elif h < 40.0:
+			name = "laranja"
+		elif h < 65.0:
+			name = "amarelo"
+		elif h < 160.0:
+			name = "verde"
+		elif h < 210.0:
+			name = "azul-claro"
+		elif h < 250.0:
+			name = "azul"
+		else:
+			name = "roxo"
+		if name != want[c["id"]]:
+			bad.append("%s=%s" % [c["id"], name])
+	check(bad.is_empty(), "cores batem com a arte %s" % str(bad))

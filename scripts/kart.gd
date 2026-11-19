@@ -914,7 +914,7 @@ func _build_model() -> void:
 			mi.material_override = sm
 			kart_body = mi
 	# número do grid nas laterais
-	var number := str(Chars.index_of(char_id) + 1)
+	var number := str(int(Chars.find(char_id).get("number", Chars.index_of(char_id) + 1)))  # RF-380: o número do carro na arte
 	for side in [-1.0, 1.0]:
 		var num := Label3D.new()
 		num.text = number
