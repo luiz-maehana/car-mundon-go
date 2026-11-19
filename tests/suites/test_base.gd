@@ -70,7 +70,8 @@ func _put(k, idx: int, lat: float, spd: float) -> void:
 
 
 func _has_part(n: Node, part: String) -> bool:
-	return n.find_child(part, true, false) != null
+	# o piloto da corrida tem as peças juntadas numa malha só (RF-479): os nomes ficam em meta("parts")
+	return n.find_child(part, true, false) != null or part in n.get_meta("parts", [])
 
 
 ## Corre o kart `k` em linha reta até passar da casca; devolve se bateu.

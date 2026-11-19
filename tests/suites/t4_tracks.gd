@@ -1078,3 +1078,39 @@ func _test_mesh_budget() -> void:
 		await process_frame
 	game.settings["quality"] = q_was
 	check(worst < 700000, "a pista mais pesada tem %d triângulos (%s; antes passava de 2 milhões)" % [worst, worst_id])
+
+
+func _test_web_perf() -> void:
+	print("CA-116 leve no celular: piloto juntado, shaders prontos, física a 30 na web")
+	check(int(ProjectSettings.get_setting("physics/common/physics_ticks_per_second.web", 60)) == 30, "web roda a física a 30 passos por segundo (interpolação deixa liso)")
+	var race = load("res://scripts/race.gd").new()
+	race.use_game_settings = false
+	race.player_chars = ["burcca"]
+	race.track_id = "queijo"
+	race.laps = 1
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	var k = race.player
+	var meshes: Array = k.driver.find_children("*", "MeshInstance3D", true, false)
+	var surf: int = meshes[0].mesh.get_surface_count() if meshes.size() == 1 else 99
+	check(meshes.size() == 1 and surf <= 4, "piloto numa malha só (%d malhas, %d desenhos)" % [meshes.size(), surf])
+	check(k.find_children("*", "", true, false).size() < 30, "kart com menos de 30 nós (%d)" % k.find_children("*", "", true, false).size())
+	race._warm_up_shaders()
+	var show = race.get_node_or_null("Showcase")
+	var ok_layers := show != null
+	if show:
+		for vi in show.find_children("*", "VisualInstance3D", true, false):
+			if vi.layers != race.WARMUP_LAYER:
+				ok_layers = false
+	var cams_ok := true
+	for c in race.find_children("*", "Camera3D", true, false):
+		if c.get_viewport() != race.warmup and (c.cull_mask & race.WARMUP_LAYER) != 0:
+			cams_ok = false
+	check(race.warmup != null and show != null and show.get_child_count() >= 8, "aquecimento: câmera de cima + vitrine com itens, escudo, anéis, fantasma e partículas")
+	check(ok_layers and cams_ok, "a vitrine fica numa camada que o jogador não vê")
+	for i in 7:
+		await process_frame
+	check(race.warmup == null and race.get_node_or_null("Showcase") == null, "o aquecimento some depois de desenhar")
+	race.queue_free()
+	await process_frame

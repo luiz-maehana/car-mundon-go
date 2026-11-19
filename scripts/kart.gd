@@ -162,6 +162,7 @@ func _build_model() -> void:
 	# piloto
 	var look: Dictionary = Chars.find(char_id).get("look", {})
 	driver = MouseModel.build(look)
+	Gfx.merge_meshes(driver)  # RF-479: 28 peças viram 1 malha (4 desenhos)
 	driver.position = Vector3(0, 0.62, 0.2)
 	model.add_child(driver)
 	var head_top := 2.75

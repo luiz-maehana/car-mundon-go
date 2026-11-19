@@ -317,14 +317,28 @@ func _update_ranking() -> void:
 	if race.time_trial:
 		return
 	var order: Array = race.ranking()
+	if order == rank_order:
+		return  # RF-479: só refaz a lista quando a ordem muda (era a parte mais cara do HUD)
+	rank_order = order.duplicate()
 	for i in rank_rows.size():
 		var r: Dictionary = rank_rows[i]
 		var k: Node3D = order[i]
 		r["head"].texture = Chars.art(k.char_id, "head")
 		r["name"].text = k.display_name
-		r["name"].add_theme_color_override("font_color", k.color.lightened(0.25))
+		_col(r["name"], k.color.lightened(0.25))
 		var me: bool = k == kart
 		r["style"].bg_color = Color(1.0, 0.85, 0.2, 0.55) if me else (Color(0.3, 0.3, 0.45, 0.5) if k.is_player else Color(0, 0, 0, 0.45))
+
+
+var rank_order: Array = []   # RF-479: última ordem desenhada na lista de posições
+
+
+## RF-479: troca a cor só quando muda (cada troca refaz o tema do Label; 60 vezes por segundo
+## pesava no celular).
+static func _col(c: Control, col: Color, prop := "font_color") -> void:
+	if c.has_theme_color_override(prop) and c.get_theme_color(prop) == col:
+		return
+	c.add_theme_color_override(prop, col)
 
 
 func _process(_delta: float) -> void:
@@ -382,11 +396,14 @@ func update_hud(delta: float) -> void:
 	boost_fx = lerpf(boost_fx, 1.0 if p.boost_time > 0.0 else 0.0, 1.0 - exp(-8.0 * delta))
 	var slm := speed_lines.material as ShaderMaterial
 	slm.set_shader_parameter("intensity", boost_fx if Gfx.setting("speed_lines", true) else 0.0)
+	# RF-479: sem turbo o efeito some (era um shader de tela cheia todo quadro, mesmo apagado)
+	# (na contagem fica ligado em zero: o shader fica pronto antes do 1º turbo, RF-480)
+	speed_lines.visible = (boost_fx > 0.01 or race.state == "countdown") and Gfx.setting("speed_lines", true)
 	slm.set_shader_parameter("aspect", root.size.x / maxf(1.0, root.size.y))
 	var lap: int = race.lap_of(p)
 	lbl_lap.text = "VOLTA %d/%d" % [lap, race.laps]
 	# RF-134: volta final em vermelho
-	lbl_lap.add_theme_color_override("font_color", Color(1.0, 0.35, 0.3) if lap == race.laps and race.laps > 1 and not p.finished else Color.WHITE)
+	_col(lbl_lap, Color(1.0, 0.35, 0.3) if lap == race.laps and race.laps > 1 and not p.finished else Color.WHITE)
 	lbl_time.text = fmt_time(race.race_time)
 	# RF-133: tempo da volta atual e melhor volta
 	if race.state != "countdown" and not p.finished:
@@ -394,7 +411,7 @@ func update_hud(delta: float) -> void:
 	# RF-132: posição com cor de pódio e "pulo" quando muda
 	lbl_pos.text = "%dº/%d" % [p.rank, race.karts.size()]
 	var pod := [Color(1.0, 0.82, 0.15), Color(0.85, 0.88, 0.95), Color(0.9, 0.55, 0.25)]
-	lbl_pos.add_theme_color_override("font_color", pod[p.rank - 1] if p.rank <= 3 else Color.WHITE)
+	_col(lbl_pos, pod[p.rank - 1] if p.rank <= 3 else Color.WHITE)
 	if p.rank != last_rank:
 		pos_pop = 1.0 if last_rank != 0 else 0.0
 		last_rank = p.rank
@@ -415,13 +432,13 @@ func update_hud(delta: float) -> void:
 		lbl_item.text = "ESCUDO %ds" % int(ceil(p.shield_time))
 	# RF-135: queijinhos
 	lbl_cheese.text = "%d/10" % p.cheese
-	lbl_cheese.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3) if p.cheese >= 10 else Color.WHITE)
+	_col(lbl_cheese, Color(1.0, 0.85, 0.3) if p.cheese >= 10 else Color.WHITE)
 	_update_power_label(p)
 	# RF-131: velocímetro + carga do drift
 	var mph: bool = Gfx.setting("speed_unit", "kmh") == "mph"
 	lbl_speed.text = "%d" % int(absf(p.speed) * (2.237 if mph else 3.6))
 	lbl_unit.text = "mph" if mph else "km/h"
-	lbl_speed.add_theme_color_override("font_color", Color(1.0, 0.6, 0.15) if p.boost_time > 0.0 else Color.WHITE)
+	_col(lbl_speed, Color(1.0, 0.6, 0.15) if p.boost_time > 0.0 else Color.WHITE)
 	drift_bar_bg.visible = p.drifting
 	if p.drifting:
 		var f := clampf(p.drift_charge / KartScript.MINI_TURBO_3, 0.0, 1.0)
@@ -444,14 +461,14 @@ func update_hud(delta: float) -> void:
 		lbl_center.text = "CHEGOU!" if race.time_trial else "CHEGOU! %dº" % p.rank
 	else:
 		lbl_center.text = ""
-	lbl_center.add_theme_color_override("font_color", center_color)
+	_col(lbl_center, center_color)
 	lbl_center.pivot_offset = lbl_center.size * 0.5
 	lbl_center.scale = Vector2.ONE * (1.0 + 0.6 * pop * pop)
 
 	if p.start_result != "" and not start_shown:
 		start_shown = true
 		_flash("LARGADA TURBO!" if p.start_result == "turbo" else "QUEIMOU!", 1.5)
-		lbl_msg.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0) if p.start_result == "turbo" else Color(1.0, 0.4, 0.3))
+		_col(lbl_msg, Color(0.4, 0.9, 1.0) if p.start_result == "turbo" else Color(1.0, 0.4, 0.3))
 	elif msg_time <= 0.0:
 		lbl_msg.remove_theme_color_override("font_color")
 	var game := get_node_or_null("/root/Game")
@@ -469,7 +486,7 @@ func update_hud(delta: float) -> void:
 	# RF-313: contramão (antes só aparecia depois da chegada)
 	if not p.finished and p.wrong_way_time > p.WRONG_WAY_SHOW:
 		_flash("CONTRAMÃO!", 0.25)
-		lbl_msg.add_theme_color_override("font_color", Color(1.0, 0.3, 0.25) if fmod(race.race_time, 0.5) < 0.3 else Color(1.0, 0.85, 0.2))
+		_col(lbl_msg, Color(1.0, 0.3, 0.25) if fmod(race.race_time, 0.5) < 0.3 else Color(1.0, 0.85, 0.2))
 	if msg_time > 0.0:
 		msg_time -= delta
 		if msg_time <= 0.0:
@@ -773,26 +790,26 @@ func _update_power_label(p: Node3D) -> void:
 	match p.power_state():
 		"charge":
 			lbl_power.text = "%s · %d/10 queijinhos" % [nm, p.cheese]
-			lbl_power.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
+			_col(lbl_power, Color(1, 1, 1, 0.55))
 		"ready":
 			lbl_power.text = "%s PRONTO! (%s)" % [nm, key]
 			var blink := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.012)
-			lbl_power.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2).lerp(Color.WHITE, blink * 0.5))
+			_col(lbl_power, Color(1.0, 0.85, 0.2).lerp(Color.WHITE, blink * 0.5))
 		"active":
 			lbl_power.text = ("%s · %d turbos (%s)" % [nm, p.power_charges, key]) if p.power_charges > 0 else "%s ATIVO" % nm
-			lbl_power.add_theme_color_override("font_color", Color(0.45, 1.0, 0.55))
+			_col(lbl_power, Color(0.45, 1.0, 0.55))
 		"cooldown":
 			lbl_power.text = "%s · recarga %ds" % [nm, int(ceil(p.power_cd))]
-			lbl_power.add_theme_color_override("font_color", Color(0.6, 0.75, 1.0, 0.8))
+			_col(lbl_power, Color(0.6, 0.75, 1.0, 0.8))
 	if p.slow_time > 0.0 and msg_time <= 0.05:
 		_flash("CÂMERA LENTA!", 0.4)
-		lbl_msg.add_theme_color_override("font_color", Color(0.45, 0.75, 1.0))
+		_col(lbl_msg, Color(0.45, 0.75, 1.0))
 
 
 func _on_power_used(k: Node3D, _power: String, msg: String) -> void:
 	if k == kart:
 		_flash(msg, 1.4)
-		lbl_msg.add_theme_color_override("font_color", Color(0.45, 1.0, 0.55))
+		_col(lbl_msg, Color(0.45, 1.0, 0.55))
 
 
 ## RF-471: no toque os controles ocupam os cantos de baixo — velocímetro e barra do drift vão pro

@@ -215,3 +215,97 @@ func apply_settings() -> void:
 			k.name_label.visible = names
 	for h in huds:
 		h.apply_settings()
+
+
+# ---------------------------------------------------------------- shaders prontos antes da largada (RF-480)
+
+## O Godot só prepara (compila) o shader de um objeto quando ele aparece na tela pela 1ª vez. No
+## navegador isso trava a página por um instante: cada trecho de pista, item ou efeito novo era um
+## tranco no meio da corrida. Aqui, ainda com a tela de "Carregando", uma câmera de cima enxerga a
+## pista inteira e uma vitrine com um exemplo de cada coisa que só aparece depois (itens no chão,
+## escudo, anéis dos poderes, kart fantasma, faíscas e fogo). Tudo é desenhado uma vez e some.
+var warmup: SubViewport
+const WARMUP_LAYER := 1 << 19   # camada 20 do 3D: só a vitrine do aquecimento
+
+
+func _warm_up_shaders() -> void:
+	if track == null or track.points.is_empty():
+		return
+	var lo: Vector3 = track.points[0]
+	var hi: Vector3 = track.points[0]
+	for p in track.points:
+		lo = lo.min(p)
+		hi = hi.max(p)
+	var center := (lo + hi) * 0.5
+	warmup = SubViewport.new()
+	warmup.name = "ShaderWarmup"
+	warmup.size = Vector2i(320, 180)
+	warmup.render_target_update_mode = SubViewport.UPDATE_ONCE
+	add_child(warmup)   # mesmo mundo 3D da corrida (mesmo céu, neblina e luz = mesmos shaders)
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size = maxf(hi.x - lo.x, hi.z - lo.z) + 120.0
+	cam.near = 1.0
+	cam.far = hi.y - lo.y + 1200.0
+	cam.position = Vector3(center.x, hi.y + 600.0, center.z)
+	cam.rotation = Vector3(-PI / 2.0, 0.0, 0.0)
+	warmup.add_child(cam)
+	cam.current = true
+	# vitrine: um exemplo de cada visual que só nasce durante a corrida
+	var show := Node3D.new()
+	show.name = "Showcase"
+	show.position = Vector3(center.x, hi.y + 20.0, center.z)
+	add_child(show)
+	var things: Array = [Gfx.prop(BANANA_MODEL, 1.5), HazardModels.mousetrap(), HazardModels.cat(), HazardModels.bomb()]
+	var shield := MeshInstance3D.new()
+	shield.mesh = SphereMesh.new()
+	var shm := ShaderMaterial.new()
+	shm.shader = KartScript.ShieldShader
+	shield.material_override = shm
+	things.append(shield)
+	for unshaded in [false, true]:  # anel do FeJauM (luz) e do baixo (sem luz): transparentes e brilhando
+		var ring := MeshInstance3D.new()
+		ring.mesh = TorusMesh.new()
+		var rm := StandardMaterial3D.new()
+		rm.albedo_color = Color(1, 1, 1, 0.8)
+		rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		rm.emission_enabled = true
+		if unshaded:
+			rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		ring.material_override = rm
+		things.append(ring)
+	if not karts.is_empty():
+		var k0: Node3D = karts[0]
+		var ghost: Node3D = k0.model.duplicate()  # poder do fantasma: o kart fica transparente
+		for gi in ghost.find_children("*", "GeometryInstance3D", true, false):
+			(gi as GeometryInstance3D).transparency = 0.65
+		things.append(ghost)
+		for pp in k0.find_children("*", "CPUParticles3D", true, false):
+			var cp: CPUParticles3D = pp.duplicate()
+			cp.preprocess = 0.3
+			cp.set_meta("warm_emit", true)
+			things.append(cp)
+	for i in things.size():
+		var n: Node3D = things[i]
+		n.position = Vector3((i % 6) * 3.0, 0.0, (i / 6) * 3.0)
+		show.add_child(n)
+		if n.has_meta("warm_emit"):
+			(n as CPUParticles3D).emitting = true  # só depois de entrar na cena
+	Gfx.simplify_meshes(show)
+	# a vitrine fica numa camada que só a câmera do aquecimento vê (o jogador nunca enxerga)
+	for vi in show.find_children("*", "VisualInstance3D", true, false):
+		(vi as VisualInstance3D).layers = WARMUP_LAYER
+	for c in find_children("*", "Camera3D", true, false):
+		if c != cam:
+			(c as Camera3D).cull_mask &= ~WARMUP_LAYER
+	_end_warm_up.call_deferred(show)
+
+
+func _end_warm_up(show: Node3D) -> void:
+	for i in 3:
+		await get_tree().process_frame  # 3 quadros: o 1º já desenhou (e compilou) tudo
+	if is_instance_valid(show):
+		show.queue_free()
+	if is_instance_valid(warmup):
+		warmup.queue_free()
+		warmup = null

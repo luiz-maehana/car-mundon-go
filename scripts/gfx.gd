@@ -63,6 +63,80 @@ static func simplify_meshes(root: Node) -> int:
 	return saved
 
 
+## RF-479: junta as peças paradas de um modelo feito de primitivas (o camundongo piloto tinha 28
+## malhas = 28 desenhos e 33 nós andando junto com o kart) numa malha só, com a cor de cada peça
+## na cor do vértice. Sobra um desenho por "jeito" de material: fosco, brilhante, sem luz e
+## transparente. Os nomes das peças ficam em meta("parts") (os testes conferem o visual por eles).
+static func merge_meshes(root: Node3D) -> MeshInstance3D:
+	var parts := []
+	var groups := {}   # jeito -> {v, n, c, i, mat}
+	for n in root.find_children("*", "", true, false):
+		if not String(n.name).begins_with("@"):
+			parts.append(String(n.name))
+		if not (n is MeshInstance3D) or n.mesh == null:
+			continue
+		var mi := n as MeshInstance3D
+		if mi.mesh is PrimitiveMesh:
+			_simplify(mi.mesh)
+		var xf := mi.transform
+		var p := mi.get_parent()
+		while p != root and p is Node3D:
+			xf = (p as Node3D).transform * xf
+			p = p.get_parent()
+		var nb := xf.basis.inverse().transposed()
+		for s in mi.mesh.get_surface_count():
+			var m := mi.get_active_material(s) as StandardMaterial3D
+			if m == null:
+				continue
+			var kind := "transp" if m.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED else ("unshaded" if m.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED else ("shiny" if m.roughness < 0.5 else "matte"))
+			if not groups.has(kind):
+				groups[kind] = {"v": PackedVector3Array(), "n": PackedVector3Array(), "c": PackedColorArray(), "i": PackedInt32Array(), "mat": m}
+			var g: Dictionary = groups[kind]
+			var a := mi.mesh.surface_get_arrays(s)
+			var verts: PackedVector3Array = a[Mesh.ARRAY_VERTEX]
+			var norms: PackedVector3Array = a[Mesh.ARRAY_NORMAL]
+			var base: int = (g["v"] as PackedVector3Array).size()
+			for vi in verts.size():
+				g["v"].append(xf * verts[vi])
+				g["n"].append((nb * norms[vi]).normalized() if vi < norms.size() else Vector3.UP)
+				g["c"].append(m.albedo_color)
+			var idx = a[Mesh.ARRAY_INDEX]
+			if idx == null or (idx as PackedInt32Array).is_empty():
+				for vi in verts.size():
+					g["i"].append(base + vi)
+			else:
+				for ii in (idx as PackedInt32Array):
+					g["i"].append(base + ii)
+	var am := ArrayMesh.new()
+	for kind in groups:
+		var g: Dictionary = groups[kind]
+		var arr := []
+		arr.resize(Mesh.ARRAY_MAX)
+		arr[Mesh.ARRAY_VERTEX] = g["v"]
+		arr[Mesh.ARRAY_NORMAL] = g["n"]
+		arr[Mesh.ARRAY_COLOR] = g["c"]
+		arr[Mesh.ARRAY_INDEX] = g["i"]
+		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+		var src: StandardMaterial3D = g["mat"]
+		var mat := StandardMaterial3D.new()
+		mat.vertex_color_use_as_albedo = true
+		mat.vertex_color_is_srgb = true
+		mat.roughness = src.roughness
+		mat.shading_mode = src.shading_mode
+		mat.transparency = src.transparency
+		am.surface_set_material(am.get_surface_count() - 1, mat)
+	# os nós vazios (Head, orelhas, grupos) também saem: só fica a malha juntada
+	for c in root.get_children():
+		root.remove_child(c)
+		c.free()
+	var out := MeshInstance3D.new()
+	out.name = "MergedMesh"
+	out.mesh = am
+	root.add_child(out)
+	root.set_meta("parts", parts)
+	return out
+
+
 static func sides_for(size: float) -> int:
 	if size < 0.5:
 		return 12

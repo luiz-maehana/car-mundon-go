@@ -339,6 +339,7 @@ func load_settings() -> void:
 	var cfg: ConfigFile = SafeCfg.load_file(settings_path)  # RF-440: nada de objeto/script vindo do arquivo
 	if not FileAccess.file_exists(settings_path) and OS.has_feature("web"):
 		settings["quality"] = 0  # RF-474: no navegador começa no gráfico Baixo (dá pra subir)
+		settings["particles_full"] = false  # RF-479: partículas leves (dá pra ligar nas configurações)
 		if is_mobile():
 			settings["render_scale"] = 0.75
 	if cfg.has_section("settings"):

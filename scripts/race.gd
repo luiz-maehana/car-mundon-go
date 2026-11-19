@@ -52,6 +52,8 @@ func _ready() -> void:
 		human_laps.append(1)
 	Gfx.simplify_meshes(self)  # RF-478
 	if DisplayServer.get_name() != "headless":
+		_warm_up_shaders()  # RF-480: tudo compila agora, com a tela de carregamento
+	if DisplayServer.get_name() != "headless":
 		_log_first_frames(Time.get_ticks_msec())
 
 
@@ -60,6 +62,13 @@ func _log_first_frames(t_ready: int) -> void:
 	for i in 3:
 		await RenderingServer.frame_post_draw
 		print("[carga] quadro %d desenhado %d ms depois de montar" % [i + 1, Time.get_ticks_msec() - t_ready])
+	# [perf] a cada 5 s: quadros por segundo, pior quadro, tempo de script (lógica e física) e desenhos
+	while is_inside_tree() and OS.has_feature("web"):
+		perf_worst = 0.0
+		await get_tree().create_timer(5.0).timeout
+		if not is_inside_tree():
+			return
+		print("[perf] %d fps · pior quadro %d ms · lógica %.1f ms · física %.1f ms · desenhos %d · objetos %d" % [Engine.get_frames_per_second(), perf_worst * 1000.0, Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)])
 
 
 func _exit_tree() -> void:
@@ -69,8 +78,12 @@ func _exit_tree() -> void:
 		ap.stop()
 
 
+var perf_worst := 0.0  # [perf]: maior delta desde o último relatório
+
+
 ## RF-81: o loop do motor (55 Hz) sobe de tom com a velocidade; volume segue o acelerador.
 func _process(delta: float) -> void:
+	perf_worst = maxf(perf_worst, delta)
 	_ensure_touch()  # RF-470
 	for e in engines:
 		var ap: AudioStreamPlayer = e["player"]
