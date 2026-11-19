@@ -50,6 +50,7 @@ func _run() -> void:
 	await _test_remap()
 	await _test_char_select()
 	await _test_new_tracks()
+	await _test_drift_feel()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -1592,3 +1593,33 @@ func _test_new_tracks() -> void:
 		check(race.all_finished() and best > 30.0 and worst < 60.0, "%s: volta da IA %.1f..%.1f s" % [race.track.def["name"], best, worst])
 		race.queue_free()
 		await process_frame
+
+
+func _test_drift_feel() -> void:
+	print("CA-61 drift arcade")
+	var race = await _race_on("queijo")
+	var k = race.player
+	var Kart = load("res://scripts/kart.gd")
+	_put(k, 0, 0.0, 26.0)
+	for a in ["p1_accelerate", "p1_steer_left", "p1_drift"]:
+		Input.action_press(a)
+	var dt := 1.0 / 60.0
+	var max_rate := 0.0
+	var prev: float = k.heading
+	for i in 75:
+		k.step(dt, true)
+		if k.drifting:
+			max_rate = maxf(max_rate, absf(wrapf(k.heading - prev, -PI, PI)) / dt)
+		prev = k.heading
+	var charge: float = k.drift_charge
+	var was: bool = k.drifting
+	Input.action_release("p1_drift")
+	k.step(dt, true)
+	var ang := rad_to_deg(k.vel.angle_to(k.forward()))
+	Input.action_release("p1_steer_left")
+	Input.action_release("p1_accelerate")
+	check(was and max_rate <= k.turn_rate * Kart.DRIFT_TURN_MAX + 0.01, "giro máx no drift %.2f rad/s <= %.2f" % [max_rate, k.turn_rate * Kart.DRIFT_TURN_MAX])
+	check(ang < 3.0, "ao soltar sai alinhado (%.1f°)" % ang)
+	check(charge >= Kart.MINI_TURBO_1 and k.boost_time > 0.0, "mini-turbo saiu (carga %.2f)" % charge)
+	race.queue_free()
+	await process_frame

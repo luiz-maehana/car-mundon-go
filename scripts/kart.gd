@@ -25,6 +25,9 @@ const SHIELD_TIME := 8.0    # RF-203
 const TRAP_TIME := 1.2      # RF-202
 const MAX_CHEESE := 10
 const ITEM_BOOST := 1.3
+const DRIFT_TURN_MIN := 0.45  # RF-280: giro no drift (× turn_rate) abrindo a curva...
+const DRIFT_TURN_MAX := 1.05  # ...e fechando
+const DRIFT_GRIP := 6.0
 const BOOST_MULT := 1.3
 const OFFROAD_MULT := 0.5
 const RADIUS := 1.0
@@ -357,6 +360,8 @@ func _move(delta: float) -> void:
 		hop_time = 0.25
 	if drifting and (not in_drift or speed < DRIFT_MIN_SPEED * 0.6 or spin_time > 0.0):
 		drifting = false
+		# RF-280: ao soltar, o kart sai alinhado pra onde aponta (o turbo empurra reto)
+		vel = forward() * speed
 		if spin_time <= 0.0:
 			if drift_charge >= MINI_TURBO_1 and is_player:
 				race.sfx("mini_turbo")
@@ -371,7 +376,7 @@ func _move(delta: float) -> void:
 	var speed_factor := clampf(absf(speed) / 8.0, 0.0, 1.0) * signf(speed)
 	if drifting:
 		var into := (steer * drift_dir + 1.0) * 0.5
-		var amount := lerpf(0.4, 1.3, into)
+		var amount := lerpf(DRIFT_TURN_MIN, DRIFT_TURN_MAX, into)  # RF-280: mais suave
 		heading -= drift_dir * amount * turn_rate * delta
 		drift_charge += delta * (0.6 + 0.8 * into)
 	else:
@@ -379,7 +384,7 @@ func _move(delta: float) -> void:
 		var air_damp := 0.35 if airborne else 1.0
 		heading -= steer * turn_rate * speed_factor * high_speed_damp * air_damp * delta
 
-	var grip := 2.5 if drifting else (1.5 if airborne else 9.0)
+	var grip := DRIFT_GRIP if drifting else (1.5 if airborne else 9.0)  # RF-280: no drift a direção segue o bico; o "de lado" é só no modelo
 	vel = vel.lerp(forward() * speed, 1.0 - exp(-grip * delta))
 	position += vel * delta
 	# esteiras carregam o kart (mesmo parado)
