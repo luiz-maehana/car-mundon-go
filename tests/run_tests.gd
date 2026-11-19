@@ -55,6 +55,7 @@ func _run() -> void:
 	await _test_rescue()
 	await _test_geladeira()
 	await _test_telhados()
+	await _test_menu_look()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -2265,4 +2266,29 @@ func _test_telhados() -> void:
 	check(race.all_finished() and best > 30.0 and worst < 60.0, "volta da IA %.1f..%.1f s" % [best, worst])
 	check(resc <= 4, "IA quase sempre acerta os pulos (%d quedas em 16 voltas)" % resc)
 	race.queue_free()
+	await process_frame
+
+
+func _test_menu_look() -> void:
+	print("CA-85 visual do menu")
+	var game = root.get_node_or_null("Game")
+	game.mode = "race"
+	game.num_players = 2
+	var menu = await _new_menu()
+	check(menu.get_node_or_null("BgArt") != null, "fundo com a arte da abertura")
+	var th: Theme = root.theme
+	check(th.get_stylebox("normal", "Button") is StyleBoxFlat and th.get_stylebox("focus", "Button") is StyleBoxFlat, "botões do tema novo (sem a textura branca)")
+	check(menu.crumb_chips.size() == 4, "4 chips de etapa")
+	menu._input(_pad(JOY_BUTTON_A))
+	menu._input(_pad(JOY_BUTTON_A))
+	menu._input(_pad(JOY_BUTTON_DPAD_RIGHT))
+	menu._input(_pad(JOY_BUTTON_A))
+	menu._input(_pad(JOY_BUTTON_A))
+	await process_frame
+	check(menu.step == menu.STEP_SETUP and menu.sum_pilots.get_child_count() == 2 and menu.sum_map.track_id != "", "AJUSTES mostra os 2 retratos e o trajeto")
+	var cur: StyleBoxFlat = menu.crumb_chips[menu.STEP_SETUP].get_theme_stylebox("panel")
+	var done: StyleBoxFlat = menu.crumb_chips[0].get_theme_stylebox("panel")
+	check(cur.bg_color != done.bg_color, "chip da etapa atual destacado")
+	menu.queue_free()
+	game.num_players = 1
 	await process_frame

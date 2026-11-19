@@ -287,6 +287,11 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-332** **Gatão** (perigo `roofcat`) patrulhando um telhado de um lado pro outro; quem encosta roda (miau). A IA desvia.
 - [x] **RF-333** **Telhados da Vila** (1,3 km, 18–22 m de altura): noite com lua cheia e estrelas, 3 vãos, varais de roupa atravessando a pista, cidade em volta com janelas, caixas d'água e antenas. O trajeto no menu marca os vãos (S) e o gato (C). Música CC0.
 
+### Visual do menu (v0.28)
+- [x] **RF-340** Botões do jogo todo viram "bala" escura arredondada com borda clara e foco em contorno amarelo com brilho; ação principal amarelo-queijo com base escura (3D). Fundo do menu = arte da abertura desfocada e escurecida, com listras diagonais andando e vinheta. Barra de cima de vidro; etapas viram chips (feita verde, atual amarela, por vir apagada). Dicas numa pílula escura no rodapé.
+- [x] **RF-341** AJUSTES ganha cartão de resumo: modo colorido, retrato de cada piloto (cabeça num círculo da cor dele, borda da cor do jogador no multi) e o trajeto da pista.
+- [x] **RF-342** Looping liso: orientação do kart e da câmera interpolada entre amostras (antes girava em degraus de ~10°), "pra cima" da câmera suavizado.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -426,6 +431,7 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-82** Devagar: cai no vão, balões, −3 queijinhos e volta no telhado antes do vão; pulo curto que bate na parede também cai.
 - [x] **CA-83** Gatão derruba quem encosta, anda de um lado pro outro e a IA vê.
 - [x] **CA-84** IA nos Telhados: volta entre 30 e 60 s e quase nunca cai.
+- [x] **CA-85** Menu: fundo com a arte, botões do tema novo, 4 chips de etapa com a atual destacada; AJUSTES mostra os retratos dos pilotos e o trajeto. (CA-76 cobre o looping liso: no máximo 4° de giro por quadro.)
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

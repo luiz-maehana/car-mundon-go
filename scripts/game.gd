@@ -199,27 +199,75 @@ static func tex_box(file: String) -> StyleBoxTexture:
 	return s
 
 
+## RF-340: botão "bala" escuro com borda clara; o foco desenha um contorno amarelo com brilho por cima.
+static func candy_box(bg: Color, border: Color, bottom := 5, radius := 14) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.border_color = border
+	s.set_border_width_all(2)
+	s.border_width_bottom = bottom
+	s.set_corner_radius_all(radius)
+	s.shadow_color = Color(0, 0, 0, 0.35)
+	s.shadow_size = 6
+	s.shadow_offset = Vector2(0, 3)
+	s.content_margin_left = 18
+	s.content_margin_right = 18
+	s.content_margin_top = 8
+	s.content_margin_bottom = 10
+	s.anti_aliasing = true
+	return s
+
+
+static func focus_ring(radius := 14) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.draw_center = false
+	s.border_color = Color(1.0, 0.84, 0.2)
+	s.set_border_width_all(3)
+	s.set_corner_radius_all(radius + 2)
+	s.expand_margin_left = 3
+	s.expand_margin_right = 3
+	s.expand_margin_top = 3
+	s.expand_margin_bottom = 3
+	s.shadow_color = Color(1.0, 0.8, 0.2, 0.35)
+	s.shadow_size = 10
+	s.anti_aliasing = true
+	return s
+
+
 static func build_theme() -> Theme:
 	var t := Theme.new()
 	t.default_font = load(FONT_PATH)
 	t.default_font_size = 22
-	t.set_stylebox("normal", "Button", tex_box("button_grey.png"))
-	t.set_stylebox("hover", "Button", tex_box("button_grey_hover.png"))
-	t.set_stylebox("pressed", "Button", tex_box("button_grey_pressed.png"))
-	t.set_stylebox("focus", "Button", tex_box("button_yellow_hover.png"))
-	t.set_stylebox("disabled", "Button", tex_box("button_grey_pressed.png"))
+	t.set_stylebox("normal", "Button", candy_box(Color(0.17, 0.19, 0.34), Color(1, 1, 1, 0.14)))
+	t.set_stylebox("hover", "Button", candy_box(Color(0.23, 0.26, 0.45), Color(1, 1, 1, 0.3)))
+	t.set_stylebox("pressed", "Button", candy_box(Color(0.12, 0.13, 0.25), Color(1, 1, 1, 0.14), 2))
+	t.set_stylebox("focus", "Button", focus_ring())
+	t.set_stylebox("disabled", "Button", candy_box(Color(0.12, 0.13, 0.2, 0.8), Color(1, 1, 1, 0.06)))
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
-		t.set_color(c, "Button", Color(0.16, 0.17, 0.22))
-	t.set_color("font_disabled_color", "Button", Color(0.38, 0.4, 0.48))
+		t.set_color(c, "Button", Color(0.95, 0.96, 1.0))
+	t.set_color("font_disabled_color", "Button", Color(0.55, 0.58, 0.7, 0.6))
+	t.set_color("font_outline_color", "Button", Color(0, 0, 0, 0.55))
+	t.set_constant("outline_size", "Button", 4)
 	return t
 
 
-## Botão de ação principal (amarelo do UI Pack).
+## Botão de ação principal: amarelo-queijo com a base mais escura (efeito 3D).
 static func make_primary(b: Button) -> void:
-	b.add_theme_stylebox_override("normal", tex_box("button_yellow.png"))
-	b.add_theme_stylebox_override("hover", tex_box("button_yellow_hover.png"))
-	b.add_theme_stylebox_override("pressed", tex_box("button_yellow_pressed.png"))
-	b.add_theme_stylebox_override("focus", tex_box("button_yellow_hover.png"))
+	b.add_theme_stylebox_override("normal", candy_box(Color(1.0, 0.78, 0.16), Color(0.85, 0.5, 0.05), 6))
+	b.add_theme_stylebox_override("hover", candy_box(Color(1.0, 0.86, 0.32), Color(0.9, 0.55, 0.08), 6))
+	b.add_theme_stylebox_override("pressed", candy_box(Color(0.95, 0.7, 0.1), Color(0.85, 0.5, 0.05), 2))
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(c, Color(0.22, 0.13, 0.03))
+	b.add_theme_constant_override("outline_size", 0)
+
+
+## Desfaz o make_primary (volta pro botão escuro do tema).
+static func clear_primary(b: Button) -> void:
+	for s in ["normal", "hover", "pressed", "focus"]:
+		b.remove_theme_stylebox_override(s)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		b.remove_theme_color_override(c)
+	b.remove_theme_constant_override("outline_size")
 
 
 func _setup_ui() -> void:

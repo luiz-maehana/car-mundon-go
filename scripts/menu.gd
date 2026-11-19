@@ -60,6 +60,8 @@ var nav_i := 0
 # nós
 var steps_root: Array = []     # Control de cada etapa
 var crumbs: Array = []         # Label de cada etapa no topo
+var crumb_chips: Array = []     # chip (PanelContainer) de cada etapa
+const BG_ART := "res://assets/ui/intro.jpg"
 var back_btn: Button
 var gfx_btn: Button
 var help: Label
@@ -88,7 +90,11 @@ var track_desc: Label
 var laps_btn: Button
 var diff_btn: Button
 var go_btn: Button
-var summary: Label
+var sum_mode: Label
+var sum_pilots_cap: Label
+var sum_pilots: HBoxContainer
+var sum_track: Label
+var sum_map: Control
 var t := 0.0
 
 
@@ -120,6 +126,19 @@ func _build() -> void:
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
+	# RF-340: a arte da abertura desfocada e escura atrás de tudo
+	if ResourceLoader.exists(BG_ART):
+		var art := TextureRect.new()
+		art.texture = load(BG_ART)
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var sm := ShaderMaterial.new()
+		sm.shader = load("res://shaders/menu_bg.gdshader")
+		art.material = sm
+		art.name = "BgArt"
+		add_child(art)
 	snd = AudioStreamPlayer.new()
 	snd.bus = "SFX"
 	snd.volume_db = -6.0
@@ -134,18 +153,28 @@ func _build() -> void:
 	margin.add_child(root_vb)
 
 	# topo: VOLTAR · título + etapas · CONFIGURAÇÕES
+	var top_panel := PanelContainer.new()
+	var tps := StyleBoxFlat.new()
+	tps.bg_color = Color(0.04, 0.05, 0.12, 0.72)
+	tps.set_corner_radius_all(20)
+	tps.border_color = Color(1.0, 0.82, 0.2, 0.45)
+	tps.border_width_bottom = 2
+	tps.set_content_margin_all(10)
+	top_panel.add_theme_stylebox_override("panel", tps)
+	root_vb.add_child(top_panel)
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 16)
-	root_vb.add_child(top)
+	top_panel.add_child(top)
 	back_btn = _button("VOLTAR", 18)
-	back_btn.custom_minimum_size = Vector2(200, 46)
+	back_btn.custom_minimum_size = Vector2(190, 50)
+	back_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	back_btn.pressed.connect(_back)
 	top.add_child(back_btn)
 	var mid := VBoxContainer.new()
 	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mid.add_theme_constant_override("separation", 2)
 	top.add_child(mid)
-	var title := _label("Car Mundon'GO", 40, Color(1.0, 0.82, 0.15))
+	var title := _label("Car Mundon'GO", 38, Color(1.0, 0.82, 0.15))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	mid.add_child(title)
 	var crumb_row := HBoxContainer.new()
@@ -154,12 +183,23 @@ func _build() -> void:
 	mid.add_child(crumb_row)
 	for i in STEP_NAMES.size():
 		if i > 0:
-			crumb_row.add_child(_label("·", 18, Color(1, 1, 1, 0.35)))
-		var c := _label("%d %s" % [i + 1, STEP_NAMES[i]], 17, Color.WHITE)
-		crumb_row.add_child(c)
+			var link := ColorRect.new()
+			link.custom_minimum_size = Vector2(18, 3)
+			link.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			link.color = Color(1, 1, 1, 0.25)
+			link.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			crumb_row.add_child(link)
+		var chip := PanelContainer.new()
+		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var c := _label("%d  %s" % [i + 1, STEP_NAMES[i]], 15, Color.WHITE)
+		c.add_theme_constant_override("outline_size", 0)
+		chip.add_child(c)
+		crumb_row.add_child(chip)
 		crumbs.append(c)
+		crumb_chips.append(chip)
 	gfx_btn = _button("CONFIGURAÇÕES", 18)  # RF-185
-	gfx_btn.custom_minimum_size = Vector2(200, 46)
+	gfx_btn.custom_minimum_size = Vector2(190, 50)
+	gfx_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	gfx_btn.pressed.connect(open_settings)
 	top.add_child(gfx_btn)
 
@@ -177,10 +217,23 @@ func _build() -> void:
 		page.add_child(builder.call())
 		steps_root.append(page)
 
-	help = _label("", 15, Color(1, 1, 1, 0.6))
+	help = _label("", 15, Color(1, 1, 1, 0.75))
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	root_vb.add_child(help)
+	var help_box := CenterContainer.new()
+	help_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pill := PanelContainer.new()
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.0, 0.0, 0.05, 0.55)
+	ps.set_corner_radius_all(18)
+	ps.content_margin_left = 20
+	ps.content_margin_right = 20
+	ps.content_margin_top = 6
+	ps.content_margin_bottom = 6
+	pill.add_theme_stylebox_override("panel", ps)
+	pill.add_child(help)
+	help_box.add_child(pill)
+	root_vb.add_child(help_box)
 
 	fade = ColorRect.new()
 	fade.color = Color(0, 0, 0, 0)
@@ -311,18 +364,18 @@ func _build_track() -> Control:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 22)
 	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 10)
+	list.add_theme_constant_override("separation", 8)
 	list.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hb.add_child(list)
 	for i in TrackScript.TRACKS.size():
 		var td: Dictionary = TrackScript.TRACKS[i]
 		var b := _button(td["name"], 20)
-		b.custom_minimum_size = Vector2(380, 62)
+		b.custom_minimum_size = Vector2(380, 54)
 		b.focus_mode = Control.FOCUS_ALL
 		b.clip_text = true
 		var chip := ColorRect.new()  # cor do tema da pista
 		chip.color = td["wall"][0]
-		chip.size = Vector2(10, 40)
+		chip.size = Vector2(8, 34)
 		chip.position = Vector2(-2, 9)
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.add_child(chip)
@@ -395,18 +448,83 @@ func _build_setup() -> Control:
 	GameScript.make_primary(go_btn)  # RF-174
 	go_btn.pressed.connect(_start_race)
 	col.add_child(go_btn)
+	# RF-341: cartão de resumo — modo, retratos dos pilotos e o trajeto da pista
 	var panel := PanelContainer.new()
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.1, 0.11, 0.2)
-	st.set_corner_radius_all(18)
-	st.set_content_margin_all(22)
-	panel.add_theme_stylebox_override("panel", st)
-	panel.custom_minimum_size = Vector2(440, 0)
+	panel.add_theme_stylebox_override("panel", _card_style(Color(1.0, 0.82, 0.2, 0.55)))
+	panel.custom_minimum_size = Vector2(470, 0)
 	hb.add_child(panel)
-	summary = _label("", 21, Color(0.92, 0.94, 1.0))
-	summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	panel.add_child(summary)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 4)
+	panel.add_child(vb)
+	vb.add_child(_caption("MODO"))
+	sum_mode = _label("", 26, Color.WHITE)
+	vb.add_child(sum_mode)
+	sum_pilots_cap = _caption("PILOTO")
+	vb.add_child(_gap(8))
+	vb.add_child(sum_pilots_cap)
+	sum_pilots = HBoxContainer.new()
+	sum_pilots.add_theme_constant_override("separation", 12)
+	vb.add_child(sum_pilots)
+	vb.add_child(_gap(8))
+	vb.add_child(_caption("PISTA"))
+	sum_track = _label("", 22, Color.WHITE)
+	vb.add_child(sum_track)
+	sum_map = TrackMap.new()
+	sum_map.custom_minimum_size = Vector2(430, 150)
+	sum_map.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(sum_map)
 	return hb
+
+
+func _caption(text: String) -> Label:
+	var l := _label(text, 14, Color(1.0, 0.82, 0.25))
+	l.add_theme_constant_override("outline_size", 0)
+	return l
+
+
+func _gap(h: float) -> Control:
+	var c := Control.new()
+	c.custom_minimum_size = Vector2(0, h)
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return c
+
+
+func _card_style(border: Color) -> StyleBoxFlat:
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.05, 0.06, 0.15, 0.86)
+	st.border_color = border
+	st.set_border_width_all(2)
+	st.set_corner_radius_all(20)
+	st.set_content_margin_all(22)
+	st.shadow_color = Color(0, 0, 0, 0.4)
+	st.shadow_size = 12
+	return st
+
+
+## RF-340: chip da etapa — feita (verde), atual (amarelo) ou por vir (contorno apagado).
+func _style_crumb(i: int, current: int) -> void:
+	var chip: PanelContainer = crumb_chips[i]
+	var lbl: Label = crumbs[i]
+	var st := StyleBoxFlat.new()
+	st.set_corner_radius_all(14)
+	st.content_margin_left = 12
+	st.content_margin_right = 12
+	st.content_margin_top = 3
+	st.content_margin_bottom = 3
+	st.set_border_width_all(2)
+	if i == current:
+		st.bg_color = Color(1.0, 0.8, 0.18)
+		st.border_color = Color(1.0, 0.92, 0.6)
+		lbl.add_theme_color_override("font_color", Color(0.2, 0.12, 0.02))
+	elif i < current:
+		st.bg_color = Color(0.25, 0.6, 0.35, 0.85)
+		st.border_color = Color(0.5, 0.9, 0.6, 0.6)
+		lbl.add_theme_color_override("font_color", Color.WHITE)
+	else:
+		st.bg_color = Color(1, 1, 1, 0.04)
+		st.border_color = Color(1, 1, 1, 0.22)
+		lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
+	chip.add_theme_stylebox_override("panel", st)
 
 
 ## Setinhas desenhadas nos dois lados do botão de valor (a fonte não tem < >).
@@ -423,7 +541,7 @@ func _add_arrows(b: Button) -> void:
 		a.offset_top = -12.0
 		a.offset_bottom = 8.0
 		a.draw.connect(func():
-			var col := Color(0.16, 0.17, 0.22, 0.25 if b.disabled else 0.9)
+			var col := Color(1.0, 0.84, 0.25, 0.25 if b.disabled else 0.95)
 			var pts := PackedVector2Array([Vector2(0, 10), Vector2(18, 0), Vector2(18, 20)]) if side < 0 else PackedVector2Array([Vector2(20, 10), Vector2(2, 0), Vector2(2, 20)])
 			a.draw_colored_polygon(pts, col))
 		b.add_child(a)
@@ -684,8 +802,7 @@ func _go_step(s: int, animate := true) -> void:
 	elif old != page:
 		old.visible = false
 	for i in crumbs.size():
-		var c: Label = crumbs[i]
-		c.add_theme_color_override("font_color", Color(1.0, 0.82, 0.2) if i == s else (Color(0.6, 0.9, 0.6) if i < s else Color(1, 1, 1, 0.4)))
+		_style_crumb(i, s)
 	_build_nav()
 	match s:
 		STEP_MODE:
@@ -776,8 +893,7 @@ func _refresh_mode() -> void:
 		if n + 1 == shown_players:
 			GameScript.make_primary(b)
 		else:
-			for s in ["normal", "hover", "pressed", "focus"]:
-				b.remove_theme_stylebox_override(s)
+			GameScript.clear_primary(b)
 
 
 # ---------------------------------------------------------------- etapa PILOTO
@@ -943,8 +1059,7 @@ func _refresh_track() -> void:
 		if i == (cup_i if gp else track_i):
 			GameScript.make_primary(b)
 		else:
-			for s in ["normal", "hover", "pressed", "focus"]:
-				b.remove_theme_stylebox_override(s)
+			GameScript.clear_primary(b)
 	var td: Dictionary = TrackScript.find(cup[0]) if gp else TrackScript.TRACKS[track_i]
 	track_map.set_track(td["id"])
 	track_map.line_color = (td["wall"][0] as Color).lightened(0.3)
@@ -1004,11 +1119,18 @@ func _refresh_setup() -> void:
 	laps_btn.text = "VOLTAS: %d" % LAP_OPTIONS[laps_i]
 	diff_btn.text = "IA: --" if _is_tt() else "IA: %s" % DIFF_NAMES[diff_i]
 	diff_btn.disabled = _is_tt()
-	var pilots := []
+	sum_mode.text = MODE_NAMES[mode_i]
+	sum_mode.add_theme_color_override("font_color", (MODE_COLORS[mode_i] as Color).lightened(0.25))
+	sum_pilots_cap.text = "PILOTOS" if picks.size() > 1 else "PILOTO"
+	for c in sum_pilots.get_children():
+		c.queue_free()
 	for i in picks.size():
-		pilots.append(("J%d " % (i + 1) if num_players > 1 else "") + Chars.LIST[picks[i]]["name"])
+		sum_pilots.add_child(_pilot_badge(picks[i], i))
 	var track_name: String = ("%s (%d pistas)" % [_cups()[cup_i]["name"], _cup().size()]) if _is_gp() else TrackScript.TRACKS[track_i]["name"]
-	summary.text = "MODO\n%s\n\nPILOTO%s\n%s\n\nPISTA\n%s" % [MODE_NAMES[mode_i], "S" if picks.size() > 1 else "", ", ".join(pilots) if not pilots.is_empty() else "—", track_name]
+	sum_track.text = track_name
+	var first: String = _cup()[0] if _is_gp() else TrackScript.TRACKS[track_i]["id"]
+	sum_map.set_track(first)
+	sum_map.line_color = (TrackScript.find(first)["wall"][0] as Color).lightened(0.3)
 
 
 func _start_race() -> void:
@@ -1196,3 +1318,34 @@ func _process(delta: float) -> void:
 			st.border_color.a = 0.65 + 0.35 * sin(t * 6.0)
 	if step == STEP_MODE and mode_icons.size() > 2:
 		mode_icons[2].queue_redraw()  # ponteiro do cronômetro
+
+
+## RF-341: retrato do piloto no resumo (cabeça num círculo da cor dele + nome; "J2" no multi).
+func _pilot_badge(ci: int, slot: int) -> Control:
+	var c: Dictionary = Chars.LIST[ci]
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 2)
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ring := Panel.new()
+	ring.custom_minimum_size = Vector2(76, 76)
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := StyleBoxFlat.new()
+	st.bg_color = (c["color"] as Color).darkened(0.35)
+	st.border_color = PLAYER_COLORS[slot % PLAYER_COLORS.size()] if num_players > 1 else (c["color"] as Color).lightened(0.3)
+	st.set_border_width_all(3)
+	st.set_corner_radius_all(38)
+	ring.add_theme_stylebox_override("panel", st)
+	ring.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	var head := TextureRect.new()
+	head.texture = Chars.art(c["id"], "head")
+	head.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	head.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	head.position = Vector2(-4, 2)
+	head.size = Vector2(84, 84)
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ring.add_child(head)
+	vb.add_child(ring)
+	var name_l := _label(("J%d " % (slot + 1) if num_players > 1 else "") + String(c["name"]).to_upper(), 14, (c["color"] as Color).lightened(0.35))
+	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(name_l)
+	return vb
