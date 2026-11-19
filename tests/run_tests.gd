@@ -1244,10 +1244,13 @@ func _test_layout() -> void:
 			check(bad.is_empty(), "menu (%s) em %s %s" % [mode, label, str(bad.slice(0, 3))])
 			var heads_ok := true
 			for card in menu.cards:
-				var hr: Rect2 = card.get_child(0).get_global_rect()
-				if not card.get_global_rect().grow(0.5).encloses(hr):
+				var cr: Rect2 = card.get_global_rect()
+				var hr: Rect2 = card.get_node("Head").get_global_rect()
+				var band_top: float = card.get_node("Band").get_global_rect().position.y
+				# carta recorta (clip_contents); topo da arte dentro e o corte reto escondido atrás da faixa
+				if not card.clip_contents or hr.position.y < cr.position.y or hr.end.y < band_top + 4.0 or hr.end.y > cr.end.y:
 					heads_ok = false
-			check(heads_ok, "CA-55 arte dentro de cada carta (%s, %s)" % [mode, label])
+			check(heads_ok, "CA-55 arte recortada na carta, corte escondido na faixa (%s, %s)" % [mode, label])
 			if mode == "race":
 				menu.open_settings()
 				await process_frame

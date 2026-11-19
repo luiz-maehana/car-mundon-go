@@ -12,6 +12,7 @@ const CARD_SIZE := Vector2(166, 196)
 const SND_MOVE := "res://assets/kenney/ui/sounds/switch-a.ogg"
 const SND_OK := "res://assets/audio/sfx/item.ogg"
 const BAR_W := 200.0
+const BAND_H := 40.0
 
 var selected := 0
 var laps_i := 2
@@ -216,6 +217,21 @@ func _build_preview() -> Control:
 	preview_holder.clip_contents = true
 	preview_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hb.add_child(preview_holder)
+	# holofote atrás e sombra no chão do piloto em destaque
+	var spot := TextureRect.new()
+	spot.texture = _radial(Color(1, 1, 1, 0.22), Color(1, 1, 1, 0.0))
+	spot.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	spot.size = Vector2(190, 190)
+	spot.position = Vector2(0, 24)
+	spot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview_holder.add_child(spot)
+	var floor_shadow := TextureRect.new()
+	floor_shadow.texture = _radial(Color(0, 0, 0, 0.55), Color(0, 0, 0, 0.0))
+	floor_shadow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	floor_shadow.size = Vector2(150, 26)
+	floor_shadow.position = Vector2(20, 230)
+	floor_shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview_holder.add_child(floor_shadow)
 	preview_art = TextureRect.new()
 	preview_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	preview_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -273,6 +289,44 @@ func _button(text: String, size: int) -> Button:
 	return b
 
 
+static var _tex_cache := {}
+
+
+## Textura de gradiente radial (centro → borda), em cache.
+func _radial(inner: Color, outer: Color) -> Texture2D:
+	var key := "r%s%s" % [inner, outer]
+	if not _tex_cache.has(key):
+		var g := Gradient.new()
+		g.set_color(0, inner)
+		g.set_color(1, outer)
+		var t2 := GradientTexture2D.new()
+		t2.gradient = g
+		t2.fill = GradientTexture2D.FILL_RADIAL
+		t2.fill_from = Vector2(0.5, 0.5)
+		t2.fill_to = Vector2(0.5, 0.0)
+		t2.width = 128
+		t2.height = 128
+		_tex_cache[key] = t2
+	return _tex_cache[key]
+
+
+## Gradiente vertical (cima → baixo), em cache.
+func _vgrad(top: Color, bottom: Color) -> Texture2D:
+	var key := "v%s%s" % [top, bottom]
+	if not _tex_cache.has(key):
+		var g := Gradient.new()
+		g.set_color(0, top)
+		g.set_color(1, bottom)
+		var t2 := GradientTexture2D.new()
+		t2.gradient = g
+		t2.fill_from = Vector2(0, 0.35)
+		t2.fill_to = Vector2(0, 1)
+		t2.width = 4
+		t2.height = 64
+		_tex_cache[key] = t2
+	return _tex_cache[key]
+
+
 ## RF-261: carta em retrato; a cabeça cabe inteira dentro (proporção mantida) e a carta recorta.
 func _make_card(i: int) -> Button:
 	var c: Dictionary = Chars.LIST[i]
@@ -296,23 +350,44 @@ func _make_card(i: int) -> Button:
 	b.mouse_entered.connect(func():  # RF-262: passar o mouse seleciona
 		if nav_zone == 1 and not picks.has(i) and selected != i and not started:
 			_select(i))
+	# brilho redondo atrás da cabeça + escurecido embaixo (profundidade)
+	var glow := TextureRect.new()
+	glow.texture = _radial(Color(1, 1, 1, 0.32), Color(1, 1, 1, 0.0))
+	glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glow.size = Vector2(CARD_SIZE.x * 1.1, CARD_SIZE.x * 1.1)
+	glow.position = Vector2(-CARD_SIZE.x * 0.05, 0)
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(glow)
+	var shade := TextureRect.new()
+	shade.texture = _vgrad(Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.45))
+	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(shade)
 	var head := TextureRect.new()
+	head.name = "Head"
 	head.texture = Chars.art(c["id"], "head")
 	head.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	head.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	head.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	head.offset_left = 8
-	head.offset_right = -8
-	head.offset_top = 10
-	head.offset_bottom = -44
+	head.stretch_mode = TextureRect.STRETCH_SCALE
+	# a arte termina num corte reto nos ombros: a base fica escondida atrás da faixa do nome
+	var tex: Texture2D = head.texture
+	var hw := CARD_SIZE.x - 2.0  # orelhas quase encostando na borda, sem cortar
+	var hh := hw * (float(tex.get_height()) / tex.get_width() if tex else 0.72)
+	head.size = Vector2(hw, hh)
+	head.position = Vector2((CARD_SIZE.x - hw) * 0.5, CARD_SIZE.y - BAND_H + 10.0 - hh)
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(head)
-	var band := ColorRect.new()
-	band.color = Color(0, 0, 0, 0.45)
+	var band := Panel.new()
+	band.name = "Band"
+	var band_st := StyleBoxFlat.new()
+	band_st.bg_color = Color(0, 0, 0, 0.55)
+	band_st.corner_radius_bottom_left = 12  # acompanha a borda arredondada da carta
+	band_st.corner_radius_bottom_right = 12
+	band.add_theme_stylebox_override("panel", band_st)
 	band.anchor_top = 1.0
 	band.anchor_right = 1.0
 	band.anchor_bottom = 1.0
-	band.offset_top = -40
+	band.offset_top = -BAND_H
 	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(band)
 	var nm := _label(c["name"], 22, col.lightened(0.35))

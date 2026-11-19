@@ -237,7 +237,7 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 
 ### Tela de escolha de piloto (v0.20)
 - [x] **RF-260** Layout em duas colunas: à esquerda a grade 4×2 de cartas (retrato), à direita o painel do piloto em destaque (corpo inteiro, nome, 4 barras de atributo, quem está escolhendo). Topo: `MODO`, título e `CONFIGURAÇÕES`; embaixo a linha de opções e as dicas. Espaçamento uniforme (margem 24, espaço 12–16).
-- [x] **RF-261** A arte nunca sai da carta: cabeça encaixada (proporção mantida) dentro da área da carta, com recorte; nome numa faixa embaixo.
+- [x] **RF-261** A arte nunca sai da carta: cabeça encaixada (proporção mantida) dentro da área da carta, com recorte; nome numa faixa embaixo. A base reta da arte (corte nos ombros) fica escondida atrás da faixa do nome; brilho atrás da cabeça e escurecido embaixo; holofote e sombra no chão no painel. Sobra de fundo das artes do Shinando e do Ortiz removida por `tools/clean_art.gd` (só a cor do fundo, a partir de sementes).
 - [x] **RF-262** Animações: carta selecionada cresce e a borda pulsa; trocar de piloto desliza/esmaece a arte grande e anima as barras até o valor novo, com som; o corpo do piloto "respira". Passar o mouse numa carta seleciona.
 - [x] **RF-263** Confirmar: a carta dá um pulo com brilho, ganha o selo J1..J4 com a cor do jogador e toca o som de confirmação. No último jogador a tela escurece rápido antes da corrida.
 
