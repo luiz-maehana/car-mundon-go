@@ -58,6 +58,7 @@ func _run() -> void:
 	await _test_menu_look()
 	await _test_loading()
 	await _test_results_live()
+	await _test_feira()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -978,7 +979,7 @@ func _test_music() -> void:
 	var Track = load("res://scripts/track.gd")
 	var sigs := {}
 	var ok := true
-	for style in ["menu", "queijo", "deserto", "cozinha", "churrasco", "fabrica", "parquinho", "geladeira", "telhados", "victory"]:
+	for style in ["menu", "queijo", "deserto", "cozinha", "churrasco", "fabrica", "parquinho", "geladeira", "telhados", "feira", "victory"]:
 		var t0 := Time.get_ticks_msec()
 		var w: AudioStream = Sfx.music(style)
 		var secs: float = w.get_length()
@@ -987,7 +988,7 @@ func _test_music() -> void:
 		if not looped or secs < 8.0:
 			ok = false
 		sigs[w.resource_name] = true
-	check(ok and sigs.size() == 10, "10 trilhas em loop, > 8 s e diferentes entre si")
+	check(ok and sigs.size() == 11, "11 trilhas em loop, > 8 s e diferentes entre si")
 	var tracks_ok := true
 	for td in Track.TRACKS:
 		if not Sfx.MUSIC_STYLES.has(td.get("music", td["id"])):
@@ -2365,5 +2366,91 @@ func _test_results_live() -> void:
 	var after := _result_texts(hud)
 	var times := after.filter(func(s): return ":" in s and "." in s).size()
 	check(race.all_finished() and after.count("correndo") == 0 and times == race.karts.size(), "quando todos terminam, todos têm tempo no placar (%d tempos)" % times)
+	race.queue_free()
+	await process_frame
+
+
+func _test_feira() -> void:
+	var dt := 1.0 / 60.0
+	print("CA-88 largura variável")
+	var race = await _race_on("feira")
+	var t = race.track
+	var n: int = t.sample_count()
+	var hmin := INF
+	var hmax := 0.0
+	var jump := 0.0
+	for i in n:
+		hmin = minf(hmin, t.road_half(i))
+		hmax = maxf(hmax, t.road_half(i))
+		jump = maxf(jump, absf(t.wall_at(i) - t.wall_at((i + 1) % n)))
+	check(hmin <= 5.1 and hmax >= 15.5, "pista afunila (%.1f m) e abre (%.1f m)" % [hmin * 2.0, hmax * 2.0])
+	check(jump < 1.0, "muro acompanha a largura sem degrau (%.2f m)" % jump)
+	var narrow := 0
+	for i in n:
+		if t.road_half(i) < 5.5:
+			narrow = i
+			break
+	check(t.wall_at(narrow) < t.road_half(narrow) + 2.0, "no beco o muro (barraca) cola na zebra")
+	var k = race.player
+	_put(k, narrow, 0.0, 0.0)
+	k.lateral = 0.0
+	var off_before: float = k.top_speed()
+	Input.action_press("p1_accelerate")
+	_drive(k, 1.5)
+	Input.action_release("p1_accelerate")
+	check(absf(k.lateral) < t.wall_at(k.track_idx), "beco: kart segue dentro das barracas")
+
+	print("CA-89 atalho por baixo das barracas")
+	var isl: Dictionary = t.islands[0]
+	var mid_i: int = int(isl["i0"]) + int(isl["len"]) / 2
+	_put(k, mid_i, (float(isl["lat0"]) + float(isl["lat1"])) * 0.5, 0.0)
+	k.step(dt, true)
+	check(k.lateral <= float(isl["lat0"]) - 0.5 or k.lateral >= float(isl["lat1"]) + 0.5, "ninguém atravessa a ilha de barracas (lateral %.1f)" % k.lateral)
+	# atalho (lado de dentro) é mais curto que a faixa larga
+	var short_len := 0.0
+	var long_len := 0.0
+	var sl: float = (-t.road_half(mid_i) + float(isl["lat0"])) * 0.5 if float(isl["side"]) < 0 else (t.road_half(mid_i) + float(isl["lat1"])) * 0.5
+	var ll: float = (t.road_half(mid_i) + float(isl["lat1"])) * 0.5 if float(isl["side"]) < 0 else (-t.road_half(mid_i) + float(isl["lat0"])) * 0.5
+	for q in int(isl["len"]):
+		var a: int = (int(isl["i0"]) + q) % n
+		var b: int = (a + 1) % n
+		short_len += (t.points[b] + t.rights[b] * sl).distance_to(t.points[a] + t.rights[a] * sl)
+		long_len += (t.points[b] + t.rights[b] * ll).distance_to(t.points[a] + t.rights[a] * ll)
+	check(short_len < long_len * 0.85, "atalho %.0f m x faixa larga %.0f m" % [short_len, long_len])
+	race.queue_free()
+	await process_frame
+
+	print("CA-90 IA na Feira")
+	race = load("res://scripts/race.gd").new()
+	race.use_game_settings = false
+	race.autopilot_player = true
+	race.player_chars = ["nanni"]
+	race.track_id = "feira"
+	race.laps = 2
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	t = race.track
+	isl = t.islands[0]
+	var short_users := {}
+	var long_users := {}
+	var tt := 0.0
+	while tt < 200.0 and not race.all_finished():
+		race.step(dt)
+		tt += dt
+		for kk in race.karts:
+			if not t.island_at(kk.track_idx).is_empty():
+				if (kk.lateral < float(isl["lat0"])) == (float(isl["side"]) < 0):
+					short_users[kk.char_id] = true
+				else:
+					long_users[kk.char_id] = true
+	var best := INF
+	var worst := 0.0
+	for kk in race.karts:
+		if kk.finished:
+			best = minf(best, kk.finish_time / 2.0)
+			worst = maxf(worst, kk.finish_time / 2.0)
+	check(race.all_finished() and best > 30.0 and worst < 60.0, "volta da IA %.1f..%.1f s" % [best, worst])
+	check(short_users.size() >= 2 and long_users.size() >= 2, "IA usa as duas faixas (%d pelo atalho, %d por fora)" % [short_users.size(), long_users.size()])
 	race.queue_free()
 	await process_frame

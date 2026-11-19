@@ -212,6 +212,31 @@ const TRACKS := [
 		"deco": "city", "deco_color": Color(1.0, 0.85, 0.45),
 		"ground_tex": "tiles", "clouds": 0.15, "fog": 0.0018, "exposure": 1.25, "stars": true, "cloud_color": Color(0.2, 0.22, 0.35), "scenery": "none",
 	},
+	{
+		"id": "feira", "name": "Feira Livre", "music": "feira",
+		# RF-372: rua de feira de manhã — afunila entre as barracas, abre numa praça com uma
+		# fileira de barracas no meio (atalho por baixo dos toldos), chicane estreita e caixotes
+		"points": [
+			Vector2(-172, 126), Vector2(-57, 132), Vector2(46, 126), Vector2(138, 115),
+			Vector2(218, 69), Vector2(247, -12), Vector2(207, -92), Vector2(126, -121),
+			Vector2(34, -98), Vector2(-23, -46), Vector2(-92, -69), Vector2(-172, -109),
+			Vector2(-241, -46), Vector2(-236, 57),
+		],
+		"widths": [8, 8, 5, 5, 9, 16, 16, 9, 6, 5, 5, 8, 8, 8],
+		# RF-371: fileira de barracas no meio da praça; a faixa de dentro (lado -) é o atalho
+		"islands": [{"from": 0.395, "to": 0.465, "lat": [-9.0, -1.5], "shortcut": -1.0}],
+		"ramp_range": [0.83, 0.93], "pad_ranges": [[0.05, 0.1], [0.52, 0.57]],
+		"item_rows": [0.2, 0.55, 0.8], "cheese_rows": [[0.3, -3.5], [0.62, 3.5], [0.9, 0.0]],
+		"ground": Color(0.42, 0.42, 0.44), "offroad": Color(0.72, 0.7, 0.66),
+		"road": [Color(0.27, 0.27, 0.3), Color(0.3, 0.3, 0.33)],
+		"curb": [Color(0.95, 0.85, 0.2), Color(0.15, 0.15, 0.15)],
+		"wall": [Color(0.72, 0.5, 0.28), Color(0.62, 0.42, 0.22)],
+		"sky_top": Color(0.35, 0.6, 0.95), "sky_horizon": Color(0.85, 0.92, 1.0),
+		"ambient": Color(0.7, 0.7, 0.72), "sun": [1.2, -45.0, Color(1.0, 0.97, 0.88)],
+		"deco": "market", "deco_color": Color(0.9, 0.3, 0.25),
+		"ground_tex": "tiles", "clouds": 0.45, "fog": 0.0008, "exposure": 1.0, "scenery": "fruit",
+		"stands": false,
+	},
 ]
 
 var def: Dictionary
@@ -333,7 +358,7 @@ func on_pad(i: int, lat: float) -> bool:
 
 ## Fração (0..1) do kart ao longo da rampa, ou -1 se não está nela (RF-141).
 func ramp_frac(i: int, along: float, lat: float) -> float:
-	if absf(lat) > ROAD_HALF:
+	if absf(lat) > road_half(i):
 		return -1.0
 	for r in _all_ramps():
 		var d := wrapi(i - int(r["idx"]), 0, points.size())
@@ -375,7 +400,7 @@ func cheese_positions() -> Array:
 		var i0 := int(n * float(row[0]))
 		for k in 5:
 			var i := (i0 + k * 4) % n
-			out.append(points[i] + rights[i] * float(row[1]) + Vector3.UP * 0.7)
+			out.append(points[i] + rights[i] * float(row[1]) * road_half(i) / ROAD_HALF + Vector3.UP * 0.7)
 	return out
 
 
@@ -435,7 +460,7 @@ func item_box_positions() -> Array:
 	for f in def.get("item_rows", ITEM_ROWS):
 		var i := int(n * float(f))
 		for lat in [-6.0, -2.0, 2.0, 6.0]:
-			out.append(points[i] + rights[i] * lat + Vector3.UP * 1.2)
+			out.append(points[i] + rights[i] * lat * road_half(i) / ROAD_HALF + Vector3.UP * 1.2)
 	return out
 
 
@@ -443,12 +468,15 @@ func item_box_positions() -> Array:
 
 const LOOP_DENSE := 72          # pontos densos por looping
 const NARROW_WALL := ROAD_HALF + CURB + 0.3   # muro colado na zebra (loopings e pontes)
+const TIGHT_HALF := 5.0        # RF-370: daqui pra baixo a pista não tem grama (barracas coladas)
 const TUNNEL_H := 9.0
 
 var ups := PackedVector3Array()     # normal da pista (UP no plano; gira no looping)
 var loop_id := PackedInt32Array()   # por amostra: índice em `loops` ou -1
 var loops: Array = []               # {i0, i1, r, w, center, right}
 var walls := PackedFloat32Array()   # por amostra: distância do muro (WALL ou NARROW_WALL)
+var halfs := PackedFloat32Array()   # RF-370: meia largura da pista por amostra
+var islands: Array = []             # RF-371: {i0, len, lat0, lat1, side} barracas no meio da pista
 
 
 ## Hermite (Catmull-Rom com tangentes explícitas, pra o looping não entortar a pista em volta).
@@ -461,6 +489,7 @@ func _hermite(p1: Vector3, m1: Vector3, p2: Vector3, m2: Vector3, t: float) -> V
 func _build_path() -> void:
 	var cps: Array = def["points"]
 	var hs: Array = def.get("heights", [])
+	var wd: Array = def.get("widths", [])  # RF-370: meia largura da pista por ponto (padrão ROAD_HALF)
 	var m := cps.size()
 	var real: Array[Vector3] = []
 	for i in m:
@@ -473,14 +502,16 @@ func _build_path() -> void:
 	var list: Array = []   # {p, m, loop}
 	for i in m:
 		var tan := (real[(i + 1) % m] - real[(i - 1 + m) % m]) * 0.5
-		list.append({"p": real[i], "m": tan, "loop": null})
+		var hw: float = float(wd[i]) if i < wd.size() else ROAD_HALF
+		list.append({"p": real[i], "m": tan, "loop": null, "h": hw})
 		if loop_at.has(i):
 			var l: Dictionary = loop_at[i]
 			var d := Vector3(tan.x, 0.0, tan.z).normalized()
 			var r := d.cross(Vector3.UP).normalized()
-			list.append({"p": real[i] + r * float(l.get("w", 22.0)), "m": tan, "loop": l, "dir": d, "right": r, "from": real[i]})
+			list.append({"p": real[i] + r * float(l.get("w", 22.0)), "m": tan, "loop": l, "dir": d, "right": r, "from": real[i], "h": hw})
 	var dense: Array[Vector3] = []
 	var dense_loop := PackedInt32Array()
+	var dense_half := PackedFloat32Array()
 	var loop_defs: Array = []
 	var lm := list.size()
 	for j in lm:
@@ -498,12 +529,14 @@ func _build_path() -> void:
 				var th := TAU * s / LOOP_DENSE
 				dense.append(base + d * rr * sin(th) + Vector3.UP * rr * (1.0 - cos(th)) + right * w * (th - sin(th)) / TAU)
 				dense_loop.append(loop_defs.size() - 1)
+				dense_half.append(float(a["h"]))
 			continue
 		for s in 40:
 			var hp := _hermite(a["p"], a["m"], b["p"], b["m"], s / 40.0)
 			hp.y = maxf(hp.y, 0.0)  # a curva da spline não afunda abaixo do chão
 			dense.append(hp)
 			dense_loop.append(-1)
+			dense_half.append(lerpf(float(a["h"]), float(b["h"]), smoothstep(0.0, 1.0, s / 40.0)))
 	var dn := dense.size()
 	var cum := PackedFloat64Array()
 	cum.append(0.0)
@@ -521,6 +554,7 @@ func _build_path() -> void:
 		var f := 0.0 if seg <= 0.0 else (d - cum[j]) / seg
 		points.append(dense[j].lerp(dense[(j + 1) % dn], f))
 		loop_id.append(dense_loop[j] if dense_loop[(j + 1) % dn] == dense_loop[j] else -1)
+		halfs.append(lerpf(dense_half[j], dense_half[(j + 1) % dn], f))
 	bounds_min = Vector2(INF, INF)
 	bounds_max = Vector2(-INF, -INF)
 	for i in n:
@@ -551,17 +585,32 @@ func _build_path() -> void:
 		l["i1"] = last
 		loops.append(l)
 	walls.resize(n)
-	walls.fill(WALL)
+	for i in n:
+		# RF-370: pista mais estreita que o normal = barracas coladas na zebra (sem grama)
+		walls[i] = halfs[i] + maxf(CURB + 0.3, OFFROAD * clampf((halfs[i] - TIGHT_HALF) / (ROAD_HALF - TIGHT_HALF), 0.0, 1.0))
 	for l in loops:
 		var c: Vector3 = l["center"]
 		for i in n:
 			if Vector2(points[i].x - c.x, points[i].z - c.z).length() < float(l["r"]) + float(l["w"]) + 6.0 and absf(points[i].y - (c.y - float(l["r"]))) < float(l["r"]) * 2.0 + 1.0:
-				walls[i] = NARROW_WALL
+				walls[i] = halfs[i] + CURB + 0.3
 	for z in def.get("narrow", []):
 		var i0 := int(n * float(z[0]))
 		var i1 := int(n * float(z[1]))
 		for k in wrapi(i1 - i0, 0, n) + 1:
-			walls[(i0 + k) % n] = NARROW_WALL
+			walls[(i0 + k) % n] = halfs[(i0 + k) % n] + CURB + 0.3
+
+
+## RF-370: meia largura da pista na amostra i.
+func road_half(i: int) -> float:
+	return halfs[i] if not halfs.is_empty() else ROAD_HALF
+
+
+## RF-371: ilha de barracas na amostra i (ou {}). Divide a pista em duas faixas.
+func island_at(i: int) -> Dictionary:
+	for isl in islands:
+		if wrapi(i - int(isl["i0"]), 0, points.size()) <= int(isl["len"]):
+			return isl
+	return {}
 
 
 ## Distância do muro na amostra i (estreito no looping e nas pontes).
@@ -649,7 +698,9 @@ func _build_visuals() -> void:
 		var top: bool = crossing_top[i] if not crossing_top.is_empty() else false
 		var road_c: Color = def["road"][(i / 4) % 2]
 		var ry := 0.036 if top else 0.03
-		_strip(st, i, -ROAD_HALF, ROAD_HALF, ry, ry, road_c)
+		var h0 := road_half(i)
+		var h1 := road_half((i + 1) % n)
+		_strip_e(st, i, -h0, h0, -h1, h1, ry, ry, road_c)
 		if top and i % 2 == 0 and _in_other_road(i, 0.0, ROAD_HALF + CURB + 1.0):
 			# faixas brancas tracejadas: mostram por onde a outra passada atravessa
 			for s in [1.0, -1.0]:
@@ -657,15 +708,14 @@ func _build_visuals() -> void:
 		var curb_c: Color = def["curb"][(i / 2) % 2]
 		for s in [1.0, -1.0]:
 			if not _in_other_road(i, s * (ROAD_HALF + CURB * 0.5), ROAD_HALF + CURB):
-				_strip(st, i, ROAD_HALF if s > 0 else -ROAD_HALF - CURB, ROAD_HALF + CURB if s > 0 else -ROAD_HALF, 0.04, 0.04, curb_c)
+				_strip_e(st, i, s * h0, s * (h0 + CURB), s * h1, s * (h1 + CURB), 0.04, 0.04, curb_c)
 		# RF-320: muro por amostra (estreito no looping e nas pontes); w0/w1 = as duas pontas do trecho
 		var w0 := wall_at(i)
 		var w1 := wall_at((i + 1) % n)
 		var off_c: Color = def["offroad"]
-		var edge := ROAD_HALF + CURB
 		for s in [1.0, -1.0]:
-			if w0 > edge + 0.5 and not _in_other_road(i, s * (edge + OFFROAD * 0.5), edge + OFFROAD * 0.5):
-				_strip_e(st, i, s * edge, s * w0, s * edge, s * w1, 0.02, 0.02, off_c)
+			if w0 > h0 + CURB + 0.5 and not _in_other_road(i, s * (h0 + CURB + OFFROAD * 0.5), h0 + CURB + OFFROAD * 0.5):
+				_strip_e(st, i, s * (h0 + CURB), s * w0, s * (h1 + CURB), s * w1, 0.02, 0.02, off_c)
 		var wall_c: Color = def["wall"][(i / 3) % 2]
 		for s in [1.0, -1.0]:
 			if not _in_other_road(i, s * WALL, WALL + WALL_T + 1.0):
@@ -692,6 +742,7 @@ func _build_visuals() -> void:
 	_build_supports()
 	_build_tunnels_and_enclosure()
 	_build_rooftops()
+	_build_market()
 	_build_moon()
 	_build_hazard_bases()
 	_build_ground()
@@ -906,6 +957,173 @@ func _build_moon() -> void:
 	moon.position = Vector3(c.x + 700.0, 380.0, c.y - 900.0)
 	moon.name = "Moon"
 	add_child(moon)
+
+
+# ---------------------------------------------------------------- feira (RF-370..372)
+
+const AWNING_H := 6.2        # toldo da ilha: acima da câmera (que passa por baixo no atalho)
+const SIDE_AWNING_H := 3.6   # toldo das barracas nas laterais (por cima do muro)
+const STALL_COLS := [Color(0.9, 0.2, 0.2), Color(0.2, 0.6, 0.3), Color(0.2, 0.45, 0.9), Color(0.95, 0.75, 0.15), Color(0.9, 0.45, 0.15)]
+
+
+## Ilha de barracas (calçada + bancas + toldos por cima do atalho) e barracas nos trechos apertados.
+func _build_market() -> void:
+	if islands.is_empty() and not def.get("market", false):
+		return
+	var n := points.size()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var tables: Array = []
+	var table_cols: Array = []
+	var fruit: Array = []
+	var fruit_cols: Array = []
+	var posts: Array[Transform3D] = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5150
+	var fpal := [Color(1.0, 0.55, 0.1), Color(0.85, 0.12, 0.1), Color(0.95, 0.85, 0.2), Color(0.3, 0.7, 0.2), Color(0.55, 0.2, 0.5)]
+	for isl in islands:
+		var la: float = isl["lat0"]
+		var lb: float = isl["lat1"]
+		var side: float = isl["side"]
+		for k in int(isl["len"]):
+			var i := (int(isl["i0"]) + k) % n
+			# calçada da ilha (um degrau)
+			_strip_e(st, i, la, lb, la, lb, 0.25, 0.25, Color(0.78, 0.76, 0.72))
+			for e in [la, lb]:
+				_strip_e(st, i, e, e, e, e, 0.0, 0.25, Color(0.6, 0.58, 0.55))
+			if k % 4 != 1:
+				continue
+			# banca: mesa com frutas, dois postes e o toldo inclinado por cima da faixa do atalho
+			var yaw := Basis(Vector3.UP, heading_at(i))
+			var mid := (la + lb) * 0.5
+			var c := points[i] + rights[i] * mid
+			tables.append(Transform3D(yaw.scaled(Vector3(lb - la - 1.0, 1.0, 6.0)), c + Vector3.UP * 0.75))
+			table_cols.append(Color(0.55, 0.36, 0.2))
+			for q in 6:
+				var fp := c + rights[i] * rng.randf_range(la - mid + 0.8, lb - mid - 0.8) + tangents[i] * rng.randf_range(-2.5, 2.5) + Vector3.UP * 1.45
+				var s := rng.randf_range(0.5, 0.9)
+				fruit.append(Transform3D(Basis().scaled(Vector3.ONE * s), fp))
+				fruit_cols.append(fpal[(k + q) % fpal.size()])
+			var edge_in := la if side < 0.0 else lb          # lado do atalho
+			var far := -road_half(i) + 1.0 if side < 0.0 else road_half(i) - 1.0
+			for t in [-3.0, 3.0]:
+				posts.append(Transform3D(yaw, points[i] + rights[i] * edge_in + tangents[i] * t + Vector3.UP * AWNING_H * 0.5))
+			var col: Color = STALL_COLS[(k / 4) % STALL_COLS.size()]
+			for stripe in 4:
+				var f0 := float(stripe) / 4.0
+				var f1 := float(stripe + 1) / 4.0
+				var l0 := lerpf(edge_in, far, f0)
+				var l1 := lerpf(edge_in, far, f1)
+				var y0 := lerpf(AWNING_H, AWNING_H - 0.8, f0)
+				var y1 := lerpf(AWNING_H, AWNING_H - 0.8, f1)
+				var cc := col if stripe % 2 == 0 else Color(0.97, 0.97, 0.95)
+				var a0 := points[i] + rights[i] * l0 - tangents[i] * 3.6 + Vector3.UP * y0
+				var b0 := points[i] + rights[i] * l1 - tangents[i] * 3.6 + Vector3.UP * y1
+				var b1 := points[i] + rights[i] * l1 + tangents[i] * 3.6 + Vector3.UP * y1
+				var a1 := points[i] + rights[i] * l0 + tangents[i] * 3.6 + Vector3.UP * y0
+				_quad(st, a0, b0, b1, a1, cc)
+	# barracas coladas no muro nos trechos apertados (a pista "afunila entre as barracas")
+	for i in range(0, n, 5):
+		if road_half(i) >= ROAD_HALF - 1.5 or not island_at(i).is_empty():
+			continue
+		var yaw := Basis(Vector3.UP, heading_at(i))
+		for s in [1.0, -1.0]:
+			var w := wall_at(i) + WALL_T + 1.8
+			var c: Vector3 = points[i] + rights[i] * s * w
+			tables.append(Transform3D(yaw.scaled(Vector3(3.0, 1.0, 8.0)), c + Vector3.UP * 0.75))
+			table_cols.append(Color(0.55, 0.36, 0.2))
+			for q in 5:
+				var fp: Vector3 = c + rights[i] * rng.randf_range(-1.0, 1.0) + tangents[i] * rng.randf_range(-3.2, 3.2) + Vector3.UP * 1.45
+				fruit.append(Transform3D(Basis().scaled(Vector3.ONE * rng.randf_range(0.5, 0.9)), fp))
+				fruit_cols.append(fpal[(i + q) % fpal.size()])
+			var col: Color = STALL_COLS[(i / 5 + (1 if s > 0 else 0)) % STALL_COLS.size()]
+			# toldo inclinado pra pista, por cima do muro
+			var l_out: float = s * (w + 2.0)
+			var l_in: float = s * (wall_at(i) - 0.6)
+			for stripe in 4:
+				var f0 := float(stripe) / 4.0
+				var f1 := float(stripe + 1) / 4.0
+				var cc := col if stripe % 2 == 0 else Color(0.97, 0.97, 0.95)
+				var p0 := lerpf(l_out, l_in, f0)
+				var p1 := lerpf(l_out, l_in, f1)
+				var y0 := lerpf(SIDE_AWNING_H + 0.8, SIDE_AWNING_H, f0)
+				var y1 := lerpf(SIDE_AWNING_H + 0.8, SIDE_AWNING_H, f1)
+				_quad(st, points[i] + rights[i] * p0 - tangents[i] * 4.4 + Vector3.UP * y0, points[i] + rights[i] * p1 - tangents[i] * 4.4 + Vector3.UP * y1,
+					points[i] + rights[i] * p1 + tangents[i] * 4.4 + Vector3.UP * y1, points[i] + rights[i] * p0 + tangents[i] * 4.4 + Vector3.UP * y0, cc)
+			posts.append(Transform3D(yaw.scaled(Vector3(1, (SIDE_AWNING_H + 0.8) / AWNING_H, 1)), points[i] + rights[i] * s * (w + 2.0) + Vector3.UP * (SIDE_AWNING_H + 0.8) * 0.5))
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	var mat := _vc_mat(0.8)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mi.material_override = mat
+	mi.name = "Market"
+	add_child(mi)
+	var cube := BoxMesh.new()
+	cube.size = Vector3.ONE
+	_multimesh_colored(cube, tables, table_cols, _vc_mat(0.85))
+	var ball := SphereMesh.new()
+	ball.radius = 0.5
+	ball.height = 1.0
+	ball.radial_segments = 8
+	ball.rings = 4
+	_multimesh_colored(ball, fruit, fruit_cols, _vc_mat(0.5))
+	var post := CylinderMesh.new()
+	post.top_radius = 0.1
+	post.bottom_radius = 0.1
+	post.height = AWNING_H
+	post.material = _deco_mat(Color(0.75, 0.75, 0.78))
+	if not posts.is_empty():
+		_multimesh(post, posts, Vector3.ZERO)
+	scenery_count += tables.size()
+	_market_signs()
+
+
+## Barraca do pastel e do caldo de cana perto da largada, com placa.
+func _market_signs() -> void:
+	var n := points.size()
+	var spots := [[int(n * 0.03), 1.0, "PASTEL", Color(0.95, 0.75, 0.2)], [int(n * 0.97), -1.0, "CALDO DE CANA", Color(0.45, 0.8, 0.3)]]
+	for sp in spots:
+		var i: int = sp[0]
+		var s: float = sp[1]
+		var pos: Vector3 = points[i] + rights[i] * s * (wall_at(i) + 6.0)
+		pos.y = 0.0
+		var yaw := Basis.looking_at(-rights[i] * s)
+		var booth := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(8.0, 3.0, 4.0)
+		booth.mesh = bm
+		booth.material_override = _deco_mat(Color(0.95, 0.95, 0.92))
+		booth.basis = yaw
+		booth.position = pos + Vector3.UP * 1.5
+		add_child(booth)
+		var roof := MeshInstance3D.new()
+		var rm := BoxMesh.new()
+		rm.size = Vector3(9.0, 0.4, 5.0)
+		roof.mesh = rm
+		roof.material_override = _deco_mat(sp[3])
+		roof.basis = yaw
+		roof.position = pos + Vector3.UP * 5.2
+		add_child(roof)
+		for x in [-4.2, 4.2]:
+			var pole := MeshInstance3D.new()
+			var pm := CylinderMesh.new()
+			pm.top_radius = 0.12
+			pm.bottom_radius = 0.12
+			pm.height = 2.2
+			pole.mesh = pm
+			pole.material_override = _deco_mat(Color(0.7, 0.7, 0.72))
+			pole.position = pos + yaw * Vector3(x, 4.1, 0.0)
+			add_child(pole)
+		var lbl := Label3D.new()
+		lbl.text = sp[2]
+		lbl.font_size = 96
+		lbl.pixel_size = 0.012
+		lbl.outline_size = 16
+		lbl.modulate = Color(1, 1, 1)
+		lbl.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+		lbl.position = pos + Vector3.UP * 6.4
+		add_child(lbl)
+		scenery_count += 1
 
 
 ## RF-320: pilares embaixo dos trechos altos (caixas de leite/potes na geladeira), fora de outras pistas.
@@ -1207,6 +1425,36 @@ func _build_trees() -> void:
 			bar.material = mast.material
 			_multimesh(bar, masts, Vector3(0, 5.0, 0))
 			_multimesh(bar, masts, Vector3(0, 4.0, 0))
+		"market":
+			# RF-372: em volta da rua — tendas coloridas (metade) e pilhas de caixotes com fruta (metade)
+			var tents: Array = []
+			var tent_cols: Array = []
+			var crates: Array = []
+			var crate_cols: Array = []
+			var tops: Array = []
+			var top_cols: Array = []
+			var fp := [Color(1.0, 0.55, 0.1), Color(0.85, 0.12, 0.1), Color(0.95, 0.85, 0.2), Color(0.3, 0.7, 0.2)]
+			for i in xforms.size():
+				var o := xforms[i].origin
+				var yaw := Basis(Vector3.UP, float(i) * 2.3)
+				if i % 2 == 0:
+					tents.append(Transform3D(yaw.scaled(Vector3(7.0, 2.6, 5.0)), o + Vector3.UP * 1.3))
+					tent_cols.append(Color(0.95, 0.95, 0.92))
+					tops.append(Transform3D(yaw.scaled(Vector3(8.0, 2.4, 6.0)), o + Vector3.UP * 3.8))
+					top_cols.append(STALL_COLS[(i / 2) % STALL_COLS.size()])
+				else:
+					for h in 3:
+						crates.append(Transform3D(yaw.scaled(Vector3(2.4, 1.3, 1.8)), o + Vector3.UP * (0.65 + h * 1.35)))
+						crate_cols.append(Color(0.62, 0.42, 0.22).darkened(0.08 * h))
+					tops.append(Transform3D(Basis().scaled(Vector3(2.0, 0.8, 1.5)), o + Vector3.UP * 4.4))
+					top_cols.append(fp[i % fp.size()])
+			var cube := BoxMesh.new()
+			cube.size = Vector3.ONE
+			_multimesh_colored(cube, tents, tent_cols, _vc_mat(0.8))
+			_multimesh_colored(cube, crates, crate_cols, _vc_mat(0.9))
+			var prism := PrismMesh.new()
+			prism.size = Vector3.ONE
+			_multimesh_colored(prism, tops, top_cols, _vc_mat(0.7))
 		"fridge":
 			# RF-324: comida gigante de geladeira — caixas de leite, potes de iogurte, ovos e garrafas
 			var groups: Array = [[], [], [], []]
@@ -1720,6 +1968,8 @@ func _scatter() -> void:
 		return
 	if kind == "ice":
 		count = 70
+	if kind == "fruit":
+		count = 110
 	if kind == "bbq":
 		count = 90
 	var tries := 0
@@ -1732,6 +1982,14 @@ func _scatter() -> void:
 		if not _clear_of_track(p, 2.5):
 			continue
 		var yaw := rng.randf() * TAU
+		if kind == "fruit":  # RF-372: laranjas, tomates e melancias caídos da feira
+			var fpal := [[Color(1.0, 0.55, 0.1), Vector3(1, 1, 1)], [Color(0.85, 0.12, 0.1), Vector3(1, 0.85, 1)], [Color(0.2, 0.55, 0.2), Vector3(1.6, 1.1, 1.1)]]
+			var fk: Array = fpal[rng.randi_range(0, fpal.size() - 1)]
+			var fs := rng.randf_range(0.7, 1.6)
+			var fv: Vector3 = fk[1] * fs
+			rocks.append(Transform3D(Basis(Vector3.UP, yaw).scaled(fv), p + Vector3.UP * fv.y * 0.45))
+			rock_cols.append((fk[0] as Color).darkened(rng.randf() * 0.1))
+			continue
 		if kind == "bbq":  # RF-273: tomates, pães e cebolas gigantes na mesa
 			var pal := [[Color(0.85, 0.12, 0.08), Vector3(1, 0.9, 1)], [Color(0.78, 0.55, 0.28), Vector3(2.2, 0.8, 1)], [Color(0.62, 0.3, 0.55), Vector3(1, 1.1, 1)], [Color(0.95, 0.9, 0.75), Vector3(1.6, 0.5, 1.6)]]
 			var pk: Array = pal[rng.randi_range(0, pal.size() - 1)]
@@ -1811,6 +2069,10 @@ func _parse_zones() -> void:
 		var i1 := _frac_idx(float(z["to"]))
 		var lat: Array = z.get("lat", [-ROAD_HALF, ROAD_HALF])
 		zones.append({"kind": z["kind"], "i0": i0, "len": wrapi(i1 - i0, 0, n), "lat0": float(lat[0]), "lat1": float(lat[1]), "dir": float(z.get("dir", 1.0))})
+	for isl in def.get("islands", []):
+		var a := _frac_idx(float(isl["from"]))
+		var b := _frac_idx(float(isl["to"]))
+		islands.append({"i0": a, "len": wrapi(b - a, 0, n), "lat0": float(isl["lat"][0]), "lat1": float(isl["lat"][1]), "side": float(isl.get("shortcut", 1.0))})
 	for h in def.get("hazards", []):
 		var spec: Dictionary = h.duplicate()
 		spec["idx"] = _frac_idx(float(h["at"]))

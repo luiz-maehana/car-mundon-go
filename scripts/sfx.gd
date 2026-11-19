@@ -202,6 +202,8 @@ const MUSIC_STYLES := {
 		"lead": "tri", "lead_vol": 0.06, "bass": "half", "drums": "soft", "seed": 4040, "rest": 0.35},
 	"telhados": {"bpm": 112, "chords": [[45, "m"], [43, "M"], [41, "M"], [40, "M"]], "scale": [69, 71, 72, 76, 77, 81],
 		"lead": "pulse", "lead_vol": 0.05, "bass": "sync", "drums": "soft", "seed": 1717, "rest": 0.4},
+	"feira": {"bpm": 132, "chords": [[48, "M"], [45, "m"], [50, "m"], [43, "M"]], "scale": [72, 74, 76, 77, 79, 81, 84],
+		"lead": "square", "lead_vol": 0.055, "bass": "sync", "drums": "dance", "seed": 2525, "rest": 0.28},
 	"victory": {"bpm": 132, "chords": [[43, "M"], [48, "M"], [50, "M"], [43, "M"]], "scale": [67, 69, 71, 74, 76, 79],
 		"lead": "square", "lead_vol": 0.06, "bass": "half", "drums": "rock", "seed": 5, "rest": 0.2},
 }

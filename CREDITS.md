@@ -39,5 +39,6 @@ Baixados do OpenGameArt; licença conferida na página de cada um em 2026-11-18.
 | music/parquinho | [Loop Town](https://opengameart.org/content/loop-town) | Fupi |
 | music/geladeira | [Happy synths loop with slight Christmas feeling](https://opengameart.org/content/happy-synths-loop-with-slight-christmas-feeling) | 3xBlast |
 | music/telhados | [Urban Theme](https://opengameart.org/content/urban-theme) | MintoDog |
+| music/feira | [Flowerbed Fields (Loop)](https://opengameart.org/content/flowerbed-fields-loop) | Zane Little Music |
 
 Se faltar algum arquivo, o jogo usa a versão sintetizada em código (scripts/sfx.gd).

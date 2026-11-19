@@ -300,6 +300,11 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 ### Placar ao vivo (v0.30)
 - [x] **RF-360** O placar do fim da corrida se refaz quando mais algum kart cruza a chegada (as IAs continuam correndo depois que você termina): quem ainda está na pista aparece "correndo" (apagado) e o tempo entra com destaque amarelo quando ele termina. Vale também no placar do multijogador.
 
+### Feira Livre: largura variável e atalho (v0.31)
+- [x] **RF-370** **Largura variável** (`widths`: meia largura por ponto de controle, interpolada suave): asfalto, zebra, grama e muro acompanham; abaixo de 5 m a grama some e as barracas ficam coladas na zebra. Fora da pista, IA (faixas), pontos de resgate, caixas e queijinhos usam a largura local.
+- [x] **RF-371** **Ilha de barracas** (`islands: [{from, to, lat, shortcut}]`): fileira de bancas no meio de um trecho largo que divide a pista em duas faixas; bate como muro. A faixa de dentro da curva é o **atalho** (mais curta), embaixo dos toldos listrados (a câmera passa por baixo). A IA escolhe a faixa pela personalidade (atrevidos pelo atalho) e fica nela até passar.
+- [x] **RF-372** **Feira Livre** (1,3 km, manhã): rua normal → beco entre barracas (10 m) → praça larga (32 m) com a ilha e o atalho → chicane apertada → rampa. Barracas com fruta dos dois lados nos becos, barraca de pastel e de caldo de cana com placa, tendas e caixotes em volta, frutas caídas. O trajeto no menu engrossa onde alarga e marca o atalho (A). Música CC0.
+
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
 - [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
@@ -442,6 +447,9 @@ tools/esc_flow.gd                              fluxo real abertura→menu→corr
 - [x] **CA-85** Menu: fundo com a arte, botões do tema novo, 4 chips de etapa com a atual destacada; AJUSTES mostra os retratos dos pilotos e o trajeto. (CA-76 cobre o looping liso: no máximo 4° de giro por quadro.)
 - [x] **CA-86** Imagem de inicialização configurada; CARREGANDO com o nome da pista por cima de tudo (no GP, copa e corrida); a corrida tira a tela sozinha.
 - [x] **CA-87** Jogador termina antes: o placar abre com quem ainda está "correndo"; quando todos terminam, todos têm tempo.
+- [x] **CA-88** Feira: pista afunila (≤ 10 m) e abre (≥ 31 m) sem degrau no muro; no beco o muro cola na zebra e o kart segue dentro.
+- [x] **CA-89** Ninguém atravessa a ilha de barracas; o atalho é pelo menos 15% mais curto que a faixa larga.
+- [x] **CA-90** IA na Feira: volta entre 30 e 60 s e usa as duas faixas.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.
@@ -458,7 +466,7 @@ Teste manual (checklist por release):
 7. **Export web** (GitHub Pages) pra turma jogar no navegador.
 8. **Multiplayer online.**
 
-## 10. Plano: pistas novas (P1 a P5 feitas — v0.21, v0.24, v0.26 e v0.27)
+## 10. Plano: pistas novas (todas feitas — v0.21, v0.24, v0.26, v0.27 e v0.31)
 
 Ideia geral: o mundo é **visto do tamanho de um camundongo** — cada pista é um lugar comum da casa/cidade em escala gigante, com um "truque" que muda o jeito de pilotar. Uma segunda copa (**Copa Farofa**, 4 pistas) entra no Grand Prix junto da atual (**Copa Queijo**). Tudo original; assets só CC0.
 
@@ -471,7 +479,7 @@ Ideia geral: o mundo é **visto do tamanho de um camundongo** — cada pista é 
 | P3 | **Fábrica de Queijo** | linha de produção | **esteiras** que empurram pra frente (rápido) ou pro lado; **rodas de queijo rolando** pela pista como obstáculo; prensas que descem; queijinhos em dobro | T1 esteira, T4 obstáculos móveis |
 | P4 ✅ | **Geladeira Polar** | dentro da geladeira aberta, luz azul | **prateleiras em andares** ligadas por rampas (pista sobe e desce); **gelo** que escorrega no congelador; potes de iogurte e caixa de leite como túnel | T3 elevação, T1 gelo |
 | P5 ✅ | **Telhados da Vila** | telhados à noite, lua cheia | **pulos entre prédios** (cair = volta pro último ponto); varal de roupa como teto; **gato de verdade patrulhando** um telhado; antenas e caixas d'água | T3 elevação, T6 vãos + respawn, T4 gato |
-| P6 | **Feira Livre** | rua de feira de manhã | pista que **afunila** entre as barracas e abre na rua; caixotes, pastel, caldo de cana; um atalho por baixo das barracas | T2 largura variável, T5 atalho |
+| P6 ✅ | **Feira Livre** | rua de feira de manhã | pista que **afunila** entre as barracas e abre na rua; caixotes, pastel, caldo de cana; um atalho por baixo das barracas | T2 largura variável, T5 atalho |
 
 ### Tecnologia, em ordem de custo
 

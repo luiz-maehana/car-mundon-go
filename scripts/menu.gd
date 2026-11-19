@@ -37,6 +37,7 @@ const TRACK_DESC := {
 	"parquinho": "Pista em 8 na praça: cruzamento no meio, escorregador gigante, caixa de areia e gangorras.",
 	"geladeira": "Dentro da geladeira: 3 andares, looping na prateleira, viaduto, gelo no congelador e túnel de caixa de leite.",
 	"telhados": "De noite, nos telhados da vila: pule os vãos entre os prédios, passe por baixo dos varais e cuidado com o gatão.",
+	"feira": "Rua de feira de manhã: afunila entre as barracas, abre numa praça com atalho por baixo dos toldos e chicane estreita.",
 }
 
 var step := STEP_MODE
@@ -1094,6 +1095,8 @@ func _refresh_track() -> void:
 		uniq.append("looping")
 	if not d.get("overpasses", []).is_empty():
 		uniq.append("viaduto")
+	if not d.get("islands", []).is_empty():
+		uniq.append("atalho")
 	if not d.get("gaps", []).is_empty():
 		uniq.append("%d vãos pra pular" % d["gaps"].size())
 	track_info.text = "%.1f km · %s%s" % [float(d["length"]) / 1000.0, rec_txt, (" · " + ", ".join(uniq)) if not uniq.is_empty() else ""]

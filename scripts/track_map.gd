@@ -38,7 +38,7 @@ static func data(id: String) -> Dictionary:
 	var pads := []
 	for p in t.pads:
 		pads.append(int(p["idx"]))
-	var d := {"pts": pts, "pads": pads, "ramp": t.ramp_idx, "zones": zones, "hazards": hazards, "length": t.length, "crossings": t.crossings.duplicate(), "overpasses": t.overpasses.duplicate(), "loops": t.loops.map(func(l): return int(l["i0"])), "ys": _ys(t), "gaps": t.gaps.map(func(g): return int(g["i0"]))}
+	var d := {"pts": pts, "pads": pads, "ramp": t.ramp_idx, "zones": zones, "hazards": hazards, "length": t.length, "crossings": t.crossings.duplicate(), "overpasses": t.overpasses.duplicate(), "loops": t.loops.map(func(l): return int(l["i0"])), "ys": _ys(t), "gaps": t.gaps.map(func(g): return int(g["i0"])), "islands": t.islands.map(func(s): return int(s["i0"]) + int(s["len"]) / 2), "halfs": t.halfs.duplicate()}
 	t.free()
 	_cache[id] = d
 	return d
@@ -127,6 +127,15 @@ func _draw() -> void:
 		draw_line(cp + Vector2(-6, 6), cp + Vector2(6, -6), Color.WHITE, 3.0, true)
 	for oi in d.get("overpasses", []):  # viaduto: o trecho de cima por cima do de baixo
 		_marker(map.call(pts[int(oi[1])]), Color(0.75, 0.85, 1.0), "V")
+	# RF-370: onde a rua alarga, o traço engrossa (e afina nos becos)
+	var hf: PackedFloat32Array = d.get("halfs", PackedFloat32Array())
+	if reveal >= 1.0 and not hf.is_empty():
+		for q in range(0, n, 2):
+			var wq := hf[q] / 8.0
+			if absf(wq - 1.0) > 0.15:
+				draw_line(map.call(pts[q]), map.call(pts[(q + 2) % n]), Color(0.85, 0.87, 0.92), 11.0 * wq, true)
+	for ii in d.get("islands", []):  # RF-371: barracas no meio = atalho
+		_marker(map.call(pts[int(ii)]), Color(0.4, 0.9, 0.5), "A")
 	for gi in d.get("gaps", []):  # RF-330: vão entre prédios (salto)
 		draw_circle(map.call(pts[int(gi)]), 7.0, Color(0.05, 0.05, 0.1))
 		_marker(map.call(pts[int(gi)]) + Vector2(0, -16), Color(1.0, 0.6, 0.2), "S")

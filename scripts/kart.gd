@@ -366,7 +366,7 @@ func _move(delta: float) -> void:
 		throttle = 0.0
 
 	var top := top_speed()
-	if not airborne and absf(lateral) > TrackScript.ROAD_HALF + TrackScript.CURB and boost_time <= 0.0:
+	if not airborne and absf(lateral) > track.road_half(track_idx) + TrackScript.CURB and boost_time <= 0.0:
 		top *= OFFROAD_MULT
 	# seta de turbo (RF-140)
 	var pad_now: bool = not airborne and track.on_pad(track_idx, lateral)
@@ -585,11 +585,30 @@ func _update_track(delta: float) -> void:
 				race.shake(self, 0.3)
 		speed *= 0.995
 		lateral = s * lim
+	# RF-371: ilha de barracas no meio da pista (bate como num muro e sai pro lado mais perto)
+	var isl: Dictionary = track.island_at(ni)
+	if not isl.is_empty() and not airborne:
+		var lo: float = float(isl["lat0"]) - RADIUS
+		var hi: float = float(isl["lat1"]) + RADIUS
+		if lateral > lo and lateral < hi:
+			var to := lo if lateral - lo < hi - lateral else hi
+			var r2: Vector3 = track.rights[ni]
+			position += r2 * (to - lateral)
+			var sgn := signf(to - (lo + hi) * 0.5)
+			var vin := -vel.dot(r2) * sgn
+			if vin > 0.0:
+				vel += r2 * sgn * vin * 1.5
+				speed *= clampf(1.0 - vin * 0.04, 0.4, 1.0)
+				if vin > 6.0 and is_player and bump_cd <= 0.0:
+					bump_cd = 0.4
+					race.sfx("bump")
+					race.shake(self, 0.3)
+			lateral = to
 	max_abs_lateral = maxf(max_abs_lateral, absf(lateral))
 
 	# RF-311: último ponto seguro (no chão, na pista, andando pra frente num trecho sem perigo)
 	var tan: Vector3 = track.tangents[ni]
-	if not airborne and not on_ramp and not on_loop and absf(position.y - ground) < 0.3 and absf(lateral) < TrackScript.ROAD_HALF - 1.0 and vel.dot(tan) > 2.0 and (track.safe.is_empty() or track.safe[ni] == 1):
+	if not airborne and not on_ramp and not on_loop and absf(position.y - ground) < 0.3 and absf(lateral) < track.road_half(ni) - 1.0 and track.island_at(ni).is_empty() and vel.dot(tan) > 2.0 and (track.safe.is_empty() or track.safe[ni] == 1):
 		safe_idx = ni
 	# RF-313: contramão (andando contra o sentido da pista)
 	if not airborne and vel.dot(tan) < -3.0:
@@ -748,13 +767,27 @@ func _player_input() -> void:
 
 func _ai_input(delta: float) -> void:
 	var n: int = track.sample_count()
-	var m := TrackScript.ROAD_HALF - 2.5
+	var m: float = maxf(1.5, minf(track.road_half(track_idx), track.road_half((track_idx + 8) % n)) - 2.5)  # RF-370: largura local
 	ai_lane_timer -= delta
 	if ai_lane_timer <= 0.0:
 		# RF-213: quem tem mais "foco" troca menos de faixa à toa
 		ai_lane = clampf(lerpf(randf_range(-m, m), ai_lane, ai_focus * 0.6), -m, m)
 		ai_lane_timer = randf_range(2.0, 5.0) * (1.0 + ai_focus)
 	_ai_tactics(n, m)
+	# RF-371: barracas no meio da pista à frente: escolhe a faixa e fica nela até passar
+	for kk in range(0, 36, 3):
+		var isl: Dictionary = track.island_at((track_idx + kk) % n)
+		if isl.is_empty():
+			continue
+		var ih: float = track.road_half((int(isl["i0"]) + int(isl["len"]) / 2) % n)
+		var ss: float = float(isl["side"])
+		var side := ss if ai_aggro >= 0.5 else -ss  # atrevido vai pelo atalho
+		var lo := (-ih + 1.5) if side < 0 else (float(isl["lat1"]) + 1.5)
+		var hi := (float(isl["lat0"]) - 1.5) if side < 0 else (ih - 1.5)
+		if ai_lane < lo or ai_lane > hi:
+			ai_lane = (lo + hi) * 0.5
+		ai_lane_timer = maxf(ai_lane_timer, 0.4)
+		break
 	# desviando: olha mais perto pra esterçar mais rápido (RF-210)
 	ai_evading = maxf(0.0, ai_evading - delta)
 	var look := (3 + int(absf(speed) * 0.12)) if ai_evading > 0.0 else (5 + int(absf(speed) * 0.3))
@@ -986,7 +1019,7 @@ func _update_visuals(delta: float) -> void:
 	var spd01 := clampf(absf(speed) / 30.0, 0.0, 1.0)
 	model.rotation.z = lerpf(model.rotation.z, -in_steer * 0.09 * spd01 - (drift_dir * 0.06 if drifting else 0.0), 1.0 - exp(-8.0 * delta))
 	var shake := 0.0
-	if not airborne and absf(lateral) > TrackScript.ROAD_HALF + TrackScript.CURB and absf(speed) > 4.0:
+	if not airborne and absf(lateral) > track.road_half(track_idx) + TrackScript.CURB and absf(speed) > 4.0:
 		shake = randf_range(-0.04, 0.04)
 	wheel_spin = fmod(wheel_spin + speed * delta / (0.21 * KART_SCALE), TAU)
 	for w in wheels:
@@ -1012,7 +1045,7 @@ func _update_visuals(delta: float) -> void:
 		f.visible = boosting
 		if boosting:
 			f.scale = Vector3.ONE * randf_range(0.8, 1.3)
-	p_dust.emitting = not airborne and absf(speed) > 5.0 and absf(lateral) > TrackScript.ROAD_HALF + TrackScript.CURB
+	p_dust.emitting = not airborne and absf(speed) > 5.0 and absf(lateral) > track.road_half(track_idx) + TrackScript.CURB
 	_update_shield_fx()
 
 

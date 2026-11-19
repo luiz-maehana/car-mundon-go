@@ -40,13 +40,25 @@ func _run() -> void:
 	for o in t.overpasses:
 		spots["over_low"] = wrapi(int(o[0]) - 12, 0, n)
 		spots["over_high"] = wrapi(int(o[1]) - 12, 0, n)
+	for isl in t.islands:
+		spots["island"] = wrapi(int(isl["i0"]) - 10, 0, n)
+		spots["island_mid"] = int(isl["i0"]) + int(isl["len"]) / 2
+		spots["shortcut"] = wrapi(int(isl["i0"]) + 4, 0, n)
+	for q in n:
+		if t.road_half(q) < 5.5:
+			spots["narrow"] = wrapi(q + 6, 0, n)
+			break
 	for gi in t.gaps.size():
 		spots["gap%d" % gi] = wrapi(int(t.gaps[gi]["i0"]) - 12, 0, n)
 	for tn in t.def.get("tunnels", []):
 		spots["tunnel"] = int(n * float(tn[0])) - 4
 	for name in spots:
 		var k = race.player
-		k.place(int(spots[name]), 0.0)
+		var lat0 := 0.0
+		if name == "shortcut" and not t.islands.is_empty():
+			var si: Dictionary = t.islands[0]
+			lat0 = (-t.road_half(int(spots[name])) + float(si["lat0"])) * 0.5 if float(si["side"]) < 0 else (t.road_half(int(spots[name])) + float(si["lat1"])) * 0.5
+		k.place(int(spots[name]), lat0)
 		if t.in_loop(int(spots[name])):
 			k.on_loop = true
 			k.loop_s = float(spots[name])
