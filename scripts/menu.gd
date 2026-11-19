@@ -324,6 +324,7 @@ func _input(event: InputEvent) -> void:
 	var game := get_node_or_null("/root/Game")
 	if game:
 		game.note_device(event)  # o menu consome o evento antes do Game ver
+	var vp := get_viewport()  # trocar de cena tira o menu da árvore no meio do caminho
 	if GameScript.is_back(event):
 		_back()
 	elif event.is_action_pressed("ui_right"):
@@ -343,7 +344,7 @@ func _input(event: InputEvent) -> void:
 				b.pressed.emit()
 	else:
 		return
-	get_viewport().set_input_as_handled()
+	vp.set_input_as_handled()
 
 
 func _back() -> void:
@@ -403,9 +404,12 @@ func _focus_zone(zone: int, i := 0) -> void:
 
 func _refresh_help() -> void:
 	var game := get_node_or_null("/root/Game")
-	var kbd := "Setas: navegar · Enter: confirmar · Esc/Backspace: voltar · J1 = WASD/controle 1 · J2 = setas/controle 2 · J3/J4 = controles 3/4 · M: som"
+	var kbd := "Setas: navegar · Enter: confirmar · Esc/Backspace: voltar · J1 = %s/controle 1 · J2 = %s/controle 2 · J3/J4 = controles 3/4 · M: som"
 	var pad := "Direcional: navegar · A: confirmar · B: voltar · cada jogador usa o seu controle (1 a 4)"
-	help.text = game.hint(kbd, pad) if game else kbd
+	if game == null:
+		help.text = kbd % ["WASD", "setas"]
+		return
+	help.text = game.hint(kbd % [game.move_keys(0), game.move_keys(1)], pad)
 
 
 func _confirm() -> void:

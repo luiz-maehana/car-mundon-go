@@ -268,6 +268,20 @@ func load_settings() -> void:
 			var v = cfg.get_value("settings", k, DEFAULTS[k])
 			if typeof(v) == typeof(DEFAULTS[k]) or (typeof(DEFAULTS[k]) == TYPE_FLOAT and typeof(v) == TYPE_INT):
 				settings[k] = v
+	# RF-253: teclas e botões trocados
+	key_binds.clear()
+	pad_binds.clear()
+	if cfg.has_section("keys"):
+		for act in cfg.get_section_keys("keys"):
+			var v = cfg.get_value("keys", act)
+			if v is Array:
+				key_binds[act] = v
+	if cfg.has_section("pad"):
+		for a in cfg.get_section_keys("pad"):
+			var v = cfg.get_value("pad", a)
+			if v is Array and PAD_REMAP.has(a):
+				pad_binds[a] = v
+	rebuild_inputs()
 	apply_settings()
 
 
@@ -275,11 +289,18 @@ func save_settings() -> void:
 	var cfg := ConfigFile.new()
 	for k in settings:
 		cfg.set_value("settings", k, settings[k])
+	for act in key_binds:
+		cfg.set_value("keys", act, key_binds[act])
+	for a in pad_binds:
+		cfg.set_value("pad", a, pad_binds[a])
 	cfg.save(settings_path)
 
 
 func reset_settings() -> void:
 	settings = DEFAULTS.duplicate()
+	key_binds.clear()  # RF-253: PADRÃO também restaura os controles
+	pad_binds.clear()
+	rebuild_inputs()
 	apply_settings()
 	save_settings()
 
@@ -420,3 +441,197 @@ func play_music(style: String) -> void:
 	music.stream = Sfx.music(style)
 	music.pitch_scale = 1.0
 	music.play()
+
+
+# ---------------------------------------------------------------- trocar teclas (RF-250..254)
+
+const PAD_REMAP := ["accelerate", "brake", "drift", "use_item"]
+const RESERVED_KEYS := [KEY_ESCAPE, KEY_M, KEY_R]
+const ACTION_NAMES := {
+	"accelerate": "Acelerar", "brake": "Frear / ré", "steer_left": "Virar à esquerda",
+	"steer_right": "Virar à direita", "drift": "Drift (no ar: manobra)", "use_item": "Usar item",
+}
+const KEY_NAMES := {
+	KEY_SPACE: "Espaço", KEY_UP: "↑", KEY_DOWN: "↓", KEY_LEFT: "←", KEY_RIGHT: "→",
+	KEY_ENTER: "Enter", KEY_KP_ENTER: "Enter num.", KEY_KP_0: "Num 0", KEY_SHIFT: "Shift",
+	KEY_CTRL: "Ctrl", KEY_ALT: "Alt", KEY_TAB: "Tab", KEY_BACKSPACE: "Backspace",
+}
+const PAD_NAMES := {
+	JOY_BUTTON_A: "A", JOY_BUTTON_B: "B", JOY_BUTTON_X: "X", JOY_BUTTON_Y: "Y",
+	JOY_BUTTON_LEFT_SHOULDER: "LB", JOY_BUTTON_RIGHT_SHOULDER: "RB", JOY_BUTTON_BACK: "Back",
+	JOY_BUTTON_LEFT_STICK: "L3", JOY_BUTTON_RIGHT_STICK: "R3", JOY_BUTTON_DPAD_UP: "Direcional ↑",
+	JOY_BUTTON_DPAD_DOWN: "Direcional ↓", JOY_BUTTON_DPAD_LEFT: "Direcional ←", JOY_BUTTON_DPAD_RIGHT: "Direcional →",
+}
+
+var key_binds := {}  # "p1_drift" -> [[physical_keycode, location], ...] (só as ações mexidas)
+var pad_binds := {}  # "drift" -> [button_index, ...] (vale pros 4 controles)
+
+
+## Recria o mapa a partir do padrão e aplica as trocas por cima.
+func rebuild_inputs() -> void:
+	for p in MAX_PLAYERS:
+		for a in ACTIONS:
+			if InputMap.has_action(action(p, a)):
+				InputMap.erase_action(action(p, a))
+	setup_inputs()
+	for act in key_binds:
+		if not InputMap.has_action(act):
+			continue
+		for ev in InputMap.action_get_events(act):
+			if ev is InputEventKey:
+				InputMap.action_erase_event(act, ev)
+		for k in key_binds[act]:
+			var e := InputEventKey.new()
+			e.physical_keycode = int(k[0]) as Key
+			e.location = int(k[1]) as KeyLocation
+			InputMap.action_add_event(act, e)
+	for a in pad_binds:
+		for p in MAX_PLAYERS:
+			var act := action(p, a)
+			for ev in InputMap.action_get_events(act):
+				if ev is InputEventJoypadButton:
+					InputMap.action_erase_event(act, ev)
+			for b in pad_binds[a]:
+				var e := InputEventJoypadButton.new()
+				e.button_index = int(b) as JoyButton
+				e.device = p
+				InputMap.action_add_event(act, e)
+	for p in MAX_PLAYERS:
+		for a in ACTIONS:
+			InputMap.action_set_deadzone(action(p, a), float(settings.get("deadzone", 0.25)))
+	input_device_changed.emit(last_device)  # dicas da tela se atualizam (RF-254)
+
+
+static func _key_of(ev: InputEventKey) -> Array:
+	return [int(ev.physical_keycode), int(ev.location)]
+
+
+static func _same_key(a: Array, b: Array) -> bool:
+	return a[0] == b[0] and (a[1] == 0 or b[1] == 0 or a[1] == b[1])
+
+
+func keys_of(player: int, a: String) -> Array:
+	var out := []
+	for ev in InputMap.action_get_events(action(player, a)):
+		if ev is InputEventKey:
+			out.append(_key_of(ev))
+	return out
+
+
+func pad_buttons_of(a: String) -> Array:
+	var out := []
+	for ev in InputMap.action_get_events(action(0, a)):
+		if ev is InputEventJoypadButton:
+			out.append(int(ev.button_index))
+	return out
+
+
+## RF-251/252: troca a tecla de (player, ação). Devolve {"ok", "msg"}.
+## Se a tecla era a única de outra ação, as duas trocam; se era uma alternativa, só sai de lá.
+func rebind_key(player: int, a: String, ev: InputEventKey) -> Dictionary:
+	var k := _key_of(ev)
+	if k[0] in RESERVED_KEYS or k[0] == KEY_NONE:
+		return {"ok": false, "msg": "%s é reservada (pausar/som/reiniciar)." % key_name(k)}
+	var old: Array = keys_of(player, a)
+	var msg := ""
+	for q in 2:
+		for b in ACTIONS:
+			if q == player and b == a:
+				continue
+			var cur: Array = keys_of(q, b)
+			var rest := cur.filter(func(o): return not _same_key(o, k))
+			if rest.size() == cur.size():
+				continue
+			if rest.is_empty() and not old.is_empty():
+				rest = [old[0]]
+				msg = "Trocou com J%d · %s (agora %s)." % [q + 1, ACTION_NAMES[b], key_name(old[0])]
+			key_binds[action(q, b)] = rest
+	key_binds[action(player, a)] = [k]
+	rebuild_inputs()
+	save_settings()
+	return {"ok": true, "msg": msg}
+
+
+## RF-251/252: troca o botão do controle de uma ação (vale pros 4 controles).
+func rebind_pad(a: String, button: int) -> Dictionary:
+	if not PAD_REMAP.has(a):
+		return {"ok": false, "msg": "Essa ação usa o analógico/direcional."}
+	if button == JOY_BUTTON_START:
+		return {"ok": false, "msg": "Start é reservado (pausar)."}
+	var old: Array = pad_buttons_of(a)
+	var msg := ""
+	for b in PAD_REMAP:
+		var cur: Array = pad_buttons_of(b)
+		if b == a or not cur.has(button):
+			continue
+		var rest := cur.filter(func(x): return x != button)
+		if rest.is_empty() and not old.is_empty():
+			rest = [old[0]]
+			msg = "Trocou com %s (agora %s)." % [ACTION_NAMES[b], pad_name(old[0])]
+		pad_binds[b] = rest
+	pad_binds[a] = [button]
+	rebuild_inputs()
+	save_settings()
+	return {"ok": true, "msg": msg}
+
+func reset_bindings() -> void:
+	key_binds.clear()
+	pad_binds.clear()
+	rebuild_inputs()
+	save_settings()
+
+
+static func key_name(k: Array) -> String:
+	if int(k[0]) == KEY_NONE:
+		return "—"
+	var s: String = KEY_NAMES.get(int(k[0]), OS.get_keycode_string(int(k[0])))
+	if int(k[1]) == KEY_LOCATION_LEFT:
+		s += " esq."
+	elif int(k[1]) == KEY_LOCATION_RIGHT:
+		s += " dir."
+	return s
+
+
+static func pad_name(button: int) -> String:
+	return PAD_NAMES.get(button, "Botão %d" % button) if button >= 0 else "—"
+
+
+## Texto das teclas de uma ação (ex.: "Espaço / Shift esq.").
+func key_label(player: int, a: String) -> String:
+	var names := []
+	for k in keys_of(player, a):
+		names.append(key_name(k))
+	return " / ".join(names) if not names.is_empty() else "—"
+
+
+## Texto do controle de uma ação, incluindo gatilhos (ex.: "A / RT").
+func pad_label(a: String) -> String:
+	var names := []
+	var triggers := []
+	for ev in InputMap.action_get_events(action(0, a)):
+		if ev is InputEventJoypadButton:
+			names.append(pad_name(int(ev.button_index)))
+		elif ev is InputEventJoypadMotion and a in ["accelerate", "brake"]:
+			triggers.append("RT" if ev.axis == JOY_AXIS_TRIGGER_RIGHT else "LT")
+	names.append_array(triggers)  # botões primeiro: "A / RT"
+	if a in ["steer_left", "steer_right"]:
+		return "Analógico / direcional"
+	return " / ".join(names) if not names.is_empty() else "—"
+
+
+## RF-254: dicas da corrida com as teclas atuais.
+func race_hint_kbd() -> String:
+	var steer := "%s %s" % [key_label(0, "steer_left"), key_label(0, "steer_right")]
+	return "%s %s %s: pilotar · %s: drift · %s: item · Esc: pausar · M: som" % [key_label(0, "accelerate"), key_label(0, "brake"), steer, key_label(0, "drift").split(" / ")[0], key_label(0, "use_item").split(" / ")[0]]
+
+
+func race_hint_pad() -> String:
+	return "Analógico: pilotar · %s: acelerar · %s: frear · %s: drift · %s: item · Start: pausar" % [pad_label("accelerate"), pad_label("brake"), pad_label("drift"), pad_label("use_item")]
+
+
+func move_keys(player: int) -> String:
+	var ks := []
+	for a in ["accelerate", "steer_left", "brake", "steer_right"]:
+		ks.append(key_label(player, a).split(" / ")[0])
+	var short := ks.all(func(s): return s.length() == 1)
+	return "".join(ks) if short else " ".join(ks)

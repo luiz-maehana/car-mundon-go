@@ -47,6 +47,7 @@ func _run() -> void:
 	await _test_time_trial()
 	await _test_ui_nav()
 	await _test_layout()
+	await _test_remap()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -1286,3 +1287,89 @@ func _test_layout() -> void:
 		await process_frame
 	Records.clear_all()
 	Records.path = Records.DEFAULT_PATH
+
+
+func _keyev(code: int, loc := KEY_LOCATION_UNSPECIFIED) -> InputEventKey:
+	var e := InputEventKey.new()
+	e.physical_keycode = code
+	e.keycode = code
+	e.location = loc
+	e.pressed = true
+	return e
+
+
+func _test_remap() -> void:
+	var game = root.get_node_or_null("Game")
+	if game == null:
+		return
+	game.reset_settings()
+	print("CA-51 trocar tecla")
+	var res: Dictionary = game.rebind_key(0, "drift", _keyev(KEY_J))
+	check(res["ok"], "J1 drift → J")
+	check(_keyev(KEY_J).is_action("p1_drift") and not _keyev(KEY_SPACE).is_action("p1_drift"), "J aciona o drift; Espaço não")
+	check(not _keyev(KEY_SHIFT, KEY_LOCATION_LEFT).is_action("p1_drift"), "alternativa (Shift esq.) saiu")
+	game.load_settings()
+	check(_keyev(KEY_J).is_action("p1_drift") and game.key_label(0, "drift") == "J", "salvo e recarregado (%s)" % game.key_label(0, "drift"))
+
+	print("CA-52 conflito e tecla reservada")
+	res = game.rebind_key(0, "accelerate", _keyev(KEY_S))  # S era o frear do J1
+	check(res["ok"] and _keyev(KEY_S).is_action("p1_accelerate") and _keyev(KEY_W).is_action("p1_brake"), "W↔S trocaram (%s)" % res["msg"])
+	check(res["msg"] != "", "aviso de troca")
+	res = game.rebind_key(0, "use_item", _keyev(KEY_UP))  # ↑ é acelerar do J2
+	check(_keyev(KEY_UP).is_action("p1_use_item") and _keyev(KEY_E).is_action("p2_accelerate"), "conflito com o outro jogador troca (%s)" % res["msg"])
+	res = game.rebind_key(1, "drift", _keyev(KEY_CTRL, KEY_LOCATION_RIGHT))  # Ctrl dir. era alternativa do item do J2
+	check(_keyev(KEY_CTRL, KEY_LOCATION_RIGHT).is_action("p2_drift") and _keyev(KEY_ENTER).is_action("p2_use_item") and not _keyev(KEY_CTRL, KEY_LOCATION_RIGHT).is_action("p2_use_item"), "alternativa sai só dela, o resto fica")
+	var before: String = game.key_label(0, "steer_left")
+	for k in [KEY_ESCAPE, KEY_M, KEY_R]:
+		res = game.rebind_key(0, "steer_left", _keyev(k))
+		check(not res["ok"] and game.key_label(0, "steer_left") == before, "%s recusada" % OS.get_keycode_string(k))
+
+	print("CA-53 controle e restaurar")
+	res = game.rebind_pad("drift", JOY_BUTTON_Y)
+	var all_ok := true
+	for p in 4:
+		var e := InputEventJoypadButton.new()
+		e.button_index = JOY_BUTTON_Y
+		e.device = p
+		e.pressed = true
+		if not e.is_action("p%d_drift" % (p + 1)):
+			all_ok = false
+	check(res["ok"] and all_ok, "Y vira drift nos 4 controles")
+	var rt := InputEventJoypadMotion.new()
+	rt.axis = JOY_AXIS_TRIGGER_RIGHT
+	rt.axis_value = 1.0
+	game.rebind_pad("accelerate", JOY_BUTTON_X)  # X era alternativa do item
+	check(rt.is_action("p1_accelerate") and game.pad_label("use_item") == "LB", "gatilho RT continua; item fica só com LB (%s)" % game.pad_label("use_item"))
+	check(not game.rebind_pad("drift", JOY_BUTTON_START)["ok"], "Start recusado")
+	game.reset_bindings()
+	check(_keyev(KEY_SPACE).is_action("p1_drift") and _keyev(KEY_W).is_action("p1_accelerate") and game.pad_label("drift") == "RB" and game.key_binds.is_empty(), "RESTAURAR volta ao padrão")
+	game.load_settings()
+	check(_keyev(KEY_SPACE).is_action("p1_drift") and not _keyev(KEY_J).is_action("p1_drift"), "padrão também fica salvo")
+
+	print("CA-54 tela de configurações")
+	var sm = load("res://scripts/settings_menu.gd").new()
+	root.add_child(sm)
+	await process_frame
+	sm.start_capture(0, "use_item")
+	check(sm.bind_buttons["0:use_item"].text.begins_with("APERTE"), "botão mostra APERTE...")
+	sm._input(_keyev(KEY_ESCAPE))
+	check(sm.capture.is_empty() and _keyev(KEY_E).is_action("p1_use_item") and is_instance_valid(sm) and sm.is_inside_tree(), "Esc cancela sem mudar e sem fechar a tela")
+	sm.start_capture(0, "use_item")
+	sm._input(_keyev(KEY_Q))
+	check(_keyev(KEY_Q).is_action("p1_use_item") and sm.bind_buttons["0:use_item"].text == "Q", "tecla nova aplicada (%s)" % sm.bind_buttons["0:use_item"].text)
+	sm.start_capture(-1, "brake")
+	var jb := InputEventJoypadButton.new()
+	jb.button_index = JOY_BUTTON_Y
+	jb.pressed = true
+	sm._input(jb)
+	check(game.pad_label("brake").begins_with("Y"), "coluna do controle aceita botão (%s)" % game.pad_label("brake"))
+	check(sm.bind_buttons["pad:steer_left"].disabled, "virar no controle não é trocável (analógico)")
+	sm.queue_free()
+	await process_frame
+	var race = await _new_race(["nanni"], true)
+	game.note_device(_keyev(KEY_W))
+	race.huds[0].refresh_hint()
+	check(" Q: item" in race.huds[0].lbl_hint.text, "dica da corrida mostra a tecla nova (%s)" % race.huds[0].lbl_hint.text)
+	race.queue_free()
+	game.reset_settings()
+	await process_frame

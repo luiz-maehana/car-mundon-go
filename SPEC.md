@@ -231,6 +231,13 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-243** No Grand Prix, `Menu` no pause pede confirmação ("Abandonar o Grand Prix?" SIM / NÃO, foco no NÃO).
 - [x] **RF-244** Nada de interface sai da tela: menu, resultado (corrida e contra o relógio), pause e configurações cabem em 16:9, 4:3 e 21:9.
 
+### Trocar teclas (v0.18)
+- [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
+- [x] **RF-251** No teclado cada ação de J1/J2 fica com uma tecla só (a nova substitui as alternativas). No controle dá pra trocar os botões de acelerar, frear, drift e item (vale pros 4 controles); gatilhos RT/LT e analógico/direcional continuam valendo.
+- [x] **RF-252** Conflito: se a tecla/botão já é de outra ação (de qualquer jogador no teclado), as duas trocam e aparece um aviso. Esc, M e R (pausar, som, reiniciar) e o Start do controle são reservados e não podem ser usados.
+- [x] **RF-253** As trocas são salvas em `user://settings.cfg` (seções `keys` e `pad`) e voltam ao abrir o jogo. `RESTAURAR CONTROLES` (e o `PADRÃO` geral) volta ao mapa original da §5.
+- [x] **RF-254** As dicas da tela (menu, corrida) mostram as teclas/botões atuais.
+
 ## 5. Controles
 
 | Ação | Jogador 1 (teclado) | Jogador 2 (teclado) | Controle (J1..J4 = controle 1..4) |
@@ -269,6 +276,7 @@ scripts/records.gd                             recordes e fantasma do contra o r
 tools/screenshot.gd                            prints do menu/corrida para revisão visual
 tools/screenshot_tt.gd                         prints do contra o relógio (usa recordes à parte)
 tools/screenshot_ui.gd                         prints da navegação por controle (menu, pause, confirmação do GP)
+tools/esc_flow.gd                              fluxo real abertura→menu→corrida→pause→resultado com teclas simuladas (procura erro/travada)
 ```
 
 **Modelo de pista:** a linha central é amostrada a cada 2 m (`points`, `tangents`, `rights`). Todo kart guarda o índice da amostra mais próxima (busca local numa janela) e a distância lateral. Isso resolve sem motor de física: grama (`|lateral| > 8`), muro (`|lateral| > 15`), progresso/voltas e mira da IA.
@@ -328,6 +336,10 @@ tools/screenshot_ui.gd                         prints da navegação por control
 - [x] **CA-48** Um evento de controle troca as dicas pra botões; uma tecla volta pro teclado.
 - [x] **CA-49** Em 1280×720, 1024×768 e 2560×1080 todos os botões e painéis das telas ficam dentro da área visível.
 - [x] **CA-50** Menu no pause do GP abre a confirmação; NÃO fecha e mantém o GP; SIM vai pro menu.
+- [x] **CA-51** Trocar a tecla de uma ação muda o InputMap (a nova aciona, a antiga não), salva e volta igual depois de recarregar as configurações.
+- [x] **CA-52** Tecla já usada por outra ação (inclusive do outro jogador) troca as duas; tecla reservada é recusada e nada muda.
+- [x] **CA-53** Trocar o botão de drift do controle vale pros 4 controles e mantém os gatilhos; RESTAURAR volta tudo ao padrão.
+- [x] **CA-54** Na tela de configurações, apertar o botão de uma ação e depois uma tecla faz a troca; Esc cancela sem mudar; a dica da corrida mostra a tecla nova.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

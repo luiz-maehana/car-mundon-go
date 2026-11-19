@@ -406,11 +406,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_START:
 		pause_pressed = true
 	if pause_pressed:
+		get_viewport().set_input_as_handled()  # antes: to_menu tira a corrida da árvore
 		if results_shown:
 			to_menu()
 		else:
 			toggle_pause()
-		get_viewport().set_input_as_handled()
 
 
 func _leave() -> void:

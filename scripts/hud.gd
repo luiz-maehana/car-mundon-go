@@ -684,13 +684,11 @@ func refresh_hint() -> void:
 	if lbl_hint == null:
 		return
 	var game := get_node_or_null("/root/Game")
-	lbl_hint.text = game.hint(HINT_KBD, HINT_PAD) if game else HINT_KBD
+	lbl_hint.text = game.hint(game.race_hint_kbd(), game.race_hint_pad()) if game else HINT_KBD
 
 
 ## Foco no botão do resultado só depois de um instante: quem ainda está segurando
 ## A/Enter pra acelerar não reinicia sem querer.
 func _focus_later(b: Button) -> void:
 	b.focus_mode = Control.FOCUS_ALL
-	get_tree().create_timer(0.8).timeout.connect(func():
-		if is_instance_valid(b):
-			b.grab_focus())
+	get_tree().create_timer(0.8).timeout.connect(b.grab_focus)  # morre junto com o botão

@@ -130,28 +130,119 @@ func _build_game(p: VBoxContainer) -> void:
 	_note(p, "Partículas valem a partir da próxima corrida.")
 
 
+## RF-250..253: cada ação tem um botão por coluna; apertar e depois a tecla/botão troca.
+var bind_buttons := {}   # "0:drift" (J1), "1:drift" (J2), "pad:drift" -> Button
+var capture := {}        # {"player": 0/1 ou -1 (controle), "action": String}
+var capture_left := 0.0
+var bind_msg: Label
+const CAPTURE_TIME := 6.0
+
+
 func _build_controls(p: VBoxContainer) -> void:
 	var grid := GridContainer.new()
 	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 26)
-	grid.add_theme_constant_override("v_separation", 8)
+	grid.add_theme_constant_override("h_separation", 14)
+	grid.add_theme_constant_override("v_separation", 6)
 	p.add_child(grid)
-	var rows := [
-		["AÇÃO", "J1 (TECLADO)", "J2 (TECLADO)", "CONTROLE"],
-		["Acelerar", "W", "↑", "A / RT"],
-		["Frear / ré", "S", "↓", "B / LT"],
-		["Virar", "A  D", "←  →", "Analógico / D-pad"],
-		["Drift (no ar: manobra)", "Espaço / Shift esq.", "Shift dir. / Num 0", "RB"],
-		["Usar item", "E / Ctrl esq.", "Enter / Ctrl dir.", "LB / X"],
-		["Pausar", "Esc", "Esc", "Start"],
-		["Liga/desliga o som", "M", "M", "—"],
-	]
-	for r in rows.size():
-		for c in rows[r].size():
-			var col := Color(1.0, 0.82, 0.2) if r == 0 else (Color(0.85, 0.88, 1.0) if c == 0 else Color.WHITE)
-			grid.add_child(_label(rows[r][c], 18 if r == 0 else 19, col))
-	_note(p, "J3 e J4 usam os controles 3 e 4. Sozinho, o J1 também usa as teclas do J2.")
+	for h in ["AÇÃO", "J1 (TECLADO)", "J2 (TECLADO)", "CONTROLE"]:
+		grid.add_child(_label(h, 18, Color(1.0, 0.82, 0.2)))
+	for a in GameScript.ACTIONS:
+		var l := _label(GameScript.ACTION_NAMES[a], 19, Color(0.85, 0.88, 1.0))
+		l.custom_minimum_size.x = 250
+		grid.add_child(l)
+		for col in ["0", "1", "pad"]:
+			var b := Button.new()
+			b.custom_minimum_size = Vector2(200, 40)
+			b.add_theme_font_size_override("font_size", 17)
+			b.clip_text = true
+			var pl := -1 if col == "pad" else int(col)
+			if col == "pad" and not GameScript.PAD_REMAP.has(a):
+				b.disabled = true
+			b.pressed.connect(func(): start_capture(pl, a))
+			grid.add_child(b)
+			bind_buttons["%s:%s" % [col, a]] = b
+	for r in [["Pausar", "Esc", "Esc", "Start"], ["Liga/desliga o som", "M", "M", "—"]]:
+		for c in r.size():
+			grid.add_child(_label(r[c], 19, Color(0.85, 0.88, 1.0) if c == 0 else Color(1, 1, 1, 0.7)))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	p.add_child(row)
+	var reset := Button.new()
+	reset.text = "RESTAURAR CONTROLES"
+	reset.custom_minimum_size = Vector2(300, 44)
+	reset.pressed.connect(func():
+		if game:
+			game.reset_bindings()
+		_refresh_binds()
+		_bind_message("Controles de volta ao padrão.", true))
+	row.add_child(reset)
+	bind_msg = _label("", 18, Color(0.45, 1.0, 0.5))
+	bind_msg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(bind_msg)
+	_note(p, "Clique numa tecla pra trocar e aperte a nova (Esc cancela). J3 e J4 usam os controles 3 e 4. Sozinho, o J1 também usa as teclas do J2.")
 	_slider(p, "Zona morta do analógico", "deadzone", 0.05, 0.5, 0.01, _pct)
+	_refresh_binds()
+
+
+func _refresh_binds() -> void:
+	for key in bind_buttons:
+		var parts: PackedStringArray = key.split(":")
+		var b: Button = bind_buttons[key]
+		if not game:
+			continue
+		b.text = game.pad_label(parts[1]) if parts[0] == "pad" else game.key_label(int(parts[0]), parts[1])
+
+
+func start_capture(player: int, a: String) -> void:
+	_refresh_binds()
+	capture = {"player": player, "action": a}
+	capture_left = CAPTURE_TIME
+	var b: Button = bind_buttons["%s:%s" % ["pad" if player < 0 else str(player), a]]
+	b.text = "APERTE UM BOTÃO..." if player < 0 else "APERTE UMA TECLA..."
+	_bind_message("", true)
+
+
+func _bind_message(text: String, good: bool) -> void:
+	if bind_msg:
+		bind_msg.text = text
+		bind_msg.add_theme_color_override("font_color", Color(0.45, 1.0, 0.5) if good else Color(1.0, 0.45, 0.4))
+
+
+func _end_capture(res: Dictionary) -> void:
+	capture = {}
+	_refresh_binds()
+	if res.is_empty():
+		_bind_message("Cancelado.", false)
+	else:
+		_bind_message(res["msg"] if res["msg"] != "" else ("Pronto!" if res["ok"] else "Não deu."), res["ok"])
+
+
+## Enquanto espera a tecla, pega tudo antes da GUI (nem Esc fecha a tela).
+func _input(event: InputEvent) -> void:
+	if capture.is_empty():
+		return
+	if event is InputEventKey and event.pressed and not event.echo:
+		get_viewport().set_input_as_handled()
+		if event.physical_keycode == KEY_ESCAPE:
+			_end_capture({})
+		elif capture["player"] >= 0 and game:
+			_end_capture(game.rebind_key(capture["player"], capture["action"], event))
+	elif event is InputEventJoypadButton and event.pressed:
+		get_viewport().set_input_as_handled()
+		if capture["player"] < 0 and game:
+			_end_capture(game.rebind_pad(capture["action"], event.button_index))
+		else:
+			_end_capture({})  # controle na coluna do teclado: cancela
+	elif event is InputEventJoypadMotion or event is InputEventKey:
+		get_viewport().set_input_as_handled()
+
+
+func _process(delta: float) -> void:
+	if capture.is_empty():
+		return
+	capture_left -= delta
+	if capture_left <= 0.0:
+		_end_capture({})
 
 
 # ---------------------------------------------------------------- linhas
@@ -251,6 +342,7 @@ func _label(text: String, size: int, c: Color) -> Label:
 func _reset() -> void:
 	if game:
 		game.reset_settings()
+	_refresh_binds()
 	for key in controls:
 		var c: Dictionary = controls[key]
 		var v = _val(key)
