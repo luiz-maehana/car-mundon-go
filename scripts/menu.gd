@@ -31,6 +31,12 @@ var track_i := 0
 var players_btn: Button
 var go_btn: Button
 var sub: Label
+var help: Label
+var nav_rows: Array = []
+var nav_zone := 1   # 0 = linha de cima, 1 = cartas, 2 = opções (RF-240)
+var nav_i := 0
+var start_scene := true  # os testes desligam pra não trocar de cena
+var started := false
 
 
 func _ready() -> void:
@@ -123,7 +129,7 @@ func _build() -> void:
 	GameScript.make_primary(go_btn)  # RF-174
 	row.add_child(go_btn)
 
-	var help := _label("Setas: escolher · Enter: confirmar · Backspace: desfazer · J1 = WASD/controle 1 · J2 = setas/controle 2 · J3/J4 = controles 3/4 · M: som", 15, Color(1, 1, 1, 0.6))
+	help = _label("", 15, Color(1, 1, 1, 0.6))
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(help)
 	add_child(gfx_btn)  # por cima do resto
@@ -139,6 +145,18 @@ func _build() -> void:
 			picks.clear()
 		_refresh())
 	add_child(mode_btn)
+	# RF-240: linhas de navegação (cima = 0, cartas = 1, opções = 2)
+	nav_rows = [[mode_btn, gfx_btn], [], [players_btn, laps_btn, diff_btn, track_btn, go_btn]]
+	for r in [0, 2]:
+		for i in nav_rows[r].size():
+			var b: Button = nav_rows[r][i]
+			b.focus_mode = Control.FOCUS_ALL
+			b.focus_entered.connect(func():
+				nav_zone = r
+				nav_i = i)
+	var gm := get_node_or_null("/root/Game")
+	if gm:
+		gm.input_device_changed.connect(func(_d): _refresh_help())
 
 
 func _label(text: String, size: int, c: Color) -> Label:
@@ -274,6 +292,9 @@ func _refresh() -> void:
 	diff_btn.disabled = _is_tt()
 	diff_btn.text = "IA: --" if _is_tt() else "IA: %s" % DIFF_NAMES[diff_i]
 	go_btn.text = "CORRER!" if cur == num_players - 1 else "CONFIRMAR J%d" % (cur + 1)
+	_refresh_help()
+	if nav_zone != 1 and nav_rows[nav_zone][nav_i].disabled:
+		_focus_zone(nav_zone, nav_i)
 
 
 func _move_selection(step: int) -> void:
@@ -289,34 +310,102 @@ func open_settings() -> void:
 		return
 	settings_overlay = SettingsMenu.new()
 	add_child(settings_overlay)
-	settings_overlay.closed.connect(func(): settings_overlay = null)
+	settings_overlay.closed.connect(func():
+		settings_overlay = null
+		if nav_zone == 0:
+			gfx_btn.grab_focus())
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if settings_overlay:
+## RF-240/241: toda a navegação do menu passa por aqui (antes da GUI), então funciona igual
+## no teclado e no controle e não depende de foco de mouse.
+func _input(event: InputEvent) -> void:
+	if settings_overlay or started:
 		return
-	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
-		get_tree().change_scene_to_file("res://scenes/intro.tscn")  # RF-103
-		return
-	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_BACKSPACE:
-		if not picks.is_empty():
-			selected = picks.pop_back()
-			_refresh()
-		return
-	if event.is_action_pressed("ui_right"):
-		_move_selection(1)
+	var game := get_node_or_null("/root/Game")
+	if game:
+		game.note_device(event)  # o menu consome o evento antes do Game ver
+	if GameScript.is_back(event):
+		_back()
+	elif event.is_action_pressed("ui_right"):
+		_nav(1, 0)
 	elif event.is_action_pressed("ui_left"):
-		_move_selection(-1)
+		_nav(-1, 0)
 	elif event.is_action_pressed("ui_down"):
-		_move_selection(4)
+		_nav(0, 1)
 	elif event.is_action_pressed("ui_up"):
-		_move_selection(-4)
-	elif event.is_action_pressed("ui_accept"):
-		_confirm()
-		return
+		_nav(0, -1)
+	elif GameScript.is_accept(event):
+		if nav_zone == 1:
+			_confirm()
+		else:
+			var b: Button = nav_rows[nav_zone][nav_i]
+			if not b.disabled:
+				b.pressed.emit()
 	else:
 		return
-	_refresh()
+	get_viewport().set_input_as_handled()
+
+
+func _back() -> void:
+	if not picks.is_empty():
+		selected = picks.pop_back()
+		_focus_zone(1)
+		_refresh()
+	elif nav_zone != 1:
+		_focus_zone(1)
+	elif start_scene:
+		get_tree().change_scene_to_file("res://scenes/intro.tscn")  # RF-103
+
+
+func _nav(dx: int, dy: int) -> void:
+	if nav_zone == 1:
+		if dx != 0:
+			_move_selection(dx)
+		elif dy < 0 and selected < 4:
+			_focus_zone(0, 0 if selected % 4 < 2 else 1)
+		elif dy > 0 and selected >= 4:
+			_focus_zone(2, [0, 1, 3, 4][selected % 4])
+		else:
+			selected = (selected + 4 * dy + 8) % 8
+			if picks.has(selected):
+				_move_selection(1)
+		_refresh()
+		return
+	if dy != 0:
+		if (nav_zone == 0 and dy > 0) or (nav_zone == 2 and dy < 0):
+			_focus_zone(1)
+		return
+	var row: Array = nav_rows[nav_zone]
+	for t in row.size():
+		nav_i = (nav_i + dx + row.size()) % row.size()
+		if not row[nav_i].disabled:
+			break
+	row[nav_i].grab_focus()
+
+
+## Põe o foco numa linha (pulando botão desativado) ou volta pras cartas.
+func _focus_zone(zone: int, i := 0) -> void:
+	nav_zone = zone
+	if zone == 1:
+		var f := get_viewport().gui_get_focus_owner()
+		if f:
+			f.release_focus()
+		return
+	var row: Array = nav_rows[zone]
+	nav_i = clampi(i, 0, row.size() - 1)
+	for t in row.size():
+		if not row[nav_i].disabled:
+			break
+		nav_i = (nav_i + 1) % row.size()
+	row[nav_i].grab_focus()
+	nav_zone = zone
+
+
+func _refresh_help() -> void:
+	var game := get_node_or_null("/root/Game")
+	var kbd := "Setas: navegar · Enter: confirmar · Esc/Backspace: voltar · J1 = WASD/controle 1 · J2 = setas/controle 2 · J3/J4 = controles 3/4 · M: som"
+	var pad := "Direcional: navegar · A: confirmar · B: voltar · cada jogador usa o seu controle (1 a 4)"
+	help.text = game.hint(kbd, pad) if game else kbd
 
 
 func _confirm() -> void:
@@ -338,4 +427,6 @@ func _confirm() -> void:
 		else:
 			game.mode = MODE_IDS[mode_i]
 		game.difficulty = diff_i
-	get_tree().change_scene_to_file("res://scenes/race.tscn")
+	started = true
+	if start_scene:
+		get_tree().change_scene_to_file("res://scenes/race.tscn")

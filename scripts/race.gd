@@ -187,7 +187,7 @@ func _build_pause() -> void:
 	title.add_theme_color_override("font_outline_color", Color.BLACK)
 	title.add_theme_constant_override("outline_size", 10)
 	vb.add_child(title)
-	var opts := [["Continuar", toggle_pause], ["Configurações", open_settings], ["Reiniciar (R)", restart], ["Menu", to_menu]]
+	var opts := [["Continuar", toggle_pause], ["Configurações", open_settings], ["Reiniciar (R)", restart], ["Menu", menu_from_pause]]
 	for o in opts:
 		var b := Button.new()
 		b.text = o[0]
@@ -198,11 +198,92 @@ func _build_pause() -> void:
 		if pause_resume_btn == null:
 			GameScript.make_primary(b)
 			pause_resume_btn = b
+	_build_confirm()
 	var hint := Label.new()
 	hint.text = "M: liga/desliga o som"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.modulate = Color(1, 1, 1, 0.7)
 	vb.add_child(hint)
+	_theme_pause(pause_layer)
+
+
+## CanvasLayer não herda o tema da janela: aplica o tema do jogo (Kenney) no pause.
+func _theme_pause(n: Node) -> void:
+	var game := get_node_or_null("/root/Game")
+	if game == null or game.theme == null:
+		return
+	for c in n.get_children():
+		if c is Control:
+			c.theme = game.theme
+
+
+# ---------------------------------------------------------------- confirmação de abandonar o GP (RF-243)
+
+var confirm_box: Control
+var confirm_no_btn: Button
+var confirm_yes_btn: Button
+
+
+func _build_confirm() -> void:
+	confirm_box = ColorRect.new()
+	confirm_box.color = Color(0, 0, 0, 0.6)
+	confirm_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	confirm_box.visible = false
+	pause_layer.add_child(confirm_box)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	confirm_box.add_child(center)
+	var panel := PanelContainer.new()
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.07, 0.08, 0.14)
+	st.set_corner_radius_all(14)
+	st.set_border_width_all(3)
+	st.border_color = Color(1.0, 0.82, 0.2, 0.8)
+	st.set_content_margin_all(26)
+	panel.add_theme_stylebox_override("panel", st)
+	center.add_child(panel)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 18)
+	panel.add_child(vb)
+	var q := Label.new()
+	q.text = "ABANDONAR O GRAND PRIX?"
+	q.add_theme_font_size_override("font_size", 36)
+	q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(q)
+	var sub := Label.new()
+	sub.text = "Os pontos desse GP vão ser perdidos."
+	sub.modulate = Color(1, 1, 1, 0.75)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(sub)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 20)
+	vb.add_child(row)
+	confirm_yes_btn = Button.new()
+	confirm_yes_btn.text = "SIM, SAIR"
+	confirm_yes_btn.custom_minimum_size = Vector2(220, 56)
+	confirm_yes_btn.pressed.connect(to_menu)
+	row.add_child(confirm_yes_btn)
+	confirm_no_btn = Button.new()
+	confirm_no_btn.text = "NÃO"
+	confirm_no_btn.custom_minimum_size = Vector2(220, 56)
+	GameScript.make_primary(confirm_no_btn)
+	confirm_no_btn.pressed.connect(confirm_no)
+	row.add_child(confirm_no_btn)
+
+
+## Botão Menu do pause: no GP pergunta antes.
+func menu_from_pause() -> void:
+	if not is_gp():
+		to_menu()
+		return
+	confirm_box.visible = true
+	confirm_no_btn.grab_focus()
+
+
+func confirm_no() -> void:
+	confirm_box.visible = false
+	pause_resume_btn.grab_focus()
 
 
 func toggle_pause() -> void:
@@ -300,6 +381,7 @@ func open_settings() -> void:
 		return
 	settings_overlay = SettingsMenu.new()
 	pause_layer.add_child(settings_overlay)
+	_theme_pause(pause_layer)
 	settings_overlay.closed.connect(func():
 		settings_overlay = null
 		pause_resume_btn.grab_focus())
@@ -308,7 +390,14 @@ func open_settings() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if settings_overlay:
 		return
+	if confirm_box and confirm_box.visible:
+		if GameScript.is_back(event):
+			confirm_no()
+			get_viewport().set_input_as_handled()
+		return
 	var pause_pressed := false
+	if (paused or results_shown) and GameScript.is_back(event):  # RF-241: B / Backspace
+		pause_pressed = true
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
 			pause_pressed = true

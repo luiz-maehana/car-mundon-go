@@ -224,6 +224,13 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-233** **Fantasma**: a posição/direção do jogador é gravada a cada 0.1 s; a melhor corrida da pista vira um kart translúcido que repete o percurso (interpolado) nas próximas tentativas. Também aparece como bolinha azul no minimapa.
 - [x] **RF-234** Resultado do contra o relógio: tempo total, tempo de cada volta, melhor volta, comparação com o recorde e "NOVO RECORDE!" quando bate; botões `TENTAR DE NOVO (R)` e `MENU`.
 
+### UI/UX robusta (v0.17)
+- [x] **RF-240** Menu 100% navegável por teclado e controle, sem mouse: linha de cima (`MODO`, `CONFIGURAÇÕES`) ↑ cartas dos pilotos ↓ linha de opções (`JOGADORES`, `VOLTAS`, `IA`, `PISTA`, `CORRER!`). Setas/direcional/analógico movem o foco (botões desativados são pulados), Enter/A aperta. O botão focado fica destacado. A/B do controle entram no `ui_accept`/`ui_cancel` (o Godot não traz por padrão), então todo botão focado funciona no controle; o foco no botão do resultado só chega 0,8 s depois (quem segura A pra acelerar não reinicia sem querer). O pause usa o tema do jogo.
+- [x] **RF-241** "Voltar" igual em todas as telas: Esc / Backspace / B. No menu: desfaz o último piloto confirmado → senão volta o foco pras cartas → senão vai pra abertura. No pause: continua a corrida. Na tela de resultado e no pódio do GP: menu. Nas configurações: fecha.
+- [x] **RF-242** As dicas de controle (rodapé do menu e da corrida) mostram teclas do teclado ou botões do controle conforme o último dispositivo usado, trocando na hora.
+- [x] **RF-243** No Grand Prix, `Menu` no pause pede confirmação ("Abandonar o Grand Prix?" SIM / NÃO, foco no NÃO).
+- [x] **RF-244** Nada de interface sai da tela: menu, resultado (corrida e contra o relógio), pause e configurações cabem em 16:9, 4:3 e 21:9.
+
 ## 5. Controles
 
 | Ação | Jogador 1 (teclado) | Jogador 2 (teclado) | Controle (J1..J4 = controle 1..4) |
@@ -261,6 +268,7 @@ tests/run_tests.gd                             testes headless
 scripts/records.gd                             recordes e fantasma do contra o relógio (user://records.cfg)
 tools/screenshot.gd                            prints do menu/corrida para revisão visual
 tools/screenshot_tt.gd                         prints do contra o relógio (usa recordes à parte)
+tools/screenshot_ui.gd                         prints da navegação por controle (menu, pause, confirmação do GP)
 ```
 
 **Modelo de pista:** a linha central é amostrada a cada 2 m (`points`, `tangents`, `rights`). Todo kart guarda o índice da amostra mais próxima (busca local numa janela) e a distância lateral. Isso resolve sem motor de física: grama (`|lateral| > 8`), muro (`|lateral| > 15`), progresso/voltas e mira da IA.
@@ -315,6 +323,11 @@ tools/screenshot_tt.gd                         prints do contra o relógio (usa 
 - [x] **CA-43** Recordes: gravar e ler devolve os mesmos tempos; só um tempo melhor substitui o recorde.
 - [x] **CA-44** Corrida contra o relógio tem 1 kart, nenhuma caixa e o jogador com Queijo Triplo após o VAI!; termina e registra o recorde e as voltas.
 - [x] **CA-45** O fantasma grava a corrida e, na tentativa seguinte, passa pelos mesmos pontos nos mesmos tempos (erro < 1 m).
+- [x] **CA-46** Só com eventos de controle (direcional + A) dá pra trocar modo, voltas, IA e pista, abrir e fechar as configurações e começar a corrida.
+- [x] **CA-47** B no menu desfaz o piloto, depois sai das opções, depois vai pra abertura; B no pause continua a corrida.
+- [x] **CA-48** Um evento de controle troca as dicas pra botões; uma tecla volta pro teclado.
+- [x] **CA-49** Em 1280×720, 1024×768 e 2560×1080 todos os botões e painéis das telas ficam dentro da área visível.
+- [x] **CA-50** Menu no pause do GP abre a confirmação; NÃO fecha e mantém o GP; SIM vai pro menu.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

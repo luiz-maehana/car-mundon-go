@@ -72,7 +72,8 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
+	if GameScript.is_back(event):  # RF-241
+		get_viewport().set_input_as_handled()
 		_to_menu()
 
 

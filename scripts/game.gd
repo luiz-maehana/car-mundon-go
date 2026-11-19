@@ -16,6 +16,10 @@ var muted := false
 var music: AudioStreamPlayer
 var current_music := ""
 
+## RF-242: último dispositivo usado ("kbd" | "pad"); as dicas da tela seguem ele.
+signal input_device_changed(device: String)
+var last_device := "kbd"
+
 # ---------------------------------------------------------------- configurações (RF-180..185)
 
 const SETTINGS_PATH := "user://settings.cfg"
@@ -63,6 +67,39 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_M:
 		toggle_mute()
+	note_device(event)
+
+
+func note_device(event: InputEvent) -> void:
+	var dev := ""
+	if event is InputEventKey and event.pressed:
+		dev = "kbd"
+	elif (event is InputEventJoypadButton and event.pressed) or (event is InputEventJoypadMotion and absf(event.axis_value) > 0.5):
+		dev = "pad"
+	if dev != "" and dev != last_device:
+		last_device = dev
+		input_device_changed.emit(dev)
+
+
+## RF-241: "voltar" = Esc / Backspace / B do controle.
+static func is_back(event: InputEvent) -> bool:
+	if event is InputEventKey:
+		return event.pressed and not event.echo and event.physical_keycode in [KEY_ESCAPE, KEY_BACKSPACE]
+	if event is InputEventJoypadButton:
+		return event.pressed and event.button_index == JOY_BUTTON_B
+	return false
+
+
+## RF-240: "confirmar" = ui_accept (Enter/Espaço) ou A do controle.
+static func is_accept(event: InputEvent) -> bool:
+	if event is InputEventJoypadButton:
+		return event.pressed and event.button_index == JOY_BUTTON_A
+	return event.is_action_pressed("ui_accept")
+
+
+## RF-242: texto de dica conforme o dispositivo.
+func hint(kbd: String, pad: String) -> String:
+	return pad if last_device == "pad" else kbd
 
 
 func toggle_mute() -> void:
@@ -75,6 +112,17 @@ static func action(player: int, name: String) -> String:
 
 
 static func setup_inputs() -> void:
+	# RF-240: o Godot não põe botão de controle no ui_accept/ui_cancel — A confirma e B volta em toda tela
+	for pair in [["ui_accept", JOY_BUTTON_A], ["ui_cancel", JOY_BUTTON_B]]:
+		var has := false
+		for ev in InputMap.action_get_events(pair[0]):
+			if ev is InputEventJoypadButton and ev.button_index == pair[1]:
+				has = true
+		if not has:
+			var jb := InputEventJoypadButton.new()
+			jb.button_index = pair[1]
+			jb.device = -1
+			InputMap.action_add_event(pair[0], jb)
 	# teclado: J1 = WASD, J2 = setas (location diferencia Shift/Ctrl esquerdo e direito)
 	var keys := {
 		0: {

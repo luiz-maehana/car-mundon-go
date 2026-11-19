@@ -45,6 +45,8 @@ func _run() -> void:
 	await _test_smart_ai()
 	_test_music()
 	await _test_time_trial()
+	await _test_ui_nav()
+	await _test_layout()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])
 	quit(1 if fails > 0 else 0)
 
@@ -1056,3 +1058,231 @@ func _test_time_trial() -> void:
 	Records.clear_all()
 	Records.path = Records.DEFAULT_PATH
 	await process_frame
+
+
+func _pad(button: int) -> InputEvent:
+	var e := InputEventJoypadButton.new()
+	e.button_index = button
+	e.pressed = true
+	e.device = 0
+	return e
+
+
+func _key(code: int) -> InputEvent:
+	var e := InputEventKey.new()
+	e.physical_keycode = code
+	e.keycode = code
+	e.pressed = true
+	return e
+
+
+func _new_menu() -> Node:
+	var menu = load("res://scenes/menu.tscn").instantiate()
+	menu.start_scene = false
+	root.add_child(menu)
+	await process_frame
+	return menu
+
+
+func _test_ui_nav() -> void:
+	var game = root.get_node_or_null("Game")
+	if game == null:
+		return
+	game.mode = "race"
+	game.num_players = 1
+	game.laps = 3
+	game.track_id = "queijo"
+	game.difficulty = 1
+	print("CA-46 menu só com controle")
+	check(_pad(JOY_BUTTON_A).is_action_pressed("ui_accept") and _pad(JOY_BUTTON_B).is_action_pressed("ui_cancel"), "A = ui_accept e B = ui_cancel (botões focados funcionam no controle)")
+	var menu = await _new_menu()
+	var up := JOY_BUTTON_DPAD_UP
+	var down := JOY_BUTTON_DPAD_DOWN
+	var right := JOY_BUTTON_DPAD_RIGHT
+	var a := JOY_BUTTON_A
+	# cartas -> opções (fileira de baixo leva pra linha de opções)
+	menu._input(_pad(down))
+	menu._input(_pad(down))
+	check(menu.nav_zone == 2 and menu.get_viewport().gui_get_focus_owner() == menu.nav_rows[2][menu.nav_i], "↓↓ leva o foco pra linha de opções")
+	menu._focus_zone(2, 1)  # VOLTAS
+	var laps0: int = menu.laps_i
+	menu._input(_pad(a))
+	check(menu.laps_i == (laps0 + 1) % menu.LAP_OPTIONS.size(), "A em VOLTAS troca as voltas")
+	menu._input(_pad(right))
+	var diff0: int = menu.diff_i
+	menu._input(_pad(a))
+	check(menu.nav_i == 2 and menu.diff_i != diff0, "→ vai pra IA e A troca a dificuldade")
+	menu._input(_pad(right))
+	var tr0: int = menu.track_i
+	menu._input(_pad(a))
+	check(menu.track_i != tr0, "→ PISTA e A troca a pista")
+	menu._input(_pad(up))
+	check(menu.nav_zone == 1, "↑ volta pras cartas")
+	menu._input(_pad(up))
+	menu._input(_pad(up))
+	check(menu.nav_zone == 0, "↑ da fileira de cima vai pra MODO/CONFIGURAÇÕES")
+	menu._focus_zone(0, 0)
+	menu._input(_pad(a))
+	menu._input(_pad(a))
+	check(menu.MODE_IDS[menu.mode_i] == "tt" and menu.players_btn.disabled, "A em MODO chega no CONTRA O RELÓGIO (JOGADORES travado)")
+	menu._input(_pad(right))
+	menu._input(_pad(a))
+	check(menu.settings_overlay != null, "A em CONFIGURAÇÕES abre a tela")
+	if menu.settings_overlay:
+		menu.settings_overlay._unhandled_input(_pad(JOY_BUTTON_B))
+	await process_frame
+	check(menu.settings_overlay == null, "B fecha as configurações")
+	menu._focus_zone(2, 0)
+	check(menu.nav_rows[2][menu.nav_i] != menu.players_btn, "foco pula botão desativado")
+	menu._focus_zone(2, 4)
+	menu._input(_pad(a))
+	check(menu.started and game.is_tt() and game.track_id == menu.TrackScript.TRACKS[menu.track_i]["id"], "A em CORRER! começa (modo %s, pista %s)" % [game.mode, game.track_id])
+	menu.queue_free()
+	await process_frame
+
+	print("CA-47 voltar (B)")
+	game.mode = "race"
+	game.num_players = 2
+	menu = await _new_menu()
+	menu._input(_pad(a))
+	check(menu.picks.size() == 1, "J1 confirmou")
+	menu._input(_pad(JOY_BUTTON_B))
+	check(menu.picks.is_empty() and menu.nav_zone == 1, "B desfaz o piloto")
+	menu._focus_zone(2, 1)
+	menu._input(_pad(JOY_BUTTON_B))
+	check(menu.nav_zone == 1 and menu.get_viewport().gui_get_focus_owner() == null, "B sai das opções pras cartas")
+	menu.queue_free()
+	game.num_players = 1
+	await process_frame
+	var race = await _new_race(["nanni"], true)
+	race.toggle_pause()
+	race._unhandled_input(_pad(JOY_BUTTON_B))
+	check(not race.paused, "B no pause continua a corrida")
+	race.queue_free()
+	await process_frame
+
+	print("CA-48 dicas por dispositivo")
+	game.note_device(_key(KEY_W))
+	menu = await _new_menu()
+	var kbd_text: String = menu.help.text
+	game.note_device(_pad(a))
+	check(game.last_device == "pad" and menu.help.text != kbd_text and "A:" in menu.help.text, "controle → dicas de botão")
+	game.note_device(_key(KEY_W))
+	check(game.last_device == "kbd" and menu.help.text == kbd_text, "tecla → dicas de teclado")
+	menu.queue_free()
+	await process_frame
+	race = await _new_race(["nanni"], true)
+	game.note_device(_pad(a))
+	check(race.huds[0].lbl_hint.text.begins_with("Analógico"), "dica da corrida muda pro controle")
+	game.note_device(_key(KEY_W))
+	race.queue_free()
+	await process_frame
+
+	print("CA-50 confirmação ao sair do GP")
+	game.start_gp()
+	game.laps = 1
+	race = load("res://scripts/race.gd").new()
+	race.autopilot_player = true
+	race.player_chars = ["nanni"]
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	race.toggle_pause()
+	race.menu_from_pause()
+	check(race.confirm_box.visible and race.get_viewport().gui_get_focus_owner() == race.confirm_no_btn, "Menu no pause do GP pergunta (foco no NÃO)")
+	race._unhandled_input(_pad(JOY_BUTTON_B))
+	check(not race.confirm_box.visible and race.paused and game.is_gp(), "B/NÃO fecha e o GP continua")
+	var conns: Array = race.confirm_yes_btn.pressed.get_connections()
+	check(conns.any(func(c): return c["callable"].get_method() == "to_menu"), "SIM vai pro menu")
+	race.queue_free()
+	game.mode = "race"
+	game.laps = 3
+	await process_frame
+
+
+## CA-49: tudo dentro da área visível em 16:9, 4:3 e 21:9 (tamanho lógico com stretch "expand").
+func _all_inside(n: Node, area: Rect2, bad: Array) -> void:
+	if n is Control and n.is_visible_in_tree() and (n is Button or n is PanelContainer or n is Label):
+		var r: Rect2 = n.get_global_rect()
+		if r.size.x > 0.0 and not area.grow(1.0).encloses(r):
+			bad.append("%s '%s' %s" % [n.get_class(), (n.text if "text" in n else n.name), r])
+	for c in n.get_children():
+		_all_inside(c, area, bad)
+
+
+func _test_layout() -> void:
+	print("CA-49 interface dentro da tela")
+	var game = root.get_node_or_null("Game")
+	for sz in [Vector2(1280, 720), Vector2(1280, 960), Vector2(1707, 720)]:
+		var label := "%dx%d" % [sz.x, sz.y]
+		for mode in ["race", "gp", "tt"]:
+			if game:
+				game.mode = mode
+			var box := Control.new()
+			box.size = sz
+			root.add_child(box)
+			var menu = load("res://scenes/menu.tscn").instantiate()
+			menu.start_scene = false
+			box.add_child(menu)
+			for t in menu.TrackScript.TRACKS.size():  # o nome de pista mais longo
+				if menu.TrackScript.TRACKS[t]["name"].length() > menu.TrackScript.TRACKS[menu.track_i]["name"].length():
+					menu.track_i = t
+			menu._refresh()
+			await process_frame
+			await process_frame
+			var bad := []
+			_all_inside(menu, Rect2(Vector2.ZERO, sz), bad)
+			check(bad.is_empty(), "menu (%s) em %s %s" % [mode, label, str(bad.slice(0, 3))])
+			if mode == "race":
+				menu.open_settings()
+				await process_frame
+				await process_frame
+				bad = []
+				_all_inside(menu.settings_overlay, Rect2(Vector2.ZERO, sz), bad)
+				check(bad.is_empty(), "configurações em %s %s" % [label, str(bad.slice(0, 3))])
+			box.queue_free()
+			await process_frame
+	if game:
+		game.mode = "race"
+	# resultados (corrida e contra o relógio) e pause na tela real
+	var Records = load("res://scripts/records.gd")
+	Records.path = "user://test_records.cfg"
+	for tt in [false, true]:
+		var race = load("res://scripts/race.gd").new()
+		race.use_game_settings = false
+		race.autopilot_player = true
+		race.time_trial = tt
+		race.player_chars = ["digao"]
+		race.laps = 2
+		root.add_child(race)
+		if race.karts.is_empty():
+			await process_frame
+		race.toggle_pause()
+		await process_frame
+		var area: Rect2 = race.get_viewport().get_visible_rect()
+		var bad := []
+		if game:
+			game.note_device(_pad(JOY_BUTTON_A))
+			await process_frame
+			_all_inside(race.huds[0].root, area, bad)
+			check(bad.is_empty(), "HUD com dicas de controle dentro da tela %s" % str(bad.slice(0, 3)))
+			game.note_device(_key(KEY_W))
+			bad = []
+		_all_inside(race.pause_layer, area, bad)
+		check(bad.is_empty(), "pause dentro da tela %s" % str(bad.slice(0, 3)))
+		race.toggle_pause()
+		while not race.results_shown:
+			race.step(1.0 / 60.0)
+		await process_frame
+		await process_frame
+		bad = []
+		var res: Control = race.results_hud.results
+		var need: Vector2 = res.get_combined_minimum_size()
+		if need.x > 1280.0 or need.y > 720.0:
+			bad.append("painel precisa de %s" % need)
+		_all_inside(res, area, bad)
+		check(bad.is_empty(), "resultado %s dentro da tela (%s) %s" % ["contra o relógio" if tt else "da corrida", area.size, str(bad.slice(0, 3))])
+		race.queue_free()
+		await process_frame
+	Records.clear_all()
+	Records.path = Records.DEFAULT_PATH

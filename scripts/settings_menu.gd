@@ -69,8 +69,8 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if (event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE) \
-			or (event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_B, JOY_BUTTON_START]):
+	if GameScript.is_back(event) \
+			or (event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_START):
 		get_viewport().set_input_as_handled()
 		close()
 

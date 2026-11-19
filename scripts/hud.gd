@@ -50,6 +50,9 @@ var ranking_box: Control
 var lbl_unit: Label
 var boost_fx := 0.0
 var lbl_record: Label
+var lbl_hint: Label
+const HINT_KBD := "WASD/Setas: pilotar · Espaço: drift · E: item · Esc: pausar · M: som"
+const HINT_PAD := "Analógico: pilotar · A: acelerar · B: frear · RB: drift · LB: item · Start: pausar"
 
 
 func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
@@ -216,12 +219,15 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 
 	if show_hint:
 		var hint := _label(16)
-		hint.text = "WASD/Setas: pilotar · Espaço: drift · E: item · Esc: pausar · M: som"
+		lbl_hint = hint
+		refresh_hint()
+		if game:
+			game.input_device_changed.connect(func(_d): refresh_hint())
 		hint.anchor_left = 1.0
 		hint.anchor_right = 1.0
 		hint.anchor_top = 1.0
 		hint.anchor_bottom = 1.0
-		hint.offset_left = -700
+		hint.offset_left = -960
 		hint.offset_right = -20
 		hint.offset_top = -36
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -531,7 +537,7 @@ func show_results() -> void:
 	menu.add_theme_font_size_override("font_size", 22)
 	menu.pressed.connect(race.to_menu)
 	buttons.add_child(menu)
-	again.grab_focus()
+	_focus_later(again)
 
 
 ## RF-73: pódio com o top 3 de corpo inteiro (2º, 1º, 3º).
@@ -670,4 +676,21 @@ func _show_tt_results() -> void:
 	menu.add_theme_font_size_override("font_size", 22)
 	menu.pressed.connect(race.to_menu)
 	buttons.add_child(menu)
-	again.grab_focus()
+	_focus_later(again)
+
+
+## RF-242: dica de controle conforme o último dispositivo.
+func refresh_hint() -> void:
+	if lbl_hint == null:
+		return
+	var game := get_node_or_null("/root/Game")
+	lbl_hint.text = game.hint(HINT_KBD, HINT_PAD) if game else HINT_KBD
+
+
+## Foco no botão do resultado só depois de um instante: quem ainda está segurando
+## A/Enter pra acelerar não reinicia sem querer.
+func _focus_later(b: Button) -> void:
+	b.focus_mode = Control.FOCUS_ALL
+	get_tree().create_timer(0.8).timeout.connect(func():
+		if is_instance_valid(b):
+			b.grab_focus())
