@@ -165,7 +165,10 @@ func _update_cameras(delta: float, snap: bool) -> void:
 		# "pra cima" suavizado: no looping a câmera gira macio, sem tranco na entrada e na saída
 		while cam_ups.size() <= i:
 			cam_ups.append(Vector3.UP)
-		cam_ups[i] = up if snap else (cam_ups[i] as Vector3).slerp(up, 1.0 - exp(-9.0 * delta)).normalized()
+		# lerp + normalizar em vez de slerp: o slerp do Godot soltava ~20 mil "axis must be
+		# normalized" por corrida no looping (imprimir erro custa caro, ainda mais na web)
+		var sm: Vector3 = (cam_ups[i] as Vector3).lerp(up, 1.0 - exp(-9.0 * delta))
+		cam_ups[i] = up if snap or sm.length_squared() < 0.01 else sm.normalized()
 		up = cam_ups[i]
 		var desired: Vector3 = p.position - f * 8.0 + up * 4.1
 		# outro kart colado na câmera: sobe um pouco pra ele não tapar a visão
@@ -204,7 +207,8 @@ func apply_settings() -> void:
 	sun_light.shadow_blur = [0.5, 1.0, 1.5][q]
 	sun_light.directional_shadow_max_distance = [60.0, 100.0, 140.0][q]
 	get_viewport().msaa_3d = Gfx.msaa_for(q)
-	var rs := float(Gfx.setting("render_scale", 1.0))
+	var game_rs := get_node_or_null("/root/Game")
+	var rs: float = game_rs.render_scale_for(get_viewport().get_visible_rect().size) if game_rs else float(Gfx.setting("render_scale", 1.0))
 	for vp in subviewports:
 		vp.msaa_3d = Gfx.msaa_for(q)
 		vp.scaling_3d_scale = rs
@@ -256,7 +260,7 @@ func _warm_up_shaders() -> void:
 	show.name = "Showcase"
 	show.position = Vector3(center.x, hi.y + 20.0, center.z)
 	add_child(show)
-	var things: Array = [Gfx.prop(BANANA_MODEL, 1.5), HazardModels.mousetrap(), HazardModels.cat(), HazardModels.bomb()]
+	var things: Array = [Gfx.prop_merged(BANANA_MODEL, 1.5), Gfx.prop_merged(CHEESE_MODEL, 1.2), HazardModels.mousetrap(), HazardModels.cat(), HazardModels.bomb()]
 	var shield := MeshInstance3D.new()
 	shield.mesh = SphereMesh.new()
 	var shm := ShaderMaterial.new()
@@ -309,3 +313,17 @@ func _end_warm_up(show: Node3D) -> void:
 	if is_instance_valid(warmup):
 		warmup.queue_free()
 		warmup = null
+
+
+# ---------------------------------------------------------------- longe da câmera (RF-484)
+
+const FAR_FROM_CAMERA := 90.0
+
+
+## Está a mais de FAR_FROM_CAMERA de todas as câmeras? Aí não vale a pena girar roda, inclinar,
+## soltar faísca nem rodar caixinha: ninguém enxerga e cada movimento custa no celular.
+func far_from_cameras(p: Vector3) -> bool:
+	for c in cameras:
+		if (c as Node3D).global_position.distance_squared_to(p) < FAR_FROM_CAMERA * FAR_FROM_CAMERA:
+			return false
+	return not cameras.is_empty()

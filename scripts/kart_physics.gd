@@ -424,6 +424,8 @@ func _jump_to(idx: int) -> void:
 	lateral = 0.0
 	if model:
 		model.rotation = Vector3.ZERO
+	m_yaw = 0.0
+	m_roll = 0.0
 	reset_physics_interpolation()
 
 

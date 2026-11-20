@@ -84,17 +84,22 @@ func _power_visuals(delta: float) -> void:
 		add_child(fx_slow)
 	if fx_slow:
 		fx_slow.visible = slow_time > 0.0
-		fx_slow.rotate_y(delta * 6.0)
-		fx_slow.position.y = 1.0 + 0.3 * sin(Time.get_ticks_msec() * 0.01)
+		if fx_slow.visible:
+			fx_slow.rotate_y(delta * 6.0)
+			fx_slow.position.y = 1.0 + 0.3 * sin(Time.get_ticks_msec() * 0.01)
 	if model:
 		var big := 1.35 if ram_time > 0.0 else 1.0
-		model.scale = model.scale.lerp(Vector3.ONE * big, 1.0 - exp(-10.0 * delta))
+		m_scale = lerpf(m_scale, big, 1.0 - exp(-10.0 * delta))  # aplicado no movimento único do modelo (RF-484)
+		if absf(m_scale - big) < 0.002:
+			m_scale = big
 		if ghost_meshes.is_empty():
 			for mi in model.find_children("*", "GeometryInstance3D", true, false):
 				ghost_meshes.append(mi)
 		var tr := 0.65 if ghost_time > 0.0 else 0.0
-		for mi in ghost_meshes:
-			(mi as GeometryInstance3D).transparency = tr
+		if tr != ghost_tr:  # RF-484: só quando muda (antes, todas as peças todo passo)
+			ghost_tr = tr
+			for mi in ghost_meshes:
+				(mi as GeometryInstance3D).transparency = tr
 	if power_charges > 0 and fx_plant == null:
 		fx_plant = Node3D.new()
 		fx_plant.name = "Plant"
@@ -128,7 +133,8 @@ func _power_visuals(delta: float) -> void:
 		add_child(fx_plant)
 	if fx_plant:
 		fx_plant.visible = power_charges > 0
-		fx_plant.rotation.y = 0.4 * sin(Time.get_ticks_msec() * 0.006)
+		if fx_plant.visible:
+			fx_plant.rotation.y = 0.4 * sin(Time.get_ticks_msec() * 0.006)
 
 
 func _flat(c: Color) -> StandardMaterial3D:

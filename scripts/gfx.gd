@@ -550,6 +550,81 @@ static func prop(path: String, size: float, by_height := false) -> Node3D:
 	return holder
 
 
+## RF-483: mesmo prop, mas com as peças juntadas numa malha só (uma por material), e a malha
+## guardada: todas as cópias usam a mesma. O queijinho do Food Kit tinha 12 peças: 15 queijos na
+## pista eram 180 objetos pro motor cuidar a cada quadro; agora são 15.
+static func prop_merged(path: String, size: float, by_height := false) -> Node3D:
+	var key := "merged:%s:%s:%s" % [path, size, by_height]
+	if not _cache.has(key):
+		var src := prop(path, size, by_height)
+		_cache[key] = merge_static_mesh(src)
+		src.free()
+	var holder := Node3D.new()
+	holder.name = path.get_file().get_basename()
+	var mi := MeshInstance3D.new()
+	mi.name = "Merged"
+	mi.mesh = _cache[key]
+	holder.add_child(mi)
+	return holder
+
+
+## Junta as malhas de `root` (no espaço dele) numa ArrayMesh com uma superfície por material,
+## mantendo UV, cor de vértice e o próprio material (textura, brilho...).
+static func merge_static_mesh(root: Node3D) -> ArrayMesh:
+	var groups := {}   # material -> arrays
+	var order := []
+	for n in root.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh == null or not mi.visible:
+			continue
+		var xf := mi.transform
+		var p := mi.get_parent()
+		while p != root and p is Node3D:
+			xf = (p as Node3D).transform * xf
+			p = p.get_parent()
+		var nb := xf.basis.inverse().transposed()
+		for s in mi.mesh.get_surface_count():
+			var mat: Material = mi.get_active_material(s)
+			if not groups.has(mat):
+				groups[mat] = {"v": PackedVector3Array(), "n": PackedVector3Array(), "uv": PackedVector2Array(), "c": PackedColorArray(), "i": PackedInt32Array(), "has_c": false}
+				order.append(mat)
+			var g: Dictionary = groups[mat]
+			var a := mi.mesh.surface_get_arrays(s)
+			var verts: PackedVector3Array = a[Mesh.ARRAY_VERTEX]
+			var norms = a[Mesh.ARRAY_NORMAL]
+			var uvs = a[Mesh.ARRAY_TEX_UV]
+			var cols = a[Mesh.ARRAY_COLOR]
+			if cols != null and not (cols as PackedColorArray).is_empty():
+				g["has_c"] = true
+			var base: int = (g["v"] as PackedVector3Array).size()
+			for vi in verts.size():
+				g["v"].append(xf * verts[vi])
+				g["n"].append((nb * (norms as PackedVector3Array)[vi]).normalized() if norms != null and vi < (norms as PackedVector3Array).size() else Vector3.UP)
+				g["uv"].append((uvs as PackedVector2Array)[vi] if uvs != null and vi < (uvs as PackedVector2Array).size() else Vector2.ZERO)
+				g["c"].append((cols as PackedColorArray)[vi] if cols != null and vi < (cols as PackedColorArray).size() else Color.WHITE)
+			var idx = a[Mesh.ARRAY_INDEX]
+			if idx == null or (idx as PackedInt32Array).is_empty():
+				for vi in verts.size():
+					g["i"].append(base + vi)
+			else:
+				for ii in (idx as PackedInt32Array):
+					g["i"].append(base + ii)
+	var am := ArrayMesh.new()
+	for mat in order:
+		var g: Dictionary = groups[mat]
+		var arr := []
+		arr.resize(Mesh.ARRAY_MAX)
+		arr[Mesh.ARRAY_VERTEX] = g["v"]
+		arr[Mesh.ARRAY_NORMAL] = g["n"]
+		arr[Mesh.ARRAY_TEX_UV] = g["uv"]
+		if g["has_c"]:
+			arr[Mesh.ARRAY_COLOR] = g["c"]
+		arr[Mesh.ARRAY_INDEX] = g["i"]
+		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+		am.surface_set_material(am.get_surface_count() - 1, mat)
+	return am
+
+
 ## RF-175: a marca fictícia do Racing Kit ("TANKCO") vira ZAWSZE, a marca do jogo.
 const BRAND_TEX := "res://assets/brand/zawsze_banner.png"
 

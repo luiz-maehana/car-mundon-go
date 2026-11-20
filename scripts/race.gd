@@ -10,7 +10,7 @@ extends "res://scripts/race_modes.gd"
 
 func _ready() -> void:
 	var game := get_node_or_null("/root/Game")
-	if game and game.has_method("hide_loading"):
+	if game and game.has_method("hide_loading") and not get_tree().process_frame.is_connected(game.hide_loading):
 		get_tree().process_frame.connect(game.hide_loading, CONNECT_ONE_SHOT)  # RF-350: tira o "Carregando"
 	if use_game_settings and game:
 		player_chars = game.selected_chars.slice(0, game.num_players)
@@ -39,7 +39,7 @@ func _ready() -> void:
 		_tt_setup()
 	_build_views()
 	if DisplayServer.get_name() != "headless":  # [carga]: diagnóstico no console do navegador
-		print("[carga] %s (gráfico %d, sombra %s): traçado %d ms · malhas %d ms · karts %d ms · resto %d ms" % [track_id, Gfx.quality(), sun_light.shadow_enabled, t_path - t0, t_track - t_path, t_karts - t_track, Time.get_ticks_msec() - t_karts])
+		print("[carga] %s (gráfico %d, sombra %s, 3D a %.2f): traçado %d ms · malhas %d ms · karts %d ms · resto %d ms" % [track_id, Gfx.quality(), sun_light.shadow_enabled, get_viewport().scaling_3d_scale, t_path - t0, t_track - t_path, t_karts - t_track, Time.get_ticks_msec() - t_karts])
 	_update_cameras(1.0, true)
 	if audio_enabled:
 		_build_audio()

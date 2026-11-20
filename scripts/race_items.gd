@@ -103,7 +103,7 @@ func _update_slipstream(delta: float) -> void:
 func _spawn_cheese() -> void:
 	# RF-172: queijo do Food Kit (Kenney)
 	for p in track.cheese_positions():
-		var node := Gfx.prop(CHEESE_MODEL, 1.2)
+		var node := Gfx.prop_merged(CHEESE_MODEL, 1.2)  # RF-483: 12 peças viram 1
 		node.position = p - Vector3.UP * 0.35
 		add_child(node)
 		cheeses.append({"node": node, "pos": p, "cd": 0.0})
@@ -112,7 +112,8 @@ func _spawn_cheese() -> void:
 func _update_cheese(delta: float) -> void:
 	for c in cheeses:
 		var node: Node3D = c["node"]
-		node.rotate_y(delta * 2.0)
+		if node.visible and not far_from_cameras(c["pos"]):
+			node.rotate_y(delta * 2.0)  # RF-484: só gira perto da câmera
 		if c["cd"] > 0.0:
 			c["cd"] -= delta
 			if c["cd"] <= 0.0:
@@ -134,7 +135,8 @@ func _update_cheese(delta: float) -> void:
 func _update_boxes(delta: float) -> void:
 	for b in boxes:
 		var node: Node3D = b["node"]
-		node.rotate_y(delta * 1.5)
+		if node.visible and not far_from_cameras(b["pos"]):
+			node.rotate_y(delta * 1.5)  # RF-484: só gira perto da câmera
 		if b["cd"] > 0.0:
 			b["cd"] -= delta
 			if b["cd"] <= 0.0:
@@ -239,7 +241,7 @@ func _spawn_hazard(type: String, pos: Vector3, v: Vector3, life: float, owner_ka
 	match type:
 		"casca":
 			# RF-172: banana do Food Kit (Kenney), deitada no chão
-			mi = Gfx.prop(BANANA_MODEL, 1.5)
+			mi = Gfx.prop_merged(BANANA_MODEL, 1.5)  # RF-483
 			mi.rotation.y = randf() * TAU
 			pos.y = track.points[owner_kart.track_idx].y
 		"ratoeira":

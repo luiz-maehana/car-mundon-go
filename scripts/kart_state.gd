@@ -174,6 +174,14 @@ var wheels: Array = []        # MeshInstance3D (giram)
 var front_wheels: Array = []  # MeshInstance3D (esterçam)
 var kart_body: MeshInstance3D
 var driver: Node3D
+var m_yaw := 0.0      # RF-484: giro, inclinação e tamanho do modelo (aplicados num movimento só)
+var m_roll := 0.0
+var m_scale := 1.0
+var ghost_tr := 0.0
+var vis_far := false  # RF-484: longe das câmeras (sem roda, inclinação e faísca)
+const AI_THINK := 0.1  # RF-484: a IA repensa a faixa 10x por segundo (o volante é todo passo)
+var ai_plans := 0  # RF-484: quantas vezes a IA pensou (pros testes)
+var ai_think := -1.0   # tempo até repensar; começa espalhado entre os karts
 var name_label: Label3D
 var wheel_spin := 0.0
 

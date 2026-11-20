@@ -12,6 +12,22 @@ func _ai_input(delta: float) -> void:
 		# RF-213: quem tem mais "foco" troca menos de faixa à toa
 		ai_lane = clampf(lerpf(randf_range(-m, m), ai_lane, ai_focus * 0.6), -m, m)
 		ai_lane_timer = randf_range(2.0, 5.0) * (1.0 + ai_focus)
+	# RF-484: a tática (qual faixa: desvio, caixa, ultrapassagem, barraca) é pensada 10x por segundo,
+	# cada kart num passo diferente; o volante continua a cada passo. Reage em 0,1 s (~3 m), olhando
+	# 30 a 50 m à frente.
+	if ai_think < 0.0:
+		ai_think = randf() * AI_THINK  # cada kart pensa num passo diferente
+	ai_think -= delta
+	if ai_think <= 0.0:
+		ai_think += AI_THINK
+		_ai_plan(n, m)
+	# desviando: olha mais perto pra esterçar mais rápido (RF-210)
+	ai_evading = maxf(0.0, ai_evading - delta)
+	_ai_steer(n)
+
+
+func _ai_plan(n: int, m: float) -> void:
+	ai_plans += 1
 	_ai_tactics(n, m)
 	# RF-371: barracas no meio da pista à frente: escolhe a faixa e fica nela até passar
 	for kk in range(0, 36, 3):
@@ -27,8 +43,9 @@ func _ai_input(delta: float) -> void:
 			ai_lane = (lo + hi) * 0.5
 		ai_lane_timer = maxf(ai_lane_timer, 0.4)
 		break
-	# desviando: olha mais perto pra esterçar mais rápido (RF-210)
-	ai_evading = maxf(0.0, ai_evading - delta)
+
+
+func _ai_steer(n: int) -> void:
 	var look := (3 + int(absf(speed) * 0.12)) if ai_evading > 0.0 else (5 + int(absf(speed) * 0.3))
 	var ti := (track_idx + look) % n
 	# RF-321: o alvo no meio do looping fica "atrás" no plano; mira a entrada dele

@@ -1114,3 +1114,71 @@ func _test_web_perf() -> void:
 	check(race.warmup == null and race.get_node_or_null("Showcase") == null, "o aquecimento some depois de desenhar")
 	race.queue_free()
 	await process_frame
+
+
+func _test_web_pixels_and_props() -> void:
+	print("CA-117 navegador: 3D com teto de pixels e props juntados")
+	var G = load("res://scripts/game.gd")
+	var phone: float = G.capped_scale(1.0, Vector2(2202, 1081), true)
+	check(absf(phone - 0.648) < 0.01, "celular (2202×1081): 3D a %.2f da tela (~1 milhão de pontos)" % phone)
+	check(G.capped_scale(1.0, Vector2(1280, 720), true) == 1.0 and G.capped_scale(1.0, Vector2(2202, 1081), false) == 1.0, "tela pequena e PC instalado: sem corte")
+	check(G.capped_scale(0.5, Vector2(2202, 1081), true) == 0.5, "escala escolhida menor que o teto continua valendo")
+	var race = load("res://scripts/race.gd").new()
+	race.use_game_settings = false
+	race.player_chars = ["nanni"]
+	race.track_id = "queijo"
+	race.laps = 1
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	var c0: Node3D = race.cheeses[0]["node"]
+	var c1: Node3D = race.cheeses[1]["node"]
+	var m0: Array = c0.find_children("*", "MeshInstance3D", true, false)
+	var m1: Array = c1.find_children("*", "MeshInstance3D", true, false)
+	check(c0.name == "cheese" and m0.size() == 1 and m1.size() == 1 and m0[0].mesh == m1[0].mesh, "queijinho numa malha só, a mesma em todas as cópias (%d peças)" % m0.size())
+	var mat: Material = m0[0].mesh.surface_get_material(0)
+	check(mat != null and m0[0].mesh.get_aabb().size.length() > 0.5, "malha juntada mantém material e tamanho")
+	check(race.find_children("*", "VisualInstance3D", true, false).size() < 320, "corrida com menos de 320 objetos visuais (%d; eram ~440)" % race.find_children("*", "VisualInstance3D", true, false).size())
+	race.queue_free()
+	await process_frame
+
+
+func _test_ai_think_and_far_karts() -> void:
+	print("CA-118 IA pensa 10x/s e kart longe da câmera não anima")
+	var race = load("res://scripts/race.gd").new()
+	race.use_game_settings = false
+	race.audio_enabled = false
+	race.player_chars = ["nanni"]
+	race.track_id = "queijo"
+	race.laps = 1
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	race.set_physics_process(false)
+	race.set_process(false)
+	var dt := 1.0 / 60.0
+	while race.state == "countdown":
+		race.step(dt)
+	for k in race.karts:
+		k.ai_plans = 0
+	for i in 120:  # 2 s de corrida
+		race.step(dt)
+	var lo := 999
+	var hi := 0
+	for k in race.karts:
+		if k != race.players[0]:
+			lo = mini(lo, k.ai_plans)
+			hi = maxi(hi, k.ai_plans)
+	check(lo >= 18 and hi <= 22, "em 2 s cada IA pensou ~20 vezes (de %d a %d)" % [lo, hi])
+	var far_k: Node3D = race.karts[0] if race.karts[0] != race.players[0] else race.karts[1]
+	var cam: Node3D = race.cameras[0]
+	far_k.position = cam.global_position + Vector3(400.0, 0.0, 0.0)
+	race.step(dt)
+	var sparks_off := true
+	for s in far_k.sparks:
+		sparks_off = sparks_off and not s.emitting
+	check(race.far_from_cameras(far_k.position) and far_k.vis_far, "kart a 400 m da câmera fica em modo longe")
+	check(sparks_off and not far_k.p_flame.emitting and not far_k.p_dust.emitting, "longe da câmera: faísca, fogo e poeira desligados")
+	check(not race.players[0].vis_far, "o kart do jogador continua animado")
+	race.queue_free()
+	await process_frame

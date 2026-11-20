@@ -243,32 +243,43 @@ func _update_visuals(delta: float) -> void:
 	# RF-312: depois do resgate o kart pisca enquanto nada acerta
 	model.visible = rescue_ghost <= 0.0 or fmod(rescue_ghost, 0.16) > 0.08
 	_power_visuals(delta)
-	var yaw := 0.0
+	# manobra no ar e pulinho: os tempos andam sempre (mesmo longe da câmera)
+	if trick_spin > 0.0:
+		trick_spin = maxf(0.0, trick_spin - delta * TAU * 2.2)
+	if hop_time > 0.0:
+		hop_time -= delta
+	# RF-484: longe de todas as câmeras ninguém vê roda, inclinação nem faísca; só o kart anda
+	var far: bool = race != null and race.has_method("far_from_cameras") and race.far_from_cameras(position)
+	if far:
+		if not vis_far:
+			vis_far = true
+			for s in sparks:
+				s.emitting = false
+			p_flame.emitting = false
+			p_dust.emitting = false
+			for f in flames:
+				f.visible = false
+		return
+	vis_far = false
 	if spin_time > 0.0:
-		yaw = model.rotation.y + 14.0 * delta
+		m_yaw += 14.0 * delta
 	elif drifting:
-		yaw = lerp_angle(model.rotation.y, drift_dir * -0.4, 1.0 - exp(-10.0 * delta))
+		m_yaw = lerp_angle(m_yaw, drift_dir * -0.4, 1.0 - exp(-10.0 * delta))
 	else:
-		yaw = lerp_angle(model.rotation.y, 0.0, 1.0 - exp(-8.0 * delta))
-	model.rotation.y = yaw
+		m_yaw = lerp_angle(m_yaw, 0.0, 1.0 - exp(-8.0 * delta))
 	# RF-145: inclinação na curva, tremida na grama, rodas girando e esterçando
 	var spd01 := clampf(absf(speed) / 30.0, 0.0, 1.0)
-	model.rotation.z = lerpf(model.rotation.z, -in_steer * 0.09 * spd01 - (drift_dir * 0.06 if drifting else 0.0), 1.0 - exp(-8.0 * delta))
+	m_roll = lerpf(m_roll, -in_steer * 0.09 * spd01 - (drift_dir * 0.06 if drifting else 0.0), 1.0 - exp(-8.0 * delta))
 	var shake := 0.0
 	if not airborne and absf(lateral) > track.road_half(track_idx) + TrackScript.CURB and absf(speed) > 4.0:
 		shake = randf_range(-0.04, 0.04)
+	var py := shake + (sin((1.0 - hop_time / 0.25) * PI) * 0.45 if hop_time > 0.0 else 0.0)
+	# RF-484: um movimento só por passo (antes eram 4: giro, inclinação, manobra e pulo, e cada um
+	# era repassado pras ~20 peças do kart)
+	model.transform = Transform3D(Basis.from_euler(Vector3(-trick_spin, m_yaw, m_roll)) * Basis.from_scale(Vector3.ONE * m_scale), Vector3(model.position.x, py, model.position.z))
 	wheel_spin = fmod(wheel_spin + speed * delta / (0.21 * KART_SCALE), TAU)
 	for w in wheels:
 		w.rotation = Vector3(wheel_spin, -in_steer * 0.45 if front_wheels.has(w) else 0.0, 0.0)
-	# manobra no ar: um giro completo no eixo X
-	if trick_spin > 0.0:
-		trick_spin = maxf(0.0, trick_spin - delta * TAU * 2.2)
-	model.rotation.x = -trick_spin
-	if hop_time > 0.0:
-		hop_time -= delta
-		model.position.y = sin((1.0 - hop_time / 0.25) * PI) * 0.45 + shake
-	else:
-		model.position.y = shake
 	# RF-165: partículas
 	var show_sparks := drifting and drift_charge >= MINI_TURBO_1
 	for s in sparks:

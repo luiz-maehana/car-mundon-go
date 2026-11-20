@@ -55,6 +55,7 @@ var graphics_high: bool:
 
 func _ready() -> void:
 	setup_inputs()
+	get_tree().root.size_changed.connect(_on_root_resized)  # RF-482
 	# nome mostrado: Car Mundon'GO. O config/name do projeto continua o antigo de propósito:
 	# ele define a pasta de save (user://) e trocar apagaria configurações e recordes.
 	if DisplayServer.get_name() != "headless":
@@ -117,6 +118,25 @@ static func is_accept(event: InputEvent) -> bool:
 
 
 ## RF-242: texto de dica conforme o dispositivo.
+## RF-482: no navegador o 3D desenha no máximo WEB_3D_PIXELS pontos, seja qual for a tela. Celular
+## tem densidade 2-3x (o Pixel 7 deitado pedia 2202×1081 = 2,4 milhões por quadro); o texto e o
+## HUD continuam na resolução cheia. Fora da web vale só a escala escolhida.
+const WEB_3D_PIXELS := 1000000.0
+
+
+func render_scale_for(px: Vector2) -> float:
+	return capped_scale(float(settings.get("render_scale", 1.0)), px, OS.has_feature("web"))
+
+
+static func capped_scale(rs: float, px: Vector2, web: bool) -> float:
+	if web and px.x * px.y > 0.0:
+		rs = minf(rs, sqrt(WEB_3D_PIXELS / (px.x * px.y)))
+	return clampf(rs, 0.35, 2.0)
+
+
+func _on_root_resized() -> void:
+	get_tree().root.scaling_3d_scale = render_scale_for(Vector2(get_tree().root.size))
+
 ## Dica pro aparelho em uso (RF-254; no toque, RF-470, usa o texto de toque quando houver).
 func hint(kbd: String, pad: String, touch: String = "") -> String:
 	if last_device == "touch" and touch != "":
@@ -433,7 +453,7 @@ func apply_settings() -> void:
 			DisplayServer.window_set_mode(want)
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if s["vsync"] else DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = int(s["max_fps"])
-	get_tree().root.scaling_3d_scale = float(s["render_scale"])
+	get_tree().root.scaling_3d_scale = render_scale_for(Vector2(get_tree().root.size))
 	for p in MAX_PLAYERS:
 		for a in ACTIONS:
 			var act := action(p, a)
