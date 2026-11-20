@@ -368,6 +368,9 @@ Assets de terceiros: só **CC0** (Kenney: Car Kit, Food Kit, Racing Kit, UI Pack
 - [x] **RF-482** Teto de pixels do 3D no navegador: no máximo 1 milhão de pontos por quadro (`WEB_3D_PIXELS`). No celular (2202×1081) o 3D fica a 0,65 da tela e o placar continua nítido; a escala escolhida nas configurações vale se for menor. Recalcula ao girar a tela ou entrar em tela cheia. O `[carga]` do console mostra a escala em uso.
 - [x] **RF-483** Enfeites numa malha só, compartilhada entre as cópias (`Gfx.prop_merged`): o queijinho tinha 12 peças (15 queijos = 180 objetos). Vale também pra banana e pra vitrine do aquecimento. Objetos visuais por corrida: ~440 → 271.
 - [x] **RF-484** Menos trabalho por passo da corrida (1,07 → 0,78 ms no PC): o modelo do kart faz 1 movimento por passo em vez de 4; fantasma e anéis só mudam quando mudam; kart a mais de 90 m de todas as câmeras não gira roda, não inclina e não solta faísca (`far_from_cameras`, `vis_far`); caixas e queijos só giram perto da câmera; a IA escolhe a faixa (desvio, caixa, ultrapassagem, barraca) 10 vezes por segundo, cada kart num passo diferente, e o volante continua a cada passo (`AI_THINK`). A câmera suaviza o "pra cima" do looping sem `slerp` (soltava ~20 mil erros por corrida).
+- [x] **RF-485** HUD mais leve: tempo, tempo da volta e velocidade são refeitos 20 vezes por segundo (`FAST_TEXT`; cada troca remonta o texto com contorno); a borda do quadro do item e os parâmetros do efeito de velocidade só mudam quando mudam ou quando aparecem.
+- [x] **RF-486** Menos textos 3D: o "?" das caixas de item vem pintado nas faces pelo shader `rainbow_box` (textura `assets/ui/box_q.png`, gerada por `tools/make_box_q.gd`; nas laterais fica sempre em pé), em vez de um `Label3D` por caixa; os números nas laterais do kart somem a partir de 30 m (`visibility_range_end`).
+- [x] **RF-487** Lista de posições desenhada numa SubViewport só quando a ordem muda (ou a escala da tela), na resolução da tela; no resto do tempo o HUD mostra a imagem pronta (~30 desenhos → 1). No celular deitado a lista já ficava escondida (RF-470); o ganho é no PC e na tela dividida. Diagnóstico desta rodada (celular simulado, CPU 4x): ~21 fps; com tudo desligado o teto do navegador é ~34; o que mais pesa é a física/IA (~5 fps) e o HUD (~4).
 
 ### Trocar teclas (v0.18)
 - [x] **RF-250** Aba CONTROLES: uma linha por ação (acelerar, frear/ré, virar à esquerda, virar à direita, drift, item) com um botão por coluna — J1 (teclado), J2 (teclado) e CONTROLE. Apertar o botão mostra "APERTE..." e a próxima tecla (ou botão do controle, na coluna CONTROLE) vira a nova. Esc cancela; 6 s sem nada também.
@@ -432,6 +435,7 @@ tests/web_smoke.js                             versão web no navegador (Playwri
 .github/workflows/build.yml                   CI: testes → check_publish → export web → web_smoke → GitHub Pages
 tools/check_publish.sh                         varredura antes de publicar (arquivos proibidos, segredos, e-mails, licenças)
 tools/make_kart_mask.gd                        gera a máscara de cor do kart (RF-475)
+tools/make_box_q.gd                            gera o "?" das caixas de item (RF-486; precisa de janela)
 tools/count_shaders.gd                         quantos shaders diferentes uma corrida usa (cada um compila no 1º desenho)
 tools/profile_race.gd                          quanto cada parte do passo da corrida gasta (karts, IA, HUD...)
 tools/measure_tick.gd                          custo do passo da corrida com janela (inclui o motor movendo os nós)
@@ -562,6 +566,7 @@ tools/screenshot*.gd                           prints pra revisão visual
 - [x] **CA-116** Web a 30 passos de física; piloto numa malha só (até 4 desenhos) e kart com menos de 30 nós; aquecimento cria a câmera de cima e a vitrine (8+ visuais) numa camada que as câmeras do jogo não veem, e some depois.
 - [x] **CA-117** Celular 2202×1081 desenha o 3D a ~0,65 (tela pequena e PC sem corte; escala menor escolhida continua); queijinho numa malha só, a mesma em todas as cópias; corrida com menos de 320 objetos visuais.
 - [x] **CA-118** Em 2 s de corrida cada IA pensa ~20 vezes; kart a 400 m da câmera fica em modo longe com faísca, fogo e poeira desligados; o kart do jogador continua animado.
+- [x] **CA-119** Em 1 s de corrida o tempo do HUD é refeito ~20 vezes; caixa de item sem `Label3D` e com o "?" no material; os 2 números do kart com distância máxima.
 
 Teste manual (checklist por release):
 - [ ] Dá pra ganhar a corrida jogando bem; dá pra perder jogando mal.

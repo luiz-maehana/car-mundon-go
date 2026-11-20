@@ -53,6 +53,8 @@ var speed_lines: ColorRect
 var ranking_box: Control
 var lbl_unit: Label
 var boost_fx := 0.0
+const FAST_TEXT := 0.05  # RF-485: tempos e velocidade refeitos 20x por segundo
+var fast_t := 0.0
 var lbl_record: Label
 var lbl_hint: Label
 const HINT_KBD := "WASD/Setas: pilotar · Espaço: drift · E: item · Esc: pausar · M: som"
@@ -275,17 +277,33 @@ func setup(r: Node, k: Node3D, s: float, show_hint: bool) -> void:
 
 
 ## RF-113: lista de posições ao vivo com busto + nome, na lateral direita.
+## RF-487: a lista (8 linhas: painel, posição, busto, nome) é desenhada numa SubViewport só quando
+## muda; no resto do tempo o HUD mostra a imagem pronta. Eram ~30 desenhos por quadro (cada busto
+## é uma textura e quebra o lote), agora 1.
 func _build_ranking() -> void:
 	var vb := VBoxContainer.new()
-	vb.anchor_left = 1.0
-	vb.anchor_right = 1.0
-	vb.offset_left = -236
-	vb.offset_right = -16
-	vb.offset_top = 124
 	vb.add_theme_constant_override("separation", 3)
 	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(vb)
-	ranking_box = vb
+	vb.theme = root.theme
+	rank_vp = SubViewport.new()
+	rank_vp.transparent_bg = true
+	rank_vp.disable_3d = true
+	rank_vp.gui_disable_input = true
+	rank_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	rank_vp.add_child(vb)
+	var tr := TextureRect.new()
+	tr.anchor_left = 1.0
+	tr.anchor_right = 1.0
+	tr.offset_left = -16 - RANK_W
+	tr.offset_right = -16
+	tr.offset_top = 124
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_SCALE
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tr.add_child(rank_vp)
+	root.add_child(tr)
+	tr.texture = rank_vp.get_texture()
+	ranking_box = tr
 	for i in race.karts.size():
 		var row := PanelContainer.new()
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -311,6 +329,37 @@ func _build_ranking() -> void:
 		hb.add_child(head)
 		var nm := _label(20, hb)
 		rank_rows.append({"style": st, "head": head, "name": nm})
+	_rank_resize()
+
+
+const RANK_W := 220.0
+var rank_vp: SubViewport
+var rank_px := 0.0   # pixels de tela por unidade do HUD na última vez que a lista foi desenhada
+
+
+## Pixels de tela por unidade do HUD (escala do HUD × esticamento da janela).
+func _screen_scale() -> float:
+	if root == null or not root.is_inside_tree():
+		return ui_scale
+	var s: float = root.get_global_transform_with_canvas().get_scale().x
+	s *= get_viewport().get_stretch_transform().get_scale().x
+	return maxf(0.25, s)
+
+
+## Desenha a lista na resolução da tela (nítida no celular, onde o HUD é ampliado).
+func _rank_resize() -> void:
+	if rank_vp == null:
+		return
+	var vb := rank_vp.get_child(0) as Control
+	var h: float = vb.get_combined_minimum_size().y
+	ranking_box.offset_bottom = ranking_box.offset_top + h
+	var s := _screen_scale()
+	rank_px = s
+	vb.position = Vector2.ZERO
+	vb.size = Vector2(RANK_W, h)
+	rank_vp.size = Vector2i(ceili(RANK_W * s), ceili(h * s))
+	rank_vp.canvas_transform = Transform2D.IDENTITY.scaled(Vector2(s, s))
+	rank_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
 func _update_ranking() -> void:
@@ -328,6 +377,7 @@ func _update_ranking() -> void:
 		_col(r["name"], k.color.lightened(0.25))
 		var me: bool = k == kart
 		r["style"].bg_color = Color(1.0, 0.85, 0.2, 0.55) if me else (Color(0.3, 0.3, 0.45, 0.5) if k.is_player else Color(0, 0, 0, 0.45))
+	rank_vp.render_target_update_mode = SubViewport.UPDATE_ONCE  # RF-487: redesenha a lista
 
 
 var rank_order: Array = []   # RF-479: última ordem desenhada na lista de posições
@@ -351,6 +401,8 @@ func _fit() -> void:
 	var vp := get_viewport()
 	if vp:
 		root.size = vp.get_visible_rect().size / ui_scale
+		if rank_vp and absf(_screen_scale() - rank_px) > 0.01:
+			_rank_resize()  # RF-487: girou a tela / tela cheia
 
 
 func _label(size: int, parent: Control = null) -> Label:
@@ -394,19 +446,26 @@ func update_hud(delta: float) -> void:
 	var p := kart
 	_update_ranking()
 	boost_fx = lerpf(boost_fx, 1.0 if p.boost_time > 0.0 else 0.0, 1.0 - exp(-8.0 * delta))
-	var slm := speed_lines.material as ShaderMaterial
-	slm.set_shader_parameter("intensity", boost_fx if Gfx.setting("speed_lines", true) else 0.0)
 	# RF-479: sem turbo o efeito some (era um shader de tela cheia todo quadro, mesmo apagado)
 	# (na contagem fica ligado em zero: o shader fica pronto antes do 1º turbo, RF-480)
 	speed_lines.visible = (boost_fx > 0.01 or race.state == "countdown") and Gfx.setting("speed_lines", true)
-	slm.set_shader_parameter("aspect", root.size.x / maxf(1.0, root.size.y))
+	if speed_lines.visible:
+		var slm := speed_lines.material as ShaderMaterial
+		slm.set_shader_parameter("intensity", boost_fx)
+		slm.set_shader_parameter("aspect", root.size.x / maxf(1.0, root.size.y))
 	var lap: int = race.lap_of(p)
 	lbl_lap.text = "VOLTA %d/%d" % [lap, race.laps]
 	# RF-134: volta final em vermelho
 	_col(lbl_lap, Color(1.0, 0.35, 0.3) if lap == race.laps and race.laps > 1 and not p.finished else Color.WHITE)
-	lbl_time.text = fmt_time(race.race_time)
+	# RF-485: textos que mudam todo passo (tempos e velocidade) são refeitos 20x por segundo:
+	# cada troca remonta o texto com contorno, e no celular isso pesava
+	fast_t -= delta
+	var fast := fast_t <= 0.0
+	if fast:
+		fast_t = maxf(0.0, fast_t + FAST_TEXT)
+		lbl_time.text = fmt_time(race.race_time)
 	# RF-133: tempo da volta atual e melhor volta
-	if race.state != "countdown" and not p.finished:
+	if fast and race.state != "countdown" and not p.finished:
 		lbl_laptime.text = "Volta %s" % fmt_time(race.race_time - lap_start) + ("   Melhor %s" % fmt_time(best_lap) if best_lap < INF else "")
 	# RF-132: posição com cor de pódio e "pulo" quando muda
 	lbl_pos.text = "%dº/%d" % [p.rank, race.karts.size()]
@@ -423,10 +482,12 @@ func update_hud(delta: float) -> void:
 	if p.item_roll > 0.0:
 		roll_t += delta
 		item_icon.set_kind(ROLL_ORDER[int(roll_t * 14.0) % ROLL_ORDER.size()])
-		item_style.border_color = Color(1, 1, 1, 0.9)
 	else:
 		item_icon.set_kind(p.item)
-		item_style.border_color = ITEM_COLORS.get(p.item, Color(1, 1, 1, 0.4))
+	# RF-485: mudar a borda redesenha o painel; só quando muda
+	var bc: Color = Color(1, 1, 1, 0.9) if p.item_roll > 0.0 else ITEM_COLORS.get(p.item, Color(1, 1, 1, 0.4))
+	if item_style.border_color != bc:
+		item_style.border_color = bc
 	lbl_item.text = (ITEM_NAMES.get(p.item, "") + (" x%d" % p.item_charges if p.item == "triplo" else "")) if p.item_roll <= 0.0 else ""
 	if p.shield_time > 0.0 and p.item == "":
 		lbl_item.text = "ESCUDO %ds" % int(ceil(p.shield_time))
@@ -436,7 +497,8 @@ func update_hud(delta: float) -> void:
 	_update_power_label(p)
 	# RF-131: velocímetro + carga do drift
 	var mph: bool = Gfx.setting("speed_unit", "kmh") == "mph"
-	lbl_speed.text = "%d" % int(absf(p.speed) * (2.237 if mph else 3.6))
+	if fast:
+		lbl_speed.text = "%d" % int(absf(p.speed) * (2.237 if mph else 3.6))
 	lbl_unit.text = "mph" if mph else "km/h"
 	_col(lbl_speed, Color(1.0, 0.6, 0.15) if p.boost_time > 0.0 else Color.WHITE)
 	drift_bar_bg.visible = p.drifting

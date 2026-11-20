@@ -12,15 +12,7 @@ func _spawn_boxes() -> void:
 		var mi := MeshInstance3D.new()
 		mi.mesh = mesh
 		mi.material_override = mat
-		node.add_child(mi)
-		var q := Label3D.new()
-		q.text = "?"
-		q.font_size = 96
-		q.pixel_size = 0.012
-		q.outline_size = 12
-		q.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		q.no_depth_test = true
-		node.add_child(q)
+		node.add_child(mi)  # RF-486: o "?" vem pintado nas faces (shader)
 		node.position = p
 		add_child(node)
 		var bi: int = track.nearest_index(p)

@@ -62,6 +62,7 @@ func _run() -> void:
 	await _test_web_perf()
 	await _test_web_pixels_and_props()
 	await _test_ai_think_and_far_karts()
+	await _test_light_hud_and_labels()
 	await _test_touch()
 	_test_safe_files()
 	print("\n%s (%d falha(s))" % ["PASSOU" if fails == 0 else "FALHOU", fails])

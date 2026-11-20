@@ -1182,3 +1182,40 @@ func _test_ai_think_and_far_karts() -> void:
 	check(not race.players[0].vis_far, "o kart do jogador continua animado")
 	race.queue_free()
 	await process_frame
+
+
+func _test_light_hud_and_labels() -> void:
+	print("CA-119 HUD e textos 3D mais leves")
+	var race = load("res://scripts/race.gd").new()
+	race.use_game_settings = false
+	race.audio_enabled = false
+	race.player_chars = ["nanni"]
+	race.track_id = "queijo"
+	race.laps = 1
+	root.add_child(race)
+	if race.karts.is_empty():
+		await process_frame
+	race.set_physics_process(false)
+	race.set_process(false)
+	var dt := 1.0 / 60.0
+	while race.state == "countdown":
+		race.step(dt)
+	var hud = race.huds[0]
+	var changes := 0
+	var last: String = hud.lbl_time.text
+	for i in 60:  # 1 s de corrida a 60 passos
+		race.step(dt)
+		if hud.lbl_time.text != last:
+			changes += 1
+			last = hud.lbl_time.text
+	check(changes >= 18 and changes <= 21, "tempo refeito ~20x por segundo (%d)" % changes)
+	var box: Node3D = race.boxes[0]["node"]
+	var mat: ShaderMaterial = (box.get_child(0) as MeshInstance3D).material_override
+	check(box.find_children("*", "Label3D", true, false).is_empty() and mat.get_shader_parameter("q_tex") != null, "caixa sem Label3D: o \"?\" vem do shader")
+	var nums := 0
+	for l in race.karts[0].find_children("*", "Label3D", true, false):
+		if not (l as Label3D).billboard and (l as Label3D).visibility_range_end > 0.0:
+			nums += 1
+	check(nums == 2, "números do kart somem de longe (%d com distância máxima)" % nums)
+	race.queue_free()
+	await process_frame

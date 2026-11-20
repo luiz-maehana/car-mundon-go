@@ -327,6 +327,7 @@ static func environment(d: Dictionary, q: int) -> Environment:
 static func rainbow_material() -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = RainbowShader
+	m.set_shader_parameter("q_tex", load("res://assets/ui/box_q.png"))  # RF-486
 	return m
 
 

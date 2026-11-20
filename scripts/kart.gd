@@ -158,6 +158,7 @@ func _build_model() -> void:
 		num.position = Vector3(side * 1.08, 0.55, 0.35)
 		num.rotation.y = PI / 2.0 * side
 		num.double_sided = false  # sem número espelhado
+		num.visibility_range_end = 30.0  # RF-486: de longe não dá pra ler; são 2 desenhos a menos por kart
 		model.add_child(num)
 	# piloto
 	var look: Dictionary = Chars.find(char_id).get("look", {})
